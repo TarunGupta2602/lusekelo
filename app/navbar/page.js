@@ -393,33 +393,48 @@ export default function Navbar() {
         {mobileMenuOpen && (
           <div className="w-full order-last mt-3">
             <div className="bg-white border rounded-lg shadow-lg p-4 space-y-4">
-              {/* User Profile in Mobile Menu */}
-              <Link
-                href="/profile"
-                className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition duration-150"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <div className="w-8 h-8 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center mr-3 font-medium text-sm">
-                  {getUserAvatar() ? (
-                    <Image
-                      src={getUserAvatar()}
-                      alt={getUserDisplayName()}
-                      width={32}
-                      height={32}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    getUserInitials()
-                  )}
-                </div>
-                <div className="flex-1">
-                  <span className="font-medium text-gray-800">{getUserDisplayName()}</span>
-                  {user && (
+              {/* User Profile or Sign In in Mobile Menu */}
+              {user ? (
+                <Link
+                  href="/profile"
+                  className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition duration-150"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center mr-3 font-medium text-sm">
+                    {getUserAvatar() ? (
+                      <Image
+                        src={getUserAvatar()}
+                        alt={getUserDisplayName()}
+                        width={32}
+                        height={32}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      getUserInitials()
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-medium text-gray-800">{getUserDisplayName()}</span>
                     <p className="text-xs text-gray-500 truncate max-w-[200px]">{user.email}</p>
-                  )}
-                </div>
-              </Link>
-              
+                  </div>
+                </Link>
+              ) : (
+                <Link
+                  href="/login"
+                  className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition duration-150"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center mr-3 font-medium text-sm">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-medium text-gray-800">Sign In</span>
+                  </div>
+                </Link>
+              )}
+
               {/* Store Dropdown in Mobile Menu */}
               <div className="store-dropdown">
                 <button
