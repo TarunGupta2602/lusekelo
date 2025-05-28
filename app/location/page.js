@@ -5,17 +5,25 @@ import Image from "next/image";
 const LocationPopup = () => {
   const [showPopup, setShowPopup] = useState(true);
   const [location, setLocation] = useState("");
+  const [region, setRegion] = useState(""); // <-- new state for dropdown
   const [locationSelected, setLocationSelected] = useState(false);
 
   const handleDetectLocation = () => {
-    // In a real implementation, this would use the browser's geolocation API
-    // For demo purposes, we'll just set a placeholder value
     setLocation("Current Location");
+    setRegion(""); // clear dropdown
     setLocationSelected(true);
   };
 
   const handleManualLocation = (e) => {
     setLocation(e.target.value);
+    setRegion(""); // clear dropdown
+    setLocationSelected(false);
+  };
+
+  const handleRegionChange = (e) => {
+    setRegion(e.target.value);
+    setLocation(e.target.value);
+    setLocationSelected(true);
   };
 
   const handleSubmitLocation = () => {
@@ -84,11 +92,8 @@ const LocationPopup = () => {
             {/* Dropdown menu for location selection */}
             <select
               className="w-full py-2 px-4 rounded text-gray-800 focus:outline-none"
-              value={location}
-              onChange={(e) => {
-                setLocation(e.target.value);
-                setLocationSelected(true);
-              }}
+              value={region}
+              onChange={handleRegionChange}
             >
               <option value="">Select your region...</option>
               <option value="South Tanzania">South Tanzania</option>
@@ -101,7 +106,7 @@ const LocationPopup = () => {
               type="text"
               placeholder="Enter your location manually..."
               className="w-full py-2 px-4 rounded text-gray-800 focus:outline-none"
-              value={location}
+              value={region ? "" : location}
               onChange={handleManualLocation}
               onKeyPress={handleKeyPress}
             />
