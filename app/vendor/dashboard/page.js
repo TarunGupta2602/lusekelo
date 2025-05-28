@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image'; // Add this import at the top
+import Image from 'next/image';
 
 export default function VendorDashboard() {
   const router = useRouter();
@@ -148,6 +148,17 @@ export default function VendorDashboard() {
   for (let i = 1; i <= totalPages; i++) {
     pageNumbers.push(i);
   }
+
+  // Redirect to /vendor if not logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/vendor');
+      }
+    };
+    checkAuth();
+  }, [router]);
 
   return (
     <div className="flex h-screen bg-gray-100">

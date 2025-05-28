@@ -67,7 +67,7 @@ export default function StoreDetailPage({ params }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br mt-17 from-green-50 via-white to-blue-50 py-10 px-2 md:px-6">
-      <div >
+      <div>
         <div className="flex flex-col md:flex-row gap-10">
           {/* Left: Image Gallery Section */}
           <div className="md:w-2/3">
@@ -116,37 +116,13 @@ export default function StoreDetailPage({ params }) {
             </div>
           </div>
 
-          {/* Right: Store Information */}
-          <div className="md:w-1/3 p-8 bg-white/90 rounded-3xl shadow-2xl border border-green-100 flex flex-col justify-between min-h-[400px]">
+          {/* Right: Store Information (Simple) */}
+          <div className="md:w-1/3 p-8 bg-white/90 rounded-3xl shadow-2xl border border-green-100 flex flex-col justify-center min-h-[400px]">
             <div>
-              <p className="text-gray-500 text-sm mb-2 flex items-center gap-2">
-                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7v4a1 1 0 001 1h3m10 0h3a1 1 0 001-1V7m-1 4V7a2 2 0 00-2-2H5a2 2 0 00-2 2v4m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2" /></svg>
-                Your Order is Brought to you by
-              </p>
               <h1 className="text-3xl font-extrabold text-green-700 mb-4 tracking-tight drop-shadow-sm">{store.name}</h1>
               <div className="flex items-start mb-4">
-                <svg className="w-5 h-5 text-red-500 mr-2 mt-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                </svg>
                 <span className="text-gray-600 text-base">{store.address}</span>
               </div>
-              <div className="flex flex-col gap-2 mb-6">
-                <div className="flex items-center gap-2 text-gray-700">
-                  <svg className="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 10c-4.41 0-8-1.79-8-4V6c0-2.21 3.59-4 8-4s8 1.79 8 4v8c0 2.21-3.59 4-8 4z" /></svg>
-                  <span className="font-semibold">Delivery Fee:</span> <span className="text-green-700">${store.delivery_fee || 0}</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" /></svg>
-                  <span className="font-semibold">Delivery Time:</span> <span className="text-green-700">{store.delivery_time || '30-45 min'}</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <svg className="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 10c-4.41 0-8-1.79-8-4V6c0-2.21 3.59-4 8-4s8 1.79 8 4v8c0 2.21-3.59 4-8 4z" /></svg>
-                  <span className="font-semibold">Price Level:</span> <span className="text-green-700">{store.price || '$$'}</span>
-                </div>
-              </div>
-              <button className="w-full bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold py-3 px-6 rounded-xl hover:from-green-600 hover:to-blue-600 shadow-lg transition-all text-lg mt-2">
-                Shop Now
-              </button>
             </div>
           </div>
         </div>

@@ -86,18 +86,25 @@ export default function Navbar() {
     loadCategories();
   }, []);
 
-  // Fetch products for search
+  // Fetch products for search directly from Supabase (not from /api/products)
   useEffect(() => {
-    const loadProducts = async () => {
+    const fetchProducts = async () => {
       try {
-        const productsData = await fetchData("products");
-        console.log("Fetched products:", productsData); // <-- Add this
-        setProducts(productsData);
+        const { data: productsData, error: productsError } = await supabase
+          .from('products')
+          .select('id, name, price, image, quantity, date_added')
+          .order('date_added', { ascending: false });
+        if (productsError) {
+          console.error('Error fetching products:', productsError.message);
+          setProducts([]);
+        } else {
+          setProducts(productsData || []);
+        }
       } catch (error) {
-        // Optionally handle error
+        setProducts([]);
       }
     };
-    loadProducts();
+    fetchProducts();
   }, []);
 
   // Log loaded products and categories
@@ -162,7 +169,7 @@ export default function Navbar() {
     []
   );
 
-  // Only search/filter products by name (case-insensitive)
+  // Only search/filter products by name (case-insensitive, trimmed)
   useEffect(() => {
     const filtered = products.filter((product) =>
       product.name &&
