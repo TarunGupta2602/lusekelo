@@ -25,12 +25,14 @@ export default function Navbar() {
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [stores, setStores] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [userDropdownVisible, setUserDropdownVisible] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [profileSidebarOpen, setProfileSidebarOpen] = useState(false);
+  const [products, setProducts] = useState([]);
   const searchInputRef = useRef();
 
   // Fetch user from Supabase auth
@@ -70,6 +72,39 @@ export default function Navbar() {
     };
     loadStores();
   }, []);
+
+  // Fetch categories for search
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const categoriesData = await fetchData("categories");
+        setCategories(categoriesData);
+      } catch (error) {
+        // Optionally handle error
+      }
+    };
+    loadCategories();
+  }, []);
+
+  // Fetch products for search
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const productsData = await fetchData("products");
+        console.log("Fetched products:", productsData); // <-- Add this
+        setProducts(productsData);
+      } catch (error) {
+        // Optionally handle error
+      }
+    };
+    loadProducts();
+  }, []);
+
+  // Log loaded products and categories
+  useEffect(() => {
+    console.log('Loaded products:', products);
+    console.log('Loaded categories:', categories);
+  }, [products, categories]);
 
   // Load cart count from localStorage
   const getCartKey = useCallback(() => {
@@ -127,15 +162,15 @@ export default function Navbar() {
     []
   );
 
-  // Effect to trigger search
+  // Only search/filter products by name (case-insensitive)
   useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setSearchResults([]);
-      setLoading(false);
-      return;
-    }
-    debouncedSearch(searchQuery);
-  }, [searchQuery, debouncedSearch]);
+    const filtered = products.filter((product) =>
+      product.name &&
+      product.name.toLowerCase().trim().includes(searchQuery.toLowerCase().trim())
+    );
+    setSearchResults(filtered.map((p) => ({ ...p, _type: "product" })));
+    setLoading(false);
+  }, [searchQuery, products]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -309,24 +344,34 @@ export default function Navbar() {
             </form>
             {searchQuery && searchResults.length > 0 && (
               <div className="absolute left-0 right-0 mt-2 mx-4 bg-white border rounded shadow-lg z-20 max-h-80 overflow-y-auto">
-                {searchResults.map((product) => (
-                  <Link
-                    href={`/products/${product.id}`}
-                    key={product.id}
-                    className="flex items-center px-4 py-2 hover:bg-gray-100"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setMobileSearchOpen(false);
-                    }}
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{product.name}</p>
-                      {product.price && (
-                        <p className="text-xs text-green-600">${product.price}</p>
-                      )}
-                    </div>
-                  </Link>
-                ))}
+                {searchResults.map((item) =>
+                  item._type === "product" ? (
+                    <Link
+                      href={`/products/${item.id}`}
+                      key={`product-${item.id}`}
+                      className="flex items-center px-4 py-2 hover:bg-gray-100"
+                      onClick={() => setSearchQuery("")}
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{item.name}</p>
+                        {item.price && (
+                          <p className="text-xs text-green-600">${item.price}</p>
+                        )}
+                      </div>
+                    </Link>
+                  ) : (
+                    <Link
+                      href={`/categories/${item.id}`}
+                      key={`category-${item.id}`}
+                      className="flex items-center px-4 py-2 hover:bg-gray-100"
+                      onClick={() => setSearchQuery("")}
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-blue-700">Category: {item.name}</p>
+                      </div>
+                    </Link>
+                  )
+                )}
               </div>
             )}
             {searchQuery && !loading && searchResults.length === 0 && (
@@ -556,21 +601,34 @@ export default function Navbar() {
           </form>
           {searchQuery && searchResults.length > 0 && (
             <div className="absolute mt-2 w-full bg-white border rounded-lg shadow-lg z-10 max-h-80 overflow-y-auto">
-              {searchResults.map((product) => (
-                <Link
-                  href={`/products/${product.id}`}
-                  key={product.id}
-                  className="flex items-center px-4 py-2 hover:bg-gray-50"
-                  onClick={() => setSearchQuery("")}
-                >
-                  <div>
-                    <p className="text-sm font-medium">{product.name}</p>
-                    {product.price && (
-                      <p className="text-xs text-green-600 font-medium">${product.price}</p>
-                    )}
-                  </div>
-                </Link>
-              ))}
+              {searchResults.map((item) =>
+                item._type === "product" ? (
+                  <Link
+                    href={`/products/${item.id}`}
+                    key={`product-${item.id}`}
+                    className="flex items-center px-4 py-2 hover:bg-gray-50"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{item.name}</p>
+                      {item.price && (
+                        <p className="text-xs text-green-600 font-medium">${item.price}</p>
+                      )}
+                    </div>
+                  </Link>
+                ) : (
+                  <Link
+                    href={`/categories/${item.id}`}
+                    key={`category-${item.id}`}
+                    className="flex items-center px-4 py-2 hover:bg-gray-50"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-blue-700">Category: {item.name}</p>
+                    </div>
+                  </Link>
+                )
+              )}
             </div>
           )}
           {searchQuery && !loading && searchResults.length === 0 && (

@@ -80,7 +80,23 @@ const LocationPopup = () => {
               </svg>
               <span>Detect my Location</span>
             </button>
-            
+
+            {/* Dropdown menu for location selection */}
+            <select
+              className="w-full py-2 px-4 rounded text-gray-800 focus:outline-none"
+              value={location}
+              onChange={(e) => {
+                setLocation(e.target.value);
+                setLocationSelected(true);
+              }}
+            >
+              <option value="">Select your region...</option>
+              <option value="South Tanzania">South Tanzania</option>
+              <option value="West Tanzania">West Tanzania</option>
+              <option value="East Tanzania">East Tanzania</option>
+              <option value="North Tanzania">North Tanzania</option>
+            </select>
+
             <input
               type="text"
               placeholder="Enter your location manually..."

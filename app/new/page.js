@@ -224,27 +224,29 @@ export default function NewPage() {
                         <Link
                           key={childCategory.id}
                           href={`/new/${childCategory.id}`}
-                          className="category-card bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg"
+                          className="category-card bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg flex flex-col"
+                          style={{ minHeight: 320 }}
                         >
                           <div className="flex flex-col h-full">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-2">{childCategory.name}</h3>
-                            <p className="text-sm text-gray-600 mb-4">{childCategory.description}</p>
-                            <div className="flex-grow flex items-center justify-center p-4 bg-gray-50 rounded-lg">
+                            <div className="flex-grow flex items-center justify-center mb-4">
                               {childCategory.image ? (
                                 <Image
                                   src={normalizeImagePath(childCategory.image)}
                                   alt={childCategory.name}
-                                  width={128}
-                                  height={128}
-                                  className="max-h-32 w-auto object-contain"
+                                  width={220}
+                                  height={180}
+                                  className="object-contain w-full h-40 rounded-lg"
+                                  style={{ maxHeight: 180, maxWidth: "100%" }}
                                   loading="lazy"
                                 />
                               ) : (
-                                <div className="w-32 h-32 flex items-center justify-center bg-gray-100 rounded">
+                                <div className="w-full h-40 flex items-center justify-center bg-gray-100 rounded-lg">
                                   <span className="text-gray-400">No image</span>
                                 </div>
                               )}
                             </div>
+                            <h3 className="text-lg font-semibold text-gray-800 mb-2 text-center">{childCategory.name}</h3>
+                            <p className="text-sm text-gray-600 mb-2 text-center">{childCategory.description}</p>
                           </div>
                         </Link>
                       ))}
