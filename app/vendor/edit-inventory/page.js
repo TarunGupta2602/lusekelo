@@ -162,9 +162,9 @@ const ProductForm = () => {
               >
                 {/* Insert categories as needed */}
                 <option value="1">Electronics</option>
-                <option value="2">Breakfast</option>
-                <option value="100">Food & Drinks</option>
-                <option value="100">Food & Drinks</option>
+                
+                
+                
                 <option value="101">Vegetables</option>
                 <option value="102">Tea, Coffee & more</option>
                 <option value="103">Fruits</option>
@@ -173,31 +173,26 @@ const ProductForm = () => {
                 <option value="106">Bakery & Biscuits</option>
                 <option value="107">Chicken & Fish</option>
                 <option value="108">Dry Fruits</option>
-                <option value="200">Beauty & Personal Care</option>
                 <option value="201">Makeup & Beauty</option>
                 <option value="202">Skin Care</option>
                 <option value="203">Baby Care</option>
                 <option value="204">Hair Care</option>
                 <option value="205">Pharma & Wellness</option>
                 <option value="206">Protein Powders</option>
-                <option value="300">Household Essentials</option>
                 <option value="301">Home Needs</option>
                 <option value="302">Kitchen & Dining</option>
                 <option value="303">Cleaning Essentials</option>
                 <option value="304">Pet Care</option>
                 <option value="305">Atta, Rice & Dal</option>
                 <option value="306">Bed & Mattresses</option>
-                <option value="400">Gym & Fitness</option>
                 <option value="401">Protein Supplements</option>
                 <option value="402">Workout Equipment</option>
                 <option value="403">Fitness Accessories</option>
                 <option value="404">Sports Nutrition</option>
-                <option value="500">Clothing</option>
                 <option value="501">Men&#39;s Clothing</option>
                 <option value="502">Women&#39;s Clothing</option>
                 <option value="503">Kids&#39; Clothing</option>
                 <option value="504">Sportswear</option>
-                <option value="600">Furniture</option>
                 <option value="601">Living Room</option>
                 <option value="602">Bedroom</option>
                 <option value="603">Office</option>
@@ -206,7 +201,6 @@ const ProductForm = () => {
                 <option value="701">Mobile Phones</option>
                 <option value="702">Laptops</option>
                 <option value="704">Audio</option>
-                <option value="800">Books & Media</option>
                 <option value="801">Fiction</option>
                 <option value="802">Non-Fiction</option>
                 <option value="803">Movies</option>
