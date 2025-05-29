@@ -162,6 +162,8 @@ const ProductForm = () => {
               >
                 {/* Insert categories as needed */}
                 <option value="1">Electronics</option>
+                                <option value="2">Breakfast</option>
+
                 
                 
                 
@@ -197,7 +199,7 @@ const ProductForm = () => {
                 <option value="602">Bedroom</option>
                 <option value="603">Office</option>
                 <option value="604">Outdoor</option>
-                <option value="700">Electronics (main)</option>
+                
                 <option value="701">Mobile Phones</option>
                 <option value="702">Laptops</option>
                 <option value="704">Audio</option>
