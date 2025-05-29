@@ -51,16 +51,16 @@ export default function LocationPopup() {
   if (!showPopup) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg overflow-hidden w-full max-w-3xl flex">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl overflow-hidden w-full max-w-5xl min-h-[520px] flex shadow-2xl">
         {/* Illustration */}
-        <div className="bg-white p-6 w-1/2 hidden md:flex items-center justify-center">
-          <div className="border-2 border-blue-400 p-2 rounded-md flex items-center justify-center">
+        <div className="bg-white p-8 w-1/2 hidden md:flex items-center justify-center">
+          <div className="border-2 border-blue-400 p-4 rounded-xl flex items-center justify-center">
             <Image
               src="/illustration-person-map.jpg"
               alt="Location detection illustration"
-              width={250}
-              height={250}
+              width={350}
+              height={350}
               className="object-contain"
               onError={(e) => {
                 e.target.onerror = null;
@@ -71,17 +71,17 @@ export default function LocationPopup() {
           </div>
         </div>
         {/* Form */}
-        <div className="bg-teal-900 text-white p-8 w-full md:w-1/2 flex flex-col justify-center">
-          <h2 className="text-xl font-semibold mb-1">Before we move forward,</h2>
-          <p className="text-green-300 text-xl font-medium mb-6">
+        <div className="bg-teal-900 text-white p-12 w-full md:w-1/2 flex flex-col justify-center min-h-[520px]">
+          <h2 className="text-2xl font-semibold mb-2">Before we move forward,</h2>
+          <p className="text-green-300 text-2xl font-medium mb-8">
             where exactly are we sending this carrier pigeon?
           </p>
-          <div className="flex flex-col space-y-4">
+          <div className="flex flex-col space-y-6">
             <button
               onClick={handleDetectLocation}
-              className="flex items-center justify-center space-x-2 bg-white rounded py-2 px-4 text-teal-900 font-medium"
+              className="flex items-center justify-center space-x-2 bg-white rounded-lg py-3 px-6 text-teal-900 font-medium text-lg"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
@@ -89,7 +89,7 @@ export default function LocationPopup() {
             </button>
             {/* Dropdown */}
             <select
-              className="w-full py-2 px-4 rounded text-gray-800 focus:outline-none"
+              className="w-full py-3 px-5 rounded-lg text-gray-800 focus:outline-none text-lg"
               value={region}
               onChange={handleRegionChange}
             >
@@ -103,7 +103,7 @@ export default function LocationPopup() {
             <input
               type="text"
               placeholder="Enter your location manually..."
-              className="w-full py-2 px-4 rounded text-gray-800 focus:outline-none"
+              className="w-full py-3 px-5 rounded-lg text-gray-800 focus:outline-none text-lg"
               value={region ? "" : location}
               onChange={handleManualLocation}
               onKeyPress={handleKeyPress}
@@ -111,13 +111,13 @@ export default function LocationPopup() {
             />
             <button
               onClick={handleSubmitLocation}
-              className="mt-2 bg-green-400 hover:bg-green-500 text-black rounded py-2 font-semibold transition"
+              className="mt-2 bg-green-400 hover:bg-green-500 text-black rounded-lg py-3 font-semibold transition text-lg"
               disabled={!location}
             >
               Confirm Location
             </button>
           </div>
-          <p className="text-gray-300 text-sm mt-4">
+          <p className="text-gray-300 text-base mt-6">
             {!locationSelected
               ? "No Location Selected yet*"
               : "Location selected: " + location}
