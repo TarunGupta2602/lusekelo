@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image' // Add this import
+import { createClient } from '@supabase/supabase-js';
 
 // Move this constant outside the component
 const defaultCategoryNames = ["Food & Drinks", "Household Essentials", "Beauty & Personal Care"]
@@ -27,6 +28,11 @@ const CategorySkeleton = () => (
   </div>
 )
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
 export default function NewPage() {
   const [electronics, setElectronics] = useState([])
   const [breakfast, setBreakfast] = useState([])
@@ -36,6 +42,8 @@ export default function NewPage() {
   const [categories, setCategories] = useState([])
   const [expandedSections, setExpandedSections] = useState({})
   const [showAllCategories, setShowAllCategories] = useState(false)
+  const [cartMessage, setCartMessage] = useState("")
+  const [user, setUser] = useState(null);
 
   // Normalize image paths
   const normalizeImagePath = (path) => {
@@ -96,6 +104,19 @@ export default function NewPage() {
     }
     fetchProducts()
   }, [])
+
+  // Fetch user for cart key
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (!error && data && data.user) {
+        setUser(data.user);
+      } else {
+        setUser(null);
+      }
+    };
+    fetchUser();
+  }, []);
 
   // Toggle section expansion
   const toggleSection = (categoryId) => {
@@ -178,6 +199,39 @@ export default function NewPage() {
       </div>
     </div>
   )
+
+  const getCartKey = () => {
+    if (user && user.id) {
+      return `cart_${user.id}`;
+    }
+    return 'cart_guest';
+  };
+
+  const handleAddToCart = (productToAdd, qty = 1) => {
+    if (!productToAdd) return;
+
+    const cartKey = getCartKey();
+    const cart = JSON.parse(localStorage.getItem(cartKey)) || [];
+    const existingItem = cart.find((item) => item.product_id === productToAdd.id);
+
+    if (existingItem) {
+      existingItem.quantity += qty;
+    } else {
+      cart.push({
+        product_id: productToAdd.id,
+        quantity: qty,
+        name: productToAdd.name,
+        price: productToAdd.price,
+        image: productToAdd.image,
+      });
+    }
+
+    localStorage.setItem(cartKey, JSON.stringify(cart));
+    window.dispatchEvent(new Event("cartUpdated"));
+
+    setCartMessage("Product added to cart!");
+    setTimeout(() => setCartMessage(""), 2000);
+  };
 
   return (
     <div className="ml-5 mr-5 ">
@@ -342,30 +396,37 @@ export default function NewPage() {
                   {electronics.length ? (
                     electronics.map((product) => (
                       <Link href={`/products/${product.id}`} key={product.id}>
-                        <div className="product-card bg-white rounded-2xl shadow-lg border border-gray-100 hover:shadow-2xl transition-shadow duration-200 p-4 flex flex-col group relative min-h-[340px]">
+                        <div className="product-card bg-white rounded-2xl shadow-lg border border-gray-100 hover:shadow-2xl transition-shadow duration-200 p-4 flex flex-col group relative min-h-[250px] hover:scale-[1.03] hover:border-green-400 hover:ring-2 hover:ring-green-100">
                           {product.image ? (
-                            <div className="mb-4 aspect-[4/3] w-full bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center">
+                            <div className="mb-3 aspect-[4/3] w-full bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center">
                               <Image
                                 src={normalizeImagePath(product.image)}
                                 alt={product.name}
-                                width={320}
-                                height={160}
-                                className="object-contain w-full h-40 group-hover:scale-105 transition-transform duration-200"
+                                width={180}
+                                height={120}
+                                className="object-contain w-full h-28 group-hover:scale-105 transition-transform duration-200"
                                 loading="lazy"
                               />
                             </div>
                           ) : (
-                            <div className="mb-4 h-40 bg-gray-100 rounded-xl flex items-center justify-center">
+                            <div className="mb-3 h-28 bg-gray-100 rounded-xl flex items-center justify-center">
                               <span className="text-gray-400">No image</span>
                             </div>
                           )}
                           <h3 className="text-base font-semibold text-gray-800 line-clamp-2 mb-1">{product.name}</h3>
+                          <p className="text-xs text-gray-500 mb-1 line-clamp-2">{product.description || "No description available."}</p>
                           <div className="flex items-center justify-between mt-auto">
                             <span className="inline-block bg-green-100 text-green-700 font-bold px-3 py-1 rounded-full text-sm shadow-sm">${product.price}</span>
-                            <button className="flex items-center justify-center w-9 h-9 bg-green-500 text-white rounded-full hover:bg-green-600 shadow-md transition-colors">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 3a1 1 0 00-1 1v5H4a1 1 0 100 2h5v5a1 1 0 102 0v-5h5a1 1 0 100-2h-5V4a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
+                            <span className="text-xs text-gray-600 ml-2">Qty: <span className="font-semibold">{product.quantity}</span></span>
+                            <button
+                              className="flex items-center justify-center w-8 h-8 bg-green-500 text-white rounded-full hover:bg-green-600 shadow-md transition-colors ml-2"
+                              onClick={e => {
+                                e.preventDefault();
+                                handleAddToCart(product, 1);
+                              }}
+                              title="Add to cart"
+                            >
+                              <span className="text-lg font-bold">+</span>
                             </button>
                           </div>
                         </div>
@@ -422,30 +483,37 @@ export default function NewPage() {
                   {breakfast.length ? (
                     breakfast.map((product) => (
                       <Link href={`/products/${product.id}`} key={product.id}>
-                        <div className="product-card bg-white rounded-2xl shadow-lg border border-gray-100 hover:shadow-2xl transition-shadow duration-200 p-4 flex flex-col group relative min-h-[340px]">
+                        <div className="product-card bg-white rounded-2xl shadow-lg border border-gray-100 hover:shadow-2xl transition-shadow duration-200 p-4 flex flex-col group relative min-h-[250px] hover:scale-[1.03] hover:border-green-400 hover:ring-2 hover:ring-green-100">
                           {product.image ? (
-                            <div className="mb-4 aspect-[4/3] w-full bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center">
+                            <div className="mb-3 aspect-[4/3] w-full bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center">
                               <Image
                                 src={normalizeImagePath(product.image)}
                                 alt={product.name}
-                                width={320}
-                                height={160}
-                                className="object-contain w-full h-40 group-hover:scale-105 transition-transform duration-200"
+                                width={180}
+                                height={120}
+                                className="object-contain w-full h-28 group-hover:scale-105 transition-transform duration-200"
                                 loading="lazy"
                               />
                             </div>
                           ) : (
-                            <div className="mb-4 h-40 bg-gray-100 rounded-xl flex items-center justify-center">
+                            <div className="mb-3 h-28 bg-gray-100 rounded-xl flex items-center justify-center">
                               <span className="text-gray-400">No image</span>
                             </div>
                           )}
                           <h3 className="text-base font-semibold text-gray-800 line-clamp-2 mb-1">{product.name}</h3>
+                          <p className="text-xs text-gray-500 mb-1 line-clamp-2">{product.description || "No description available."}</p>
                           <div className="flex items-center justify-between mt-auto">
                             <span className="inline-block bg-green-100 text-green-700 font-bold px-3 py-1 rounded-full text-sm shadow-sm">${product.price}</span>
-                            <button className="flex items-center justify-center w-9 h-9 bg-green-500 text-white rounded-full hover:bg-green-600 shadow-md transition-colors">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 3a1 1 0 00-1 1v5H4a1 1 0 100 2h5v5a1 1 0 102 0v-5h5a1 1 0 100-2h-5V4a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
+                            <span className="text-xs text-gray-600 ml-2">Qty: <span className="font-semibold">{product.quantity}</span></span>
+                            <button
+                              className="flex items-center justify-center w-8 h-8 bg-green-500 text-white rounded-full hover:bg-green-600 shadow-md transition-colors ml-2"
+                              onClick={e => {
+                                e.preventDefault();
+                                handleAddToCart(product, 1);
+                              }}
+                              title="Add to cart"
+                            >
+                              <span className="text-lg font-bold">+</span>
                             </button>
                           </div>
                         </div>
@@ -474,6 +542,13 @@ export default function NewPage() {
           </div>
         </section>
       </div>
+
+      {/* Show cart message */}
+      {cartMessage && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-2 rounded-lg shadow-lg z-50">
+          {cartMessage}
+        </div>
+      )}
     </div>
   )
 }
