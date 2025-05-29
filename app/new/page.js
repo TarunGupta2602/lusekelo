@@ -116,7 +116,7 @@ export default function NewPage() {
     }
     .category-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 1rem;
     }
     .category-transition {
@@ -225,7 +225,7 @@ export default function NewPage() {
                           key={childCategory.id}
                           href={`/new/${childCategory.id}`}
                           className="category-card bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg flex flex-col"
-                          style={{ minHeight: 320 }}
+                          style={{ minHeight: 340 }}
                         >
                           <div className="flex flex-col h-full">
                             <div className="flex-grow flex items-center justify-center mb-4">
@@ -233,14 +233,14 @@ export default function NewPage() {
                                 <Image
                                   src={normalizeImagePath(childCategory.image)}
                                   alt={childCategory.name}
-                                  width={220}
-                                  height={180}
-                                  className="object-contain w-full h-40 rounded-lg"
-                                  style={{ maxHeight: 180, maxWidth: "100%" }}
+                                  width={320} // Increased width
+                                  height={240} // Increased height
+                                  className="object-contain w-full h-60 rounded-lg" // Increased h-40 to h-60
+                                  style={{ maxHeight: 240, maxWidth: "100%" }} // Increased maxHeight
                                   loading="lazy"
                                 />
                               ) : (
-                                <div className="w-full h-40 flex items-center justify-center bg-gray-100 rounded-lg">
+                                <div className="w-full h-60 flex items-center justify-center bg-gray-100 rounded-lg">
                                   <span className="text-gray-400">No image</span>
                                 </div>
                               )}
