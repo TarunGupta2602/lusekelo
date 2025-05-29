@@ -117,7 +117,7 @@ export default function VendorDashboard() {
 
   // Handle edit inventory
   const handleEditInventory = () => {
-    router.push('/vendor/edit-inventory');
+    router.push('/vendor/add-inventory');
   };
 
   // Toggle sort order
@@ -159,6 +159,14 @@ export default function VendorDashboard() {
     };
     checkAuth();
   }, [router]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const section = params.get('section');
+    if (section === 'inventory') {
+      setSidebarSection('Inventory');
+    }
+  }, []);
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -216,7 +224,12 @@ export default function VendorDashboard() {
                 <a
                   href="#"
                   className="flex items-center px-4 py-2 hover:bg-gray-100 text-gray-700"
-                  onClick={() => { setSidebarSection('Inventory'); setDropdownOpen(false); }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setSidebarSection('Inventory');
+                    setDropdownOpen(false);
+                    router.push('/vendor/dashboard?section=inventory'); // <-- Add this line
+                  }}
                 >
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -332,6 +345,12 @@ export default function VendorDashboard() {
               />
               <button onClick={handleEditInventory} className="bg-blue-500 text-white px-4 py-2 rounded">
                 Add Inventory
+              </button>
+              <button
+                onClick={() => router.push('/vendor/edit-inventory')}
+                className="bg-yellow-500 text-white px-4 py-2 rounded"
+              >
+                Edit Inventory
               </button>
               <button onClick={handleSortByNewest} className="bg-blue-500 text-white px-4 py-2 rounded">
                 Sort by {sortOrder === 'desc' ? 'Oldest' : 'Newest'}

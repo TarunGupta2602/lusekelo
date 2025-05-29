@@ -1,306 +1,326 @@
-"use client";
-import React, { useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-import Image from "next/image"; // Add this at the top
+'use client';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { useRouter } from 'next/navigation';
 
-const ProductForm = () => {
-  const [formData, setFormData] = useState({
-    name: "",
-    price: "",
-    description: "",
-    quantity: "",
-    categoryid: "1",
-    supermarketid: "1",
-  });
-  const [imageFile, setImageFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState(null);
+export default function EditInventoryPage() {
+  const router = useRouter();
+  const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [filter, setFilter] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [editId, setEditId] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', price: '', quantity: '' });
+  const productsPerPage = 10;
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  // Normalize image path if you use images
+  const normalizeImagePath = (path) => {
+    if (!path) return '';
+    return path.replace(/^(\.\.\/)+assets\//, '/');
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setImageFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
-    }
-  };
+  // Fetch products from Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError('');
 
-  const uploadImage = async (file) => {
-    const ext = file.name.split(".").pop().toLowerCase();
-    const fileName = `${Date.now()}.${ext}`;
-    const filePath = `public/${fileName}`;
+        // Fetch products from products table
+        const { data: productsData, error: productsError } = await supabase
+          .from('products')
+          .select('id, name, price, image, quantity, date_added')
+          .order('date_added', { ascending: sortOrder === 'asc' });
 
-    const { error: uploadError } = await supabase.storage
-      .from("images")
-      .upload(filePath, file);
+        if (productsError) {
+          setError('Error fetching products: ' + productsError.message);
+          setLoading(false);
+          return;
+        }
 
-    if (uploadError) throw uploadError;
+        if (!productsData || productsData.length === 0) {
+          setError('No products available in the inventory.');
+          setProducts([]);
+          setFilteredProducts([]);
+          setLoading(false);
+          return;
+        }
 
-    const { data: urlData } = supabase.storage
-      .from("images")
-      .getPublicUrl(filePath);
+        // Normalize image paths
+        const normalizedProducts = productsData.map((product) => ({
+          ...product,
+          image: normalizeImagePath(product.image),
+        }));
 
-    return urlData.publicUrl;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage(null);
-
-    try {
-      let imageUrl = null;
-      if (imageFile) {
-        imageUrl = await uploadImage(imageFile);
+        setProducts(normalizedProducts);
+        setFilteredProducts(normalizedProducts);
+        setLoading(false);
+      } catch (err) {
+        setError('Unexpected error: ' + err.message);
+        setLoading(false);
       }
+    };
 
-      const { error } = await supabase.from("products").insert([
-        {
-          name: formData.name,
-          price: parseFloat(formData.price),
-          description: formData.description,
-          quantity: parseInt(formData.quantity),
-          image: imageUrl,
-          categoryid: parseInt(formData.categoryid),
-          supermarketid: parseInt(formData.supermarketid),
-          date_added: new Date().toISOString(), // Add current date
-        },
-      ]);
+    fetchData();
+  }, [sortOrder]);
 
-      if (error) throw error;
+  // Filtering and searching
+  useEffect(() => {
+    const filtered = products.filter((product) => {
+      const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const today = new Date();
+      const productDate = new Date(product.date_added);
 
-      setMessage({ type: "success", text: "Product added successfully!" });
-      setFormData({
-        name: "",
-        price: "",
-        description: "",
-        quantity: "",
-        categoryid: "1",
-        supermarketid: "1",
-      });
-      setImageFile(null);
-      setPreviewUrl(null);
-    } catch (err) {
-      setMessage({ type: "error", text: err.message });
-    } finally {
-      setLoading(false);
+      if (filter === 'Today') {
+        return matchesSearch && productDate.toDateString() === today.toDateString();
+      } else if (filter === 'Yesterday') {
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        return matchesSearch && productDate.toDateString() === yesterday.toDateString();
+      } else if (filter === 'Last 7 Days') {
+        const last7Days = new Date(today);
+        last7Days.setDate(today.getDate() - 7);
+        return matchesSearch && productDate >= last7Days;
+      } else if (filter === 'Last 30 Days') {
+        const last30Days = new Date(today);
+        last30Days.setDate(today.getDate() - 30);
+        return matchesSearch && productDate >= last30Days;
+      }
+      return matchesSearch;
+    });
+
+    setFilteredProducts(filtered);
+    setCurrentPage(1); // Reset to first page on search or filter change
+  }, [searchQuery, filter, products]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
+  const startIndex = (currentPage - 1) * productsPerPage;
+  const paginatedProducts = filteredProducts.slice(startIndex, startIndex + productsPerPage);
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) setCurrentPage(page);
+  };
+
+  // Sort order toggle
+  const handleSortByNewest = () => {
+    setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+  };
+
+  // Edit handler: open inline edit form
+  const handleEdit = (product) => {
+    setEditId(product.id);
+    setEditForm({
+      name: product.name,
+      price: product.price,
+      quantity: product.quantity,
+    });
+  };
+
+  // Cancel edit
+  const handleCancelEdit = () => {
+    setEditId(null);
+    setEditForm({ name: '', price: '', quantity: '' });
+  };
+
+  // Save edit
+  const handleSaveEdit = async (id) => {
+    const { name, price, quantity } = editForm;
+    const { error } = await supabase
+      .from('products')
+      .update({ name, price, quantity })
+      .eq('id', id);
+    if (error) {
+      alert('Failed to update product: ' + error.message);
+      return;
     }
+    // Update UI
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === id ? { ...p, name, price, quantity } : p
+      )
+    );
+    setEditId(null);
+    setEditForm({ name: '', price: '', quantity: '' });
+  };
+
+  // Delete handler
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this product?')) {
+      // Delete from DB
+      const { error } = await supabase.from('products').delete().eq('id', id);
+      if (error) {
+        alert('Failed to delete product: ' + error.message);
+        return;
+      }
+      // Remove from UI
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+    }
+  };
+
+  // Stock status
+  const getStockStatus = (quantity) => {
+    if (quantity === 0) return { text: 'Out of Stock', color: 'bg-red-100 text-red-600' };
+    if (quantity <= 5) return { text: 'Low Stock', color: 'bg-yellow-100 text-yellow-600' };
+    return { text: 'In Stock', color: 'bg-green-100 text-green-600' };
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-pink-50 flex items-center justify-center py-10">
-      <div className="w-full max-w-2xl bg-white/90 border border-blue-100 rounded-3xl shadow-2xl p-8 md:p-12 relative">
-        <h2 className="text-3xl font-extrabold text-center text-blue-700 mb-2 tracking-tight drop-shadow-sm">
-          Add New Product
-        </h2>
-        <p className="text-center text-gray-500 mb-8">
-          Fill in the details below to add a new product to your inventory.
-        </p>
-        <form onSubmit={handleSubmit} className="space-y-7">
-          {/* Product Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <input
-              type="text"
-              name="name"
-              placeholder="Product Name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
-            />
-            <input
-              type="number"
-              name="price"
-              placeholder="Price"
-              value={formData.price}
-              onChange={handleChange}
-              required
-              className="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
-            />
-          </div>
-
-          <textarea
-            name="description"
-            placeholder="Description"
-            value={formData.description}
-            onChange={handleChange}
-            rows={3}
-            className="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
-          />
-
-          <input
-            type="number"
-            name="quantity"
-            placeholder="Quantity"
-            value={formData.quantity}
-            onChange={handleChange}
-            required
-            className="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
-          />
-
-          {/* Dropdowns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-semibold text-blue-700 mb-1">
-                Category
-              </label>
-              <select
-                name="categoryid"
-                value={formData.categoryid}
-                onChange={handleChange}
-                className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
-              >
-                {/* Insert categories as needed */}
-                <option value="1">Electronics</option>
-                                <option value="2">Breakfast</option>
-
-                
-                
-                
-                <option value="101">Vegetables</option>
-                <option value="102">Tea, Coffee & more</option>
-                <option value="103">Fruits</option>
-                <option value="104">Munchies</option>
-                <option value="105">Cold Drinks & Juices</option>
-                <option value="106">Bakery & Biscuits</option>
-                <option value="107">Chicken & Fish</option>
-                <option value="108">Dry Fruits</option>
-                <option value="201">Makeup & Beauty</option>
-                <option value="202">Skin Care</option>
-                <option value="203">Baby Care</option>
-                <option value="204">Hair Care</option>
-                <option value="205">Pharma & Wellness</option>
-                <option value="206">Protein Powders</option>
-                <option value="301">Home Needs</option>
-                <option value="302">Kitchen & Dining</option>
-                <option value="303">Cleaning Essentials</option>
-                <option value="304">Pet Care</option>
-                <option value="305">Atta, Rice & Dal</option>
-                <option value="306">Bed & Mattresses</option>
-                <option value="401">Protein Supplements</option>
-                <option value="402">Workout Equipment</option>
-                <option value="403">Fitness Accessories</option>
-                <option value="404">Sports Nutrition</option>
-                <option value="501">Men&#39;s Clothing</option>
-                <option value="502">Women&#39;s Clothing</option>
-                <option value="503">Kids&#39; Clothing</option>
-                <option value="504">Sportswear</option>
-                <option value="601">Living Room</option>
-                <option value="602">Bedroom</option>
-                <option value="603">Office</option>
-                <option value="604">Outdoor</option>
-                
-                <option value="701">Mobile Phones</option>
-                <option value="702">Laptops</option>
-                <option value="704">Audio</option>
-                <option value="801">Fiction</option>
-                <option value="802">Non-Fiction</option>
-                <option value="803">Movies</option>
-                <option value="804">Music</option>
-                {/* Add all other categories here */}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-blue-700 mb-1">
-                Supermarket
-              </label>
-              <select
-                name="supermarketid"
-                value={formData.supermarketid}
-                onChange={handleChange}
-                className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
-              >
-                <option value="1">Supermarket 1</option>
-                <option value="2">Supermarket 2</option>
-                <option value="3">Supermarket 3</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Image Upload */}
-          <div>
-            <label className="block text-sm font-semibold text-blue-700 mb-1">
-              Upload Image
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:border-0 file:rounded-full file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            />
-            {previewUrl && (
-              <Image
-                src={previewUrl}
-                alt="Preview"
-                width={240}
-                height={240}
-                className="mt-4 rounded-xl shadow-lg max-h-60 object-contain border border-blue-100 mx-auto"
-              />
-            )}
-          </div>
-
-          {/* Submit Button & Message */}
-          <div className="flex flex-col items-center mt-2">
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-gradient-to-r from-blue-600 to-pink-500 hover:from-blue-700 hover:to-pink-600 text-white font-bold px-8 py-3 rounded-xl shadow-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <svg
-                    className="animate-spin h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v8z"
-                    ></path>
-                  </svg>
-                  Submitting...
-                </span>
-              ) : (
-                "Add Product"
-              )}
-            </button>
-            {message && (
-              <p
-                className={`mt-4 text-center text-lg ${
-                  message.type === "error"
-                    ? "text-red-600"
-                    : "text-green-600"
-                }`}
-              >
-                {message.text}
-              </p>
-            )}
-          </div>
-        </form>
+    <div className="p-8">
+      <h2 className="text-2xl font-bold mb-4">Edit Inventory</h2>
+      <div className="flex space-x-2 mb-4">
+        {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'All'].map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-4 py-2 rounded ${filter === f ? 'bg-gray-200' : 'bg-white'} border`}
+          >
+            {f}
+          </button>
+        ))}
+        <input
+          type="text"
+          placeholder="Search products..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="px-4 py-2 border rounded"
+        />
+        <button onClick={handleSortByNewest} className="bg-blue-500 text-white px-4 py-2 rounded">
+          Sort by {sortOrder === 'desc' ? 'Oldest' : 'Newest'}
+        </button>
+      </div>
+      {loading ? (
+        <p>Loading...</p>
+      ) : error ? (
+        <p className="text-red-600">{error}</p>
+      ) : filteredProducts.length === 0 ? (
+        <p>No products found.</p>
+      ) : (
+        <div className="bg-white shadow-md rounded">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b">
+                <th className="p-4">Product</th>
+                <th className="p-4">Date Added</th>
+                <th className="p-4">Amount</th>
+                <th className="p-4">Status</th>
+                <th className="p-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedProducts.map((product) => {
+                const stock = getStockStatus(product.quantity);
+                const isEditing = editId === product.id;
+                return (
+                  <tr key={product.id} className="border-b">
+                    <td className="p-4">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editForm.name}
+                          onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                          className="border px-2 py-1 rounded w-full"
+                        />
+                      ) : (
+                        product.name
+                      )}
+                    </td>
+                    <td className="p-4">{product.date_added}</td>
+                    <td className="p-4">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={editForm.price}
+                          onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                          className="border px-2 py-1 rounded w-full"
+                        />
+                      ) : (
+                        product.price
+                      )}
+                    </td>
+                    <td className={`p-4 font-semibold ${stock.color}`}>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={editForm.quantity}
+                          onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
+                          className="border px-2 py-1 rounded w-full"
+                        />
+                      ) : (
+                        stock.text
+                      )}
+                    </td>
+                    <td className="p-4 space-x-2">
+                      {isEditing ? (
+                        <>
+                          <button
+                            onClick={() => handleSaveEdit(product.id)}
+                            className="bg-green-500 text-white px-3 py-1 rounded"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="bg-gray-400 text-white px-3 py-1 rounded"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleEdit(product)}
+                            className="bg-yellow-500 text-white px-3 py-1 rounded"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(product.id)}
+                            className="bg-red-500 text-white px-3 py-1 rounded"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {/* Pagination */}
+      <div className="flex justify-center mt-4 space-x-2">
+        <button
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className={`px-4 py-2 rounded ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+        >
+          Previous
+        </button>
+        {Array.from({ length: totalPages }, (_, i) => (
+          <button
+            key={i + 1}
+            onClick={() => handlePageChange(i + 1)}
+            className={`px-4 py-2 rounded ${currentPage === i + 1 ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          >
+            {i + 1}
+          </button>
+        ))}
+        <button
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className={`px-4 py-2 rounded ${currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+        >
+          Next
+        </button>
       </div>
     </div>
   );
-};
-
-export default ProductForm;
+}
