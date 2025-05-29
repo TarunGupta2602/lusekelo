@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { FaRegEdit, FaRegTrashAlt } from "react-icons/fa"; // Add this at the top with your imports
 
 export default function EditInventoryPage() {
   const router = useRouter();
@@ -172,27 +173,27 @@ export default function EditInventoryPage() {
   };
 
   return (
-    <div className="p-8">
-      <h2 className="text-2xl font-bold mb-4">Edit Inventory</h2>
-      <div className="flex space-x-2 mb-4">
+    <div className="p-8 bg-gray-50 min-h-screen">
+      <h2 className="text-3xl font-bold mb-6">Edit Inventory</h2>
+      <div className="flex flex-wrap gap-2 mb-4">
         {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'All'].map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-2 rounded ${filter === f ? 'bg-gray-200' : 'bg-white'} border`}
+            className={`px-4 py-2 rounded ${filter === f ? 'bg-gray-200 font-semibold' : 'bg-white'} border`}
           >
             {f}
           </button>
         ))}
         <input
           type="text"
-          placeholder="Search products..."
+          placeholder="Search..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="px-4 py-2 border rounded"
         />
-        <button onClick={handleSortByNewest} className="bg-blue-500 text-white px-4 py-2 rounded">
-          Sort by {sortOrder === 'desc' ? 'Oldest' : 'Newest'}
+        <button onClick={handleSortByNewest} className="bg-gray-800 text-white px-4 py-2 rounded">
+          Sort by: {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
         </button>
       </div>
       {loading ? (
@@ -202,40 +203,43 @@ export default function EditInventoryPage() {
       ) : filteredProducts.length === 0 ? (
         <p>No products found.</p>
       ) : (
-        <div className="bg-white shadow-md rounded overflow-x-auto">
+        <div className="bg-white shadow-md rounded-lg overflow-x-auto border-2 border-blue-300">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b">
-                <th className="p-4">Image</th>
-                <th className="p-4">Product</th>
-                <th className="p-4">Date Added</th>
-                <th className="p-4">Amount</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Actions</th>
+              <tr className="border-b-2 border-blue-300 bg-gray-50">
+                <th className="p-3 font-bold border-r border-blue-200 w-24">Product ID</th>
+                <th className="p-3 font-bold border-r border-blue-200">Product Image</th>
+                <th className="p-3 font-bold border-r border-blue-200">Product Name</th>
+                <th className="p-3 font-bold border-r border-blue-200">Date Added</th>
+                <th className="p-3 font-bold border-r border-blue-200">Amount</th>
+                <th className="p-3 font-bold border-r border-blue-200">Units in Stock</th>
+                <th className="p-3 font-bold">Action</th>
               </tr>
             </thead>
             <tbody>
               {paginatedProducts.map((product) => {
-                const stock = getStockStatus(product.quantity);
                 const isEditing = editId === product.id;
                 return (
-                  <tr key={product.id} className="border-b">
-                    <td className="p-4">
+                  <tr key={product.id} className="border-b border-blue-200 hover:bg-blue-50 transition">
+                    <td className="p-3 border-r border-blue-100 text-gray-700 font-mono font-semibold w-24">
+                      #{product.id}
+                    </td>
+                    <td className="p-3 border-r border-blue-100">
                       {product.image ? (
                         <Image
                           src={product.image}
                           alt={product.name}
-                          width={60}
-                          height={60}
+                          width={40}
+                          height={40}
                           className="rounded object-cover"
                         />
                       ) : (
-                        <div className="w-[60px] h-[60px] bg-gray-200 flex items-center justify-center rounded text-gray-400">
-                          No Image
+                        <div className="w-10 h-10 bg-gray-200 flex items-center justify-center rounded text-gray-400">
+                          <span className="text-xs">No Image</span>
                         </div>
                       )}
                     </td>
-                    <td className="p-4">
+                    <td className="p-3 border-r border-blue-100">
                       {isEditing ? (
                         <input
                           type="text"
@@ -247,8 +251,8 @@ export default function EditInventoryPage() {
                         product.name
                       )}
                     </td>
-                    <td className="p-4">{product.date_added}</td>
-                    <td className="p-4">
+                    <td className="p-3 border-r border-blue-100">{product.date_added}</td>
+                    <td className="p-3 border-r border-blue-100">
                       {isEditing ? (
                         <input
                           type="number"
@@ -257,10 +261,10 @@ export default function EditInventoryPage() {
                           className="border px-2 py-1 rounded w-full"
                         />
                       ) : (
-                        product.price
+                        `$${parseFloat(product.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
                       )}
                     </td>
-                    <td className={`p-4 font-semibold ${stock.color}`}>
+                    <td className="p-3 border-r border-blue-100">
                       {isEditing ? (
                         <input
                           type="number"
@@ -269,38 +273,42 @@ export default function EditInventoryPage() {
                           className="border px-2 py-1 rounded w-full"
                         />
                       ) : (
-                        stock.text
+                        product.quantity
                       )}
                     </td>
-                    <td className="p-4 space-x-2">
+                    <td className="p-3 flex gap-2">
                       {isEditing ? (
                         <>
                           <button
                             onClick={() => handleSaveEdit(product.id)}
-                            className="bg-green-500 text-white px-3 py-1 rounded"
+                            className="bg-green-500 text-white px-2 py-1 rounded"
+                            title="Save"
                           >
-                            Save
+                            ✓
                           </button>
                           <button
                             onClick={handleCancelEdit}
-                            className="bg-gray-400 text-white px-3 py-1 rounded"
+                            className="bg-gray-400 text-white px-2 py-1 rounded"
+                            title="Cancel"
                           >
-                            Cancel
+                            ×
                           </button>
                         </>
                       ) : (
                         <>
                           <button
                             onClick={() => handleEdit(product)}
-                            className="bg-yellow-500 text-white px-3 py-1 rounded"
+                            className="bg-transparent text-blue-600 hover:bg-blue-100 px-2 py-1 rounded"
+                            title="Edit"
                           >
-                            Edit
+                            <FaRegEdit className="w-5 h-5" />
                           </button>
                           <button
                             onClick={() => handleDelete(product.id)}
-                            className="bg-red-500 text-white px-3 py-1 rounded"
+                            className="bg-transparent text-red-600 hover:bg-red-100 px-2 py-1 rounded"
+                            title="Delete"
                           >
-                            Delete
+                            <FaRegTrashAlt className="w-5 h-5" />
                           </button>
                         </>
                       )}
@@ -313,7 +321,7 @@ export default function EditInventoryPage() {
         </div>
       )}
       {/* Pagination */}
-      <div className="flex justify-center mt-4 space-x-2">
+      <div className="flex justify-center mt-6 space-x-2">
         <button
           onClick={() => handlePageChange(currentPage - 1)}
           disabled={currentPage === 1}
