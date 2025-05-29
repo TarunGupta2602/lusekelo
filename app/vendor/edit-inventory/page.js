@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 export default function EditInventoryPage() {
   const router = useRouter();
@@ -201,10 +202,11 @@ export default function EditInventoryPage() {
       ) : filteredProducts.length === 0 ? (
         <p>No products found.</p>
       ) : (
-        <div className="bg-white shadow-md rounded">
+        <div className="bg-white shadow-md rounded overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b">
+                <th className="p-4">Image</th>
                 <th className="p-4">Product</th>
                 <th className="p-4">Date Added</th>
                 <th className="p-4">Amount</th>
@@ -218,6 +220,21 @@ export default function EditInventoryPage() {
                 const isEditing = editId === product.id;
                 return (
                   <tr key={product.id} className="border-b">
+                    <td className="p-4">
+                      {product.image ? (
+                        <Image
+                          src={product.image}
+                          alt={product.name}
+                          width={60}
+                          height={60}
+                          className="rounded object-cover"
+                        />
+                      ) : (
+                        <div className="w-[60px] h-[60px] bg-gray-200 flex items-center justify-center rounded text-gray-400">
+                          No Image
+                        </div>
+                      )}
+                    </td>
                     <td className="p-4">
                       {isEditing ? (
                         <input
