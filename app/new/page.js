@@ -233,6 +233,80 @@ export default function NewPage() {
     setTimeout(() => setCartMessage(""), 2000);
   };
 
+  // Enhanced Category Card with glassmorphism and vibrant hover
+  const CategoryCard = ({ childCategory }) => (
+    <Link
+      key={childCategory.id}
+      href={`/new/${childCategory.id}`}
+      className="category-card bg-white/60 backdrop-blur-md border border-green-200 rounded-3xl shadow-xl hover:shadow-2xl hover:scale-[1.04] hover:bg-gradient-to-br hover:from-green-50 hover:to-green-200 transition-all duration-200 flex flex-col group p-6 min-h-[380px] relative overflow-hidden"
+      style={{ minHeight: 380 }}
+    >
+      <div className="absolute inset-0 pointer-events-none z-0 rounded-3xl bg-gradient-to-br from-green-100/30 via-white/10 to-green-200/30 opacity-80" />
+      <div className="flex flex-col h-full z-10 relative">
+        <div className="flex-grow flex items-center justify-center mb-4">
+          {childCategory.image ? (
+            <Image
+              src={normalizeImagePath(childCategory.image)}
+              alt={childCategory.name}
+              width={320}
+              height={200}
+              className="object-contain w-full h-48 rounded-xl bg-white group-hover:scale-105 transition-transform duration-200 border border-green-100 shadow-md"
+              style={{ maxHeight: 200, maxWidth: '100%' }}
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-full h-48 flex items-center justify-center bg-gray-100 rounded-xl">
+              <span className="text-gray-400">No image</span>
+            </div>
+          )}
+        </div>
+        <h3 className="text-lg font-extrabold text-green-900 mb-1 text-center group-hover:text-green-700 transition-colors tracking-tight drop-shadow-sm">{childCategory.name}</h3>
+        <p className="text-sm text-gray-600 mb-2 text-center line-clamp-2">{childCategory.description}</p>
+      </div>
+    </Link>
+  );
+
+  // Enhanced Product Card for product sections
+  const ProductCard = ({ product, handleAddToCart }) => (
+    <Link href={`/products/${product.id}`} key={product.id}>
+      <div className="product-card bg-white/70 backdrop-blur-md rounded-3xl shadow-xl border border-green-100 hover:shadow-2xl hover:scale-[1.04] hover:bg-gradient-to-br hover:from-green-50 hover:to-green-200 transition-all duration-200 p-5 flex flex-col group relative min-h-[260px] overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none z-0 rounded-3xl bg-gradient-to-br from-green-100/30 via-white/10 to-green-200/30 opacity-80" />
+        <div className="mb-3 aspect-[4/3] w-full bg-white/60 rounded-xl overflow-hidden flex items-center justify-center border border-green-50 shadow-sm z-10 relative">
+          {product.image ? (
+            <Image
+              src={normalizeImagePath(product.image)}
+              alt={product.name}
+              width={180}
+              height={120}
+              className="object-contain w-full h-28 group-hover:scale-105 transition-transform duration-200"
+              loading="lazy"
+            />
+          ) : (
+            <div className="h-28 w-full flex items-center justify-center bg-gray-100 rounded-xl">
+              <span className="text-gray-400">No image</span>
+            </div>
+          )}
+        </div>
+        <h3 className="text-base font-bold text-green-900 line-clamp-2 mb-1 group-hover:text-green-700 transition-colors drop-shadow-sm">{product.name}</h3>
+        <p className="text-xs text-gray-500 mb-1 line-clamp-2">{product.description || "No description available."}</p>
+        <div className="flex items-center justify-between mt-auto z-10 relative">
+          <span className="inline-block bg-green-100 text-green-700 font-bold px-3 py-1 rounded-full text-sm shadow-sm">${product.price}</span>
+          <span className="text-xs text-gray-600 ml-2">Qty: <span className="font-semibold">{product.quantity}</span></span>
+          <button
+            className="flex items-center justify-center w-8 h-8 bg-green-500 text-white rounded-full hover:bg-green-600 shadow-md transition-colors ml-2"
+            onClick={e => {
+              e.preventDefault();
+              handleAddToCart(product, 1);
+            }}
+            title="Add to cart"
+          >
+            <span className="text-lg font-bold">+</span>
+          </button>
+        </div>
+      </div>
+    </Link>
+  );
+
   return (
     <div className="ml-5 mr-5 ">
       <style dangerouslySetInnerHTML={{ __html: style }} />
@@ -251,12 +325,12 @@ export default function NewPage() {
             {(showAllCategories ? categories : categories.filter(cat => defaultCategoryNames.includes(cat.name)))
               .filter(cat => cat.children && cat.children.length > 0)
               .map((parentCategory) => (
-                <div key={parentCategory.id} className="mb-12 bg-white rounded-xl shadow-lg p-6">
+                <div key={parentCategory.id} className="mb-12 bg-white rounded-3xl shadow-2xl p-8 border border-green-100">
                   <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800">{parentCategory.name}</h2>
+                    <h2 className="text-2xl md:text-3xl font-extrabold text-green-900 tracking-tight">{parentCategory.name}</h2>
                     <button
                       onClick={() => toggleSection(parentCategory.id)}
-                      className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-100 via-green-200 to-green-300 text-green-800 rounded-xl font-semibold shadow hover:from-green-200 hover:to-green-400 hover:text-green-900 transition-all border border-green-200 focus:outline-none focus:ring-2 focus:ring-green-200"
+                      className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-green-400 via-green-500 to-green-600 text-white rounded-xl font-semibold shadow hover:from-green-500 hover:to-green-700 hover:scale-105 transition-all border-2 border-green-400 focus:outline-none focus:ring-2 focus:ring-green-200"
                     >
                       {expandedSections[parentCategory.id] ? 'Show Less' : 'See All'}
                       <svg
@@ -275,34 +349,7 @@ export default function NewPage() {
                     {parentCategory.children
                       .slice(0, expandedSections[parentCategory.id] ? undefined : 4)
                       .map((childCategory) => (
-                        <Link
-                          key={childCategory.id}
-                          href={`/new/${childCategory.id}`}
-                          className="category-card bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg flex flex-col"
-                          style={{ minHeight: 340 }}
-                        >
-                          <div className="flex flex-col h-full">
-                            <div className="flex-grow flex items-center justify-center mb-4">
-                              {childCategory.image ? (
-                                <Image
-                                  src={normalizeImagePath(childCategory.image)}
-                                  alt={childCategory.name}
-                                  width={320} // Increased width
-                                  height={240} // Increased height
-                                  className="object-contain w-full h-60 rounded-lg" // Increased h-40 to h-60
-                                  style={{ maxHeight: 240, maxWidth: "100%" }} // Increased maxHeight
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="w-full h-60 flex items-center justify-center bg-gray-100 rounded-lg">
-                                  <span className="text-gray-400">No image</span>
-                                </div>
-                              )}
-                            </div>
-                            <h3 className="text-lg font-semibold text-gray-800 mb-2 text-center">{childCategory.name}</h3>
-                            <p className="text-sm text-gray-600 mb-2 text-center">{childCategory.description}</p>
-                          </div>
-                        </Link>
+                        <CategoryCard key={childCategory.id} childCategory={childCategory} />
                       ))}
                   </div>
                 </div>
@@ -395,42 +442,7 @@ export default function NewPage() {
                 <div className="flex space-x-6 pb-4">
                   {electronics.length ? (
                     electronics.map((product) => (
-                      <Link href={`/products/${product.id}`} key={product.id}>
-                        <div className="product-card bg-white rounded-2xl shadow-lg border border-gray-100 hover:shadow-2xl transition-shadow duration-200 p-4 flex flex-col group relative min-h-[250px] hover:scale-[1.03] hover:border-green-400 hover:ring-2 hover:ring-green-100">
-                          {product.image ? (
-                            <div className="mb-3 aspect-[4/3] w-full bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center">
-                              <Image
-                                src={normalizeImagePath(product.image)}
-                                alt={product.name}
-                                width={180}
-                                height={120}
-                                className="object-contain w-full h-28 group-hover:scale-105 transition-transform duration-200"
-                                loading="lazy"
-                              />
-                            </div>
-                          ) : (
-                            <div className="mb-3 h-28 bg-gray-100 rounded-xl flex items-center justify-center">
-                              <span className="text-gray-400">No image</span>
-                            </div>
-                          )}
-                          <h3 className="text-base font-semibold text-gray-800 line-clamp-2 mb-1">{product.name}</h3>
-                          <p className="text-xs text-gray-500 mb-1 line-clamp-2">{product.description || "No description available."}</p>
-                          <div className="flex items-center justify-between mt-auto">
-                            <span className="inline-block bg-green-100 text-green-700 font-bold px-3 py-1 rounded-full text-sm shadow-sm">${product.price}</span>
-                            <span className="text-xs text-gray-600 ml-2">Qty: <span className="font-semibold">{product.quantity}</span></span>
-                            <button
-                              className="flex items-center justify-center w-8 h-8 bg-green-500 text-white rounded-full hover:bg-green-600 shadow-md transition-colors ml-2"
-                              onClick={e => {
-                                e.preventDefault();
-                                handleAddToCart(product, 1);
-                              }}
-                              title="Add to cart"
-                            >
-                              <span className="text-lg font-bold">+</span>
-                            </button>
-                          </div>
-                        </div>
-                      </Link>
+                      <ProductCard key={product.id} product={product} handleAddToCart={handleAddToCart} />
                     ))
                   ) : (
                     <p className="text-gray-500 p-4">No Electronics products found.</p>
@@ -482,42 +494,7 @@ export default function NewPage() {
                 <div className="flex space-x-6 pb-4">
                   {breakfast.length ? (
                     breakfast.map((product) => (
-                      <Link href={`/products/${product.id}`} key={product.id}>
-                        <div className="product-card bg-white rounded-2xl shadow-lg border border-gray-100 hover:shadow-2xl transition-shadow duration-200 p-4 flex flex-col group relative min-h-[250px] hover:scale-[1.03] hover:border-green-400 hover:ring-2 hover:ring-green-100">
-                          {product.image ? (
-                            <div className="mb-3 aspect-[4/3] w-full bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center">
-                              <Image
-                                src={normalizeImagePath(product.image)}
-                                alt={product.name}
-                                width={180}
-                                height={120}
-                                className="object-contain w-full h-28 group-hover:scale-105 transition-transform duration-200"
-                                loading="lazy"
-                              />
-                            </div>
-                          ) : (
-                            <div className="mb-3 h-28 bg-gray-100 rounded-xl flex items-center justify-center">
-                              <span className="text-gray-400">No image</span>
-                            </div>
-                          )}
-                          <h3 className="text-base font-semibold text-gray-800 line-clamp-2 mb-1">{product.name}</h3>
-                          <p className="text-xs text-gray-500 mb-1 line-clamp-2">{product.description || "No description available."}</p>
-                          <div className="flex items-center justify-between mt-auto">
-                            <span className="inline-block bg-green-100 text-green-700 font-bold px-3 py-1 rounded-full text-sm shadow-sm">${product.price}</span>
-                            <span className="text-xs text-gray-600 ml-2">Qty: <span className="font-semibold">{product.quantity}</span></span>
-                            <button
-                              className="flex items-center justify-center w-8 h-8 bg-green-500 text-white rounded-full hover:bg-green-600 shadow-md transition-colors ml-2"
-                              onClick={e => {
-                                e.preventDefault();
-                                handleAddToCart(product, 1);
-                              }}
-                              title="Add to cart"
-                            >
-                              <span className="text-lg font-bold">+</span>
-                            </button>
-                          </div>
-                        </div>
-                      </Link>
+                      <ProductCard key={product.id} product={product} handleAddToCart={handleAddToCart} />
                     ))
                   ) : (
                     <p className="text-gray-500 p-4">No Breakfast products found.</p>

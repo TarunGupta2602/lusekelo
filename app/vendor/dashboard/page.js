@@ -18,6 +18,7 @@ export default function VendorDashboard() {
   const [userName, setUserName] = useState('');
   const [sidebarSection, setSidebarSection] = useState('Dashboard');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [store, setStore] = useState(null);
   const productsPerPage = 10;
 
   // Function to normalize image paths
@@ -44,10 +45,31 @@ export default function VendorDashboard() {
         // Set user name (using email or user_metadata.name if available)
         setUserName(user.user_metadata?.name || user.email.split('@')[0]);
 
-        // Fetch products from products table
+        // Fetch the vendor's supermarket
+        const { data: stores, error: storeError } = await supabase
+          .from('supermarkets')
+          .select('id, name, main_image')
+          .eq('vendor_id', user.id)
+          .limit(1);
+
+        if (storeError) {
+          setError('Error fetching store: ' + storeError.message);
+          setLoading(false);
+          return;
+        }
+        if (!stores || stores.length === 0) {
+          router.push('/vendor/create-store'); // Redirect if no store
+          setLoading(false);
+          return;
+        }
+        const supermarket = stores[0];
+        setStore(supermarket);
+
+        // Fetch products only for this supermarket
         const { data: productsData, error: productsError } = await supabase
           .from('products')
-          .select('id, name, price, image, quantity, date_added')
+          .select('id, name, price, image, quantity, date_added, supermarketid')
+          .eq('supermarketid', supermarket.id)
           .order('date_added', { ascending: sortOrder === 'asc' });
 
         if (productsError) {
@@ -56,14 +78,8 @@ export default function VendorDashboard() {
           return;
         }
 
-        if (!productsData || productsData.length === 0) {
-          setError('Products not found. No products available in the inventory.');
-          setLoading(false);
-          return;
-        }
-
         // Normalize image paths
-        const normalizedProducts = productsData.map(product => ({
+        const normalizedProducts = (productsData || []).map(product => ({
           ...product,
           image: normalizeImagePath(product.image)
         }));
@@ -168,13 +184,72 @@ export default function VendorDashboard() {
     }
   }, []);
 
+  // Fetch store info and redirect if not exists
+  useEffect(() => {
+    const checkStore = async () => {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        router.push('/vendor');
+        return;
+      }
+      // Check for store in supermarkets table
+      const { data: stores, error: storeError } = await supabase
+        .from('supermarkets')
+        .select('id, name, main_image')
+        .eq('vendor_id', user.id)
+        .limit(1);
+
+      if (storeError) {
+        setError('Error fetching store: ' + storeError.message);
+        return;
+      }
+      if (!stores || stores.length === 0) {
+        router.push('/vendor/create-store'); // Redirect if no store
+        return;
+      }
+      setStore(stores[0]);
+    };
+    checkStore();
+  }, [router]);
+
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
       <div className="w-64 bg-white shadow-md">
         <div className="p-4">
-          <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
-          <p className="text-sm text-pink-600 font-semibold">VISHAL MEGA MART</p>
+          {store ? (
+            <div className="flex items-center space-x-3">
+              {store.main_image ? (
+                <Image
+                  src={
+                    store.main_image.startsWith('http')
+                      ? store.main_image
+                      : store.main_image.startsWith('/')
+                        ? store.main_image
+                        : '/' + store.main_image.replace(/^(\.\.\/)+/, '')
+                  }
+                  alt={store.name}
+                  width={40}
+                  height={40}
+                  className="rounded-full object-cover"
+                  unoptimized // Remove this if you want Next.js optimization for remote images
+                />
+              ) : (
+                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                  <span className="text-gray-400 text-xl">🏬</span>
+                </div>
+              )}
+              <div>
+                <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
+                <p className="text-sm text-pink-600 font-semibold">{store.name}</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
+              <p className="text-sm text-pink-600 font-semibold">Loading...</p>
+            </>
+          )}
         </div>
         <nav className="mt-4">
           <a href="#" className="flex items-center px-4 py-2 text-gray-600 hover:bg-gray-200">
@@ -212,7 +287,7 @@ export default function VendorDashboard() {
             {dropdownOpen && (
               <div className="ml-8 mt-1 bg-white border rounded shadow absolute z-10 w-40">
                 <a
-                  href="/vendor/orders"
+                  href="#"
                   className="flex items-center px-4 py-2 hover:bg-gray-100 text-gray-700"
                   onClick={() => setSidebarSection('Orders')}
                 >
@@ -381,14 +456,23 @@ export default function VendorDashboard() {
                           <td className="p-4 flex items-center space-x-2">
                             {product.image ? (
                               <Image
-                                src={product.image}
+                                src={
+                                  product.image.startsWith('http')
+                                    ? product.image
+                                    : product.image.startsWith('/')
+                                      ? product.image
+                                      : '/' + product.image.replace(/^(\.\.\/)+/, '')
+                                }
                                 alt={product.name}
                                 width={40}
                                 height={40}
                                 className="w-10 h-10 rounded object-cover"
+                                unoptimized
                               />
                             ) : (
-                              <div className="w-10 h-10 bg-gray-200 rounded"></div>
+                              <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center">
+                                <span className="text-gray-400 text-xl">🛒</span>
+                              </div>
                             )}
                             <span>{product.name}</span>
                           </td>
@@ -433,6 +517,27 @@ export default function VendorDashboard() {
               </button>
             </div>
           </>
+        )}
+
+        {/* Orders Table UI */}
+        {sidebarSection === 'Orders' && (
+          <div className="bg-white rounded-xl shadow flex flex-col items-center justify-center min-h-[350px]">
+            <h2 className="text-2xl font-bold text-blue-700 mb-2">Orders Page</h2>
+            <p className="text-gray-500 text-center max-w-xs mb-4">
+              This is the orders page. There are currently no orders for your store.<br />
+              Once customers place orders, they will appear here.
+            </p>
+            <svg
+              className="w-16 h-16 text-gray-300 mb-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 48 48"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect x="8" y="16" width="32" height="20" rx="2" strokeWidth="2" stroke="currentColor" fill="none"/>
+              <path d="M16 16V12a8 8 0 0116 0v4" strokeWidth="2" stroke="currentColor" fill="none"/>
+            </svg>
+          </div>
         )}
         {/* You can add more content for other sidebar sections here if needed */}
       </div>

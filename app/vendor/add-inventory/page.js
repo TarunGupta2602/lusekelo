@@ -1,7 +1,8 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import Image from "next/image"; // Add this at the top
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,18 +10,47 @@ const supabase = createClient(
 );
 
 const ProductForm = () => {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     name: "",
     price: "",
     description: "",
     quantity: "",
     categoryid: "1",
-    supermarketid: "1",
   });
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [supermarketId, setSupermarketId] = useState(null);
+
+  // Fetch the current user's supermarket id
+  useEffect(() => {
+    const fetchSupermarket = async () => {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) {
+        setMessage({
+          type: "error",
+          text: "User not found. Please log in again.",
+        });
+        return;
+      }
+      const { data: stores, error: storeError } = await supabase
+        .from("supermarkets")
+        .select("id")
+        .eq("vendor_id", user.id)
+        .limit(1);
+      if (storeError || !stores || stores.length === 0) {
+        setMessage({ type: "error", text: "No store found for this vendor." });
+        return;
+      }
+      setSupermarketId(stores[0].id);
+    };
+    fetchSupermarket();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -59,6 +89,15 @@ const ProductForm = () => {
     setMessage(null);
 
     try {
+      if (!supermarketId) {
+        setMessage({
+          type: "error",
+          text: "Supermarket not found. Please refresh the page.",
+        });
+        setLoading(false);
+        return;
+      }
+
       let imageUrl = null;
       if (imageFile) {
         imageUrl = await uploadImage(imageFile);
@@ -72,8 +111,8 @@ const ProductForm = () => {
           quantity: parseInt(formData.quantity),
           image: imageUrl,
           categoryid: parseInt(formData.categoryid),
-          supermarketid: parseInt(formData.supermarketid),
-          date_added: new Date().toISOString(), // Add current date
+          supermarketid: supermarketId,
+          date_added: new Date().toISOString(),
         },
       ]);
 
@@ -86,7 +125,6 @@ const ProductForm = () => {
         description: "",
         quantity: "",
         categoryid: "1",
-        supermarketid: "1",
       });
       setImageFile(null);
       setPreviewUrl(null);
@@ -148,84 +186,61 @@ const ProductForm = () => {
             className="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
           />
 
-          {/* Dropdowns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-semibold text-blue-700 mb-1">
-                Category
-              </label>
-              <select
-                name="categoryid"
-                value={formData.categoryid}
-                onChange={handleChange}
-                className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
-              >
-                {/* Insert categories as needed */}
-                <option value="1">Electronics</option>
-                                <option value="2">Breakfast</option>
-
-                
-                
-                
-                <option value="101">Vegetables</option>
-                <option value="102">Tea, Coffee & more</option>
-                <option value="103">Fruits</option>
-                <option value="104">Munchies</option>
-                <option value="105">Cold Drinks & Juices</option>
-                <option value="106">Bakery & Biscuits</option>
-                <option value="107">Chicken & Fish</option>
-                <option value="108">Dry Fruits</option>
-                <option value="201">Makeup & Beauty</option>
-                <option value="202">Skin Care</option>
-                <option value="203">Baby Care</option>
-                <option value="204">Hair Care</option>
-                <option value="205">Pharma & Wellness</option>
-                <option value="206">Protein Powders</option>
-                <option value="301">Home Needs</option>
-                <option value="302">Kitchen & Dining</option>
-                <option value="303">Cleaning Essentials</option>
-                <option value="304">Pet Care</option>
-                <option value="305">Atta, Rice & Dal</option>
-                <option value="306">Bed & Mattresses</option>
-                <option value="401">Protein Supplements</option>
-                <option value="402">Workout Equipment</option>
-                <option value="403">Fitness Accessories</option>
-                <option value="404">Sports Nutrition</option>
-                <option value="501">Men&#39;s Clothing</option>
-                <option value="502">Women&#39;s Clothing</option>
-                <option value="503">Kids&#39; Clothing</option>
-                <option value="504">Sportswear</option>
-                <option value="601">Living Room</option>
-                <option value="602">Bedroom</option>
-                <option value="603">Office</option>
-                <option value="604">Outdoor</option>
-                
-                <option value="701">Mobile Phones</option>
-                <option value="702">Laptops</option>
-                <option value="704">Audio</option>
-                <option value="801">Fiction</option>
-                <option value="802">Non-Fiction</option>
-                <option value="803">Movies</option>
-                <option value="804">Music</option>
-                {/* Add all other categories here */}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-blue-700 mb-1">
-                Supermarket
-              </label>
-              <select
-                name="supermarketid"
-                value={formData.supermarketid}
-                onChange={handleChange}
-                className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
-              >
-                <option value="1">Supermarket 1</option>
-                <option value="2">Supermarket 2</option>
-                <option value="3">Supermarket 3</option>
-              </select>
-            </div>
+          {/* Category Dropdown */}
+          <div>
+            <label className="block text-sm font-semibold text-blue-700 mb-1">
+              Category
+            </label>
+            <select
+              name="categoryid"
+              value={formData.categoryid}
+              onChange={handleChange}
+              className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
+            >
+              {/* Insert categories as needed */}
+              <option value="1">Electronics</option>
+              <option value="2">Breakfast</option>
+              <option value="101">Vegetables</option>
+              <option value="102">Tea, Coffee & more</option>
+              <option value="103">Fruits</option>
+              <option value="104">Munchies</option>
+              <option value="105">Cold Drinks & Juices</option>
+              <option value="106">Bakery & Biscuits</option>
+              <option value="107">Chicken & Fish</option>
+              <option value="108">Dry Fruits</option>
+              <option value="201">Makeup & Beauty</option>
+              <option value="202">Skin Care</option>
+              <option value="203">Baby Care</option>
+              <option value="204">Hair Care</option>
+              <option value="205">Pharma & Wellness</option>
+              <option value="206">Protein Powders</option>
+              <option value="301">Home Needs</option>
+              <option value="302">Kitchen & Dining</option>
+              <option value="303">Cleaning Essentials</option>
+              <option value="304">Pet Care</option>
+              <option value="305">Atta, Rice & Dal</option>
+              <option value="306">Bed & Mattresses</option>
+              <option value="401">Protein Supplements</option>
+              <option value="402">Workout Equipment</option>
+              <option value="403">Fitness Accessories</option>
+              <option value="404">Sports Nutrition</option>
+              <option value="501">Men's Clothing</option>
+              <option value="502">Women's Clothing</option>
+              <option value="503">Kids' Clothing</option>
+              <option value="504">Sportswear</option>
+              <option value="601">Living Room</option>
+              <option value="602">Bedroom</option>
+              <option value="603">Office</option>
+              <option value="604">Outdoor</option>
+              <option value="701">Mobile Phones</option>
+              <option value="702">Laptops</option>
+              <option value="704">Audio</option>
+              <option value="801">Fiction</option>
+              <option value="802">Non-Fiction</option>
+              <option value="803">Movies</option>
+              <option value="804">Music</option>
+              {/* Add all other categories here */}
+            </select>
           </div>
 
           {/* Image Upload */}

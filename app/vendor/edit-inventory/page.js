@@ -33,10 +33,38 @@ export default function EditInventoryPage() {
         setLoading(true);
         setError('');
 
-        // Fetch products from products table
+        // 1. Get current user
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          setError('User not found. Please log in again.');
+          setLoading(false);
+          return;
+        }
+
+        // 2. Get supermarket for this vendor
+        const { data: stores, error: storeError } = await supabase
+          .from('supermarkets')
+          .select('id')
+          .eq('vendor_id', user.id)
+          .limit(1);
+
+        if (storeError) {
+          setError('Error fetching store: ' + storeError.message);
+          setLoading(false);
+          return;
+        }
+        if (!stores || stores.length === 0) {
+          setError('No store found for this vendor.');
+          setLoading(false);
+          return;
+        }
+        const supermarketId = stores[0].id;
+
+        // 3. Fetch products for this supermarket only
         const { data: productsData, error: productsError } = await supabase
           .from('products')
-          .select('id, name, price, image, quantity, date_added')
+          .select('id, name, price, image, quantity, date_added, supermarketid')
+          .eq('supermarketid', supermarketId)
           .order('date_added', { ascending: sortOrder === 'asc' });
 
         if (productsError) {
