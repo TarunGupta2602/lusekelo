@@ -80,9 +80,8 @@ export default function NewPage() {
         setLoading(false)
       }
     }
-    
     fetchCategories()
-  }, [defaultCategoryNames]) // Add as dependency
+  }, []) // Removed defaultCategoryNames from dependency array
 
   // Fetch products with optimized loading
   useEffect(() => {

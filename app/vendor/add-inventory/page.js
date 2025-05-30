@@ -224,9 +224,9 @@ const ProductForm = () => {
               <option value="402">Workout Equipment</option>
               <option value="403">Fitness Accessories</option>
               <option value="404">Sports Nutrition</option>
-              <option value="501">Men's Clothing</option>
-              <option value="502">Women's Clothing</option>
-              <option value="503">Kids' Clothing</option>
+              <option value="501">Men&apos;s Clothing</option>
+              <option value="502">Women&apos;s Clothing</option>
+              <option value="503">Kids&apos; Clothing</option>
               <option value="504">Sportswear</option>
               <option value="601">Living Room</option>
               <option value="602">Bedroom</option>
