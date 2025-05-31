@@ -18,7 +18,13 @@ const geistMono = Geist_Mono({
 
 export default function RootLayout({ children }) {
   const pathname = usePathname(); // Get the current pathname
-  const isVendorRoute = pathname === "/vendor" || pathname === "/vendor/dashboard" || pathname === "/vendor/edit-inventory" || pathname === "/vendor/create-store"; // Check if the route is vendor login or dashboard
+  const isVendorRoute =
+    pathname === "/vendor" ||
+    pathname === "/vendor/dashboard" ||
+    pathname === "/vendor/edit-inventory" ||
+    pathname === "/vendor/create-store" ||
+    pathname === "/admin" ||
+    pathname === "/admin/dashboard"; // Check if the route is vendor login or dashboard
 
   return (
     <html lang="en">

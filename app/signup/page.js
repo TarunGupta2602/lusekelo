@@ -49,7 +49,7 @@ export default function SignupPage() {
       interval = setInterval(async () => {
         const { data, error } = await supabase.auth.getUser();
         if (data?.user?.email_confirmed_at) {
-          clearInterval(interval);
+          clearInterval(interval); 
           router.push("/login");
         }
       }, 4000);
