@@ -22,6 +22,7 @@ export default function RootLayout({ children }) {
     pathname === "/vendor" ||
     pathname === "/vendor/dashboard" ||
     pathname === "/vendor/edit-inventory" ||
+    pathname === "/vendor/add-inventory" ||
     pathname === "/vendor/create-store" ||
     pathname === "/admin" ||
     pathname === "/admin/dashboard"; // Check if the route is vendor login or dashboard
@@ -31,9 +32,9 @@ export default function RootLayout({ children }) {
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {/* Render Navbar only if not on vendor login or dashboard */}
         {!isVendorRoute && <Navbar />}
-        
+
         {children}
-        
+
         {/* Render Footer only if not on vendor login or dashboard */}
         {!isVendorRoute && <Footer />}
       </body>
