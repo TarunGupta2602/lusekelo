@@ -147,10 +147,10 @@ const ShopContent = () => {
                           </div>
                         ))}
                       </div>
-                      <div className="w-full sm:w-2/5 bg-teal-900 text-white p-4 flex flex-col justify-between">
+                      <div className="w-full sm:w-2/5 bg-[#013033] text-white p-4 flex flex-col justify-between">
                         <div>
                           <h3 className="text-lg sm:text-xl font-semibold">{store.name}</h3>
-                          <div className="flex items-start mt-3 text-gray-300">
+                          <div className="flex items-start mt-3 text-[#6A6A6A]">
                             <span className="text-red-500 mr-2 mt-1">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -160,7 +160,7 @@ const ShopContent = () => {
                             <p className="text-sm leading-tight">{store.address}</p>
                           </div>
                         </div>
-                        <button className="mt-4 w-full bg-green-400 hover:bg-green-500 text-black font-medium py-2 rounded text-center transition-colors">
+                        <button className="mt-4 w-full bg-[#BBEB6D] text-black font-medium py-2 rounded text-center transition-all duration-200 hover:scale-105 hover:shadow-md">
                           Shop from here
                         </button>
                       </div>
