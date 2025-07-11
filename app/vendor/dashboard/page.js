@@ -1,0 +1,956 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import Papa from 'papaparse';
+
+export default function VendorDashboard() {
+  const router = useRouter();
+  const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [filter, setFilter] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [sidebarSection, setSidebarSection] = useState('Dashboard');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [store, setStore] = useState(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editUserName, setEditUserName] = useState('');
+  const [editStoreName, setEditStoreName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const productsPerPage = 10;
+
+  // Store mapping of uploaded image names to their generated URLs
+  const [uploadedImageMap, setUploadedImageMap] = useState({});
+
+  const normalizeImagePath = (path) => {
+    if (!path) return '/default-vendor.png';
+    return path.replace(/^(\.\.\/)+assets\//, '/');
+  };
+
+  const handleMultipleImageUpload = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    try {
+      setUploading(true);
+      setError('');
+
+      const uploadPromises = Array.from(files).map(async (file) => {
+        // Validate file type
+        const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+        const extension = file.name.split('.').pop().toLowerCase();
+        if (!validExtensions.includes(extension)) {
+          throw new Error(`Invalid file type for ${file.name}. Only ${validExtensions.join(', ')} are allowed.`);
+        }
+
+        // Generate unique file name
+        const fileName = `public/${Date.now()}_${file.name}`;
+
+        // Upload to Supabase storage
+        const { data, error } = await supabase.storage
+          .from('images')
+          .upload(fileName, file);
+
+        if (error) {
+          throw new Error(`Error uploading ${file.name}: ${error.message}`);
+        }
+
+        // Get public URL
+        const { data: publicUrlData } = supabase.storage
+          .from('images')
+          .getPublicUrl(fileName);
+
+        return {
+          fileName: file.name,
+          publicUrl: publicUrlData.publicUrl,
+        };
+      });
+
+      const results = await Promise.allSettled(uploadPromises);
+
+      const successfulUploads = results
+        .filter((result) => result.status === 'fulfilled')
+        .map((result) => result.value);
+
+      const failedUploads = results
+        .filter((result) => result.status === 'rejected')
+        .map((result) => result.reason.message);
+
+      // Build mapping of image name to URL
+      const imageMap = {};
+      successfulUploads.forEach(({ fileName, publicUrl }) => {
+        imageMap[fileName] = publicUrl;
+      });
+      setUploadedImageMap((prev) => ({ ...prev, ...imageMap }));
+
+      if (failedUploads.length > 0) {
+        setError(`Some uploads failed: ${failedUploads.join(', ')}`);
+      }
+
+      if (successfulUploads.length > 0) {
+        alert(`Successfully uploaded ${successfulUploads.length} image(s)`);
+      }
+    } catch (err) {
+      setError(`Upload error: ${err.message}`);
+    } finally {
+      setUploading(false);
+      e.target.value = null; // Reset input field
+    }
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          setError('User not found. Please log in again.');
+          router.push('/vendor');
+          return;
+        }
+
+        setUserName(user.user_metadata?.name || user.email.split('@')[0]);
+        setUserEmail(user.email);
+        setEditUserName(user.user_metadata?.name || user.email.split('@')[0]);
+
+        const { data: stores, error: storeError } = await supabase
+          .from('supermarkets')
+          .select('id, name, main_image')
+          .eq('vendor_id', user.id)
+          .limit(1);
+
+        if (storeError) {
+          setError('Error fetching store: ' + storeError.message);
+          setLoading(false);
+          return;
+        }
+        if (!stores || stores.length === 0) {
+          router.push('/vendor/create-store');
+          setLoading(false);
+          return;
+        }
+        const supermarket = stores[0];
+        setStore(supermarket);
+        setEditStoreName(supermarket.name);
+
+        const { data: productsData, error: productsError } = await supabase
+          .from('products')
+          .select('id, name, price, image, quantity, date_added, supermarketid, description, categoryid')
+          .eq('supermarketid', supermarket.id)
+          .order('date_added', { ascending: sortOrder === 'asc' });
+
+        if (productsError) {
+          setError('Error fetching products: ' + productsError.message);
+          setLoading(false);
+          return;
+        }
+
+        const normalizedProducts = (productsData || []).map((product) => ({
+          ...product,
+          image: normalizeImagePath(product.image),
+        }));
+
+        setProducts(normalizedProducts);
+        setFilteredProducts(normalizedProducts);
+        setLoading(false);
+      } catch (err) {
+        setError('Unexpected error: ' + err.message);
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [router, sortOrder]);
+
+  useEffect(() => {
+    const filtered = products.filter((product) => {
+      const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const today = new Date();
+      const productDate = new Date(product.date_added);
+
+      if (filter === 'Today') {
+        return matchesSearch && productDate.toDateString() === today.toDateString();
+      } else if (filter === 'Yesterday') {
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        return matchesSearch && productDate.toDateString() === yesterday.toDateString();
+      } else if (filter === 'Last 7 Days') {
+        const last7Days = new Date(today);
+        last7Days.setDate(today.getDate() - 7);
+        return matchesSearch && productDate >= last7Days;
+      } else if (filter === 'Last 30 Days') {
+        const last30Days = new Date(today);
+        last30Days.setDate(today.getDate() - 30);
+        return matchesSearch && productDate >= last30Days;
+      }
+      return matchesSearch;
+    });
+
+    setFilteredProducts(filtered);
+    setCurrentPage(1);
+  }, [searchQuery, filter, products]);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/vendor');
+  };
+
+  const handleEditInventory = () => {
+    router.push('/vendor/add-inventory');
+  };
+
+  const handleSortByNewest = () => {
+    setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+  };
+
+  const getStockStatus = (quantity) => {
+    if (quantity === 0) return { text: 'Out of Stock', color: 'bg-red-100 text-red-600' };
+    if (quantity <= 5) return { text: 'Low Stock', color: 'bg-yellow-100 text-yellow-600' };
+    return { text: 'In Stock', color: 'bg-green-100 text-green-600' };
+  };
+
+  const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
+  const startIndex = (currentPage - 1) * productsPerPage;
+  const paginatedProducts = filteredProducts.slice(startIndex, startIndex + productsPerPage);
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const pageNumbers = [];
+  for (let i = 1; i <= totalPages; i++) {
+    pageNumbers.push(i);
+  }
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/vendor');
+      }
+    };
+    checkAuth();
+  }, [router]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const section = params.get('section');
+    if (section === 'inventory') {
+      setSidebarSection('Inventory');
+    }
+  }, []);
+
+  useEffect(() => {
+    const checkStore = async () => {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        router.push('/vendor');
+        return;
+      }
+      const { data: stores, error: storeError } = await supabase
+        .from('supermarkets')
+        .select('id, name, main_image')
+        .eq('vendor_id', user.id)
+        .limit(1);
+
+      if (storeError) {
+        setError('Error fetching store: ' + storeError.message);
+        return;
+      }
+      if (!stores || stores.length === 0) {
+        router.push('/vendor/create-store');
+        return;
+      }
+      setStore(stores[0]);
+    };
+    checkStore();
+  }, [router]);
+
+  const handleProfileClick = () => {
+    setIsProfileModalOpen(true);
+    setIsEditing(false);
+    setEditUserName(userName);
+    setEditStoreName(store?.name || '');
+    setNewPassword('');
+    setConfirmPassword('');
+  };
+
+  const handleCloseModal = () => {
+    setIsProfileModalOpen(false);
+    setIsEditing(false);
+    setError('');
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setError('');
+
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        setError('User not found.');
+        return;
+      }
+
+      const updates = { name: editUserName };
+
+      const { error: userUpdateError } = await supabase.auth.updateUser({
+        data: updates,
+        ...(newPassword && newPassword === confirmPassword ? { password: newPassword } : {}),
+      });
+
+      if (userUpdateError) {
+        setError('Error updating profile: ' + userUpdateError.message);
+        return;
+      }
+
+      if (newPassword && newPassword !== confirmPassword) {
+        setError('Passwords do not match.');
+        return;
+      }
+
+      const { error: storeUpdateError } = await supabase
+        .from('supermarkets')
+        .update({ name: editStoreName })
+        .eq('id', store.id);
+
+      if (storeUpdateError) {
+        setError('Error updating store name: ' + storeUpdateError.message);
+        return;
+      }
+
+      setUserName(editUserName);
+      setStore({ ...store, name: editStoreName });
+      setIsEditing(false);
+      setIsProfileModalOpen(false);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setError('Unexpected error: ' + err.message);
+    }
+  };
+
+  const getCategoryNameById = (id) => {
+    const categories = [
+      { id: 1, name: 'Electronics' },
+      { id: 2, name: 'Breakfast' },
+      { id: 101, name: 'Vegetables' },
+      { id: 102, name: 'Tea, Coffee & more' },
+      { id: 103, name: 'Fruits' },
+      { id: 104, name: 'Munchies' },
+      { id: 105, name: 'Cold Drinks & Juices' },
+      { id: 106, name: 'Bakery & Biscuits' },
+      { id: 107, name: 'Chicken & Fish' },
+      { id: 108, name: 'Dry Fruits' },
+      { id: 201, name: 'Makeup & Beauty' },
+      { id: 202, name: 'Skin Care' },
+      { id: 203, name: 'Baby Care' },
+      { id: 204, name: 'Hair Care' },
+      { id: 205, name: 'Pharma & Wellness' },
+      { id: 206, name: 'Protein Powders' },
+      { id: 301, name: 'Home Needs' },
+      { id: 302, name: 'Kitchen & Dining' },
+      { id: 303, name: 'Cleaning Essentials' },
+      { id: 304, name: 'Pet Care' },
+      { id: 305, name: 'Atta, Rice & Dal' },
+      { id: 306, name: 'Bed & Mattresses' },
+      { id: 401, name: 'Protein Supplements' },
+      { id: 402, name: 'Workout Equipment' },
+      { id: 403, name: 'Fitness Accessories' },
+      { id: 404, name: 'Sports Nutrition' },
+      { id: 501, name: "Men's Clothing" },
+      { id: 502, name: "Women's Clothing" },
+      { id: 503, name: "Kids' Clothing" },
+      { id: 504, name: 'Sportswear' },
+      { id: 601, name: 'Living Room' },
+      { id: 602, name: 'Bedroom' },
+      { id: 603, name: 'Office' },
+      { id: 604, name: 'Outdoor' },
+      { id: 701, name: 'Mobile Phones' },
+      { id: 702, name: 'Laptops' },
+      { id: 704, name: 'Audio' },
+      { id: 801, name: 'Fiction' },
+      { id: 802, name: 'Non-Fiction' },
+      { id: 803, name: 'Movies' },
+      { id: 804, name: 'Music' },
+    ];
+    const found = categories.find((c) => c.id === Number(id));
+    return found ? found.name : '';
+  };
+
+  const getCategoryIdByName = (name) => {
+    const categories = [
+      { id: 1, name: 'Electronics' },
+      { id: 2, name: 'Breakfast' },
+      { id: 101, name: 'Vegetables' },
+      { id: 102, name: 'Tea, Coffee & more' },
+      { id: 103, name: 'Fruits' },
+      { id: 104, name: 'Munchies' },
+      { id: 105, name: 'Cold Drinks & Juices' },
+      { id: 106, name: 'Bakery & Biscuits' },
+      { id: 107, name: 'Chicken & Fish' },
+      { id: 108, name: 'Dry Fruits' },
+      { id: 201, name: 'Makeup & Beauty' },
+      { id: 202, name: 'Skin Care' },
+      { id: 203, name: 'Baby Care' },
+      { id: 204, name: 'Hair Care' },
+      { id: 205, name: 'Pharma & Wellness' },
+      { id: 206, name: 'Protein Powders' },
+      { id: 301, name: 'Home Needs' },
+      { id: 302, name: 'Kitchen & Dining' },
+      { id: 303, name: 'Cleaning Essentials' },
+      { id: 304, name: 'Pet Care' },
+      { id: 305, name: 'Atta, Rice & Dal' },
+      { id: 306, name: 'Bed & Mattresses' },
+      { id: 401, name: 'Protein Supplements' },
+      { id: 402, name: 'Workout Equipment' },
+      { id: 403, name: 'Fitness Accessories' },
+      { id: 404, name: 'Sports Nutrition' },
+      { id: 501, name: "Men's Clothing" },
+      { id: 502, name: "Women's Clothing" },
+      { id: 503, name: "Kids' Clothing" },
+      { id: 504, name: 'Sportswear' },
+      { id: 601, name: 'Living Room' },
+      { id: 602, name: 'Bedroom' },
+      { id: 603, name: 'Office' },
+      { id: 604, name: 'Outdoor' },
+      { id: 701, name: 'Mobile Phones' },
+      { id: 702, name: 'Laptops' },
+      { id: 704, name: 'Audio' },
+      { id: 801, name: 'Fiction' },
+      { id: 802, name: 'Non-Fiction' },
+      { id: 803, name: 'Movies' },
+      { id: 804, name: 'Music' },
+    ];
+    const found = categories.find((c) => c.name === name);
+    return found ? found.id : 1;
+  };
+
+  const handleExportCSV = () => {
+    if (!products || products.length === 0) return;
+    const exportData = products.map((product) => ({
+      name: product.name,
+      price: product.price,
+      description: product.description,
+      quantity: product.quantity,
+      category: getCategoryNameById(product.categoryid),
+      supermarketid: product.supermarketid,
+      date_added: product.date_added,
+      image: product.image,
+    }));
+    const csv = Papa.unparse(exportData);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'products.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportCSV = (e) => {
+    const file = e.target.files[0];
+    if (!file || !store) return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          const productsToInsert = results.data.map((row) => {
+            // If image name matches uploaded image, use the generated URL
+            let imageUrl = row.image || null;
+            if (imageUrl && uploadedImageMap[imageUrl]) {
+              imageUrl = uploadedImageMap[imageUrl];
+            }
+            return {
+              name: row.name,
+              price: parseFloat(row.price),
+              description: row.description,
+              quantity: parseInt(row.quantity),
+              categoryid: getCategoryIdByName(row.category),
+              supermarketid: store.id,
+              date_added: row.date_added || new Date().toISOString(),
+              image: imageUrl,
+            };
+          });
+          const { error } = await supabase.from('products').insert(productsToInsert);
+          if (error) {
+            alert('Error importing products: ' + error.message);
+          } else {
+            alert('Products imported successfully!');
+            window.location.reload();
+          }
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      },
+      error: (err) => {
+        alert('CSV Parse Error: ' + err.message);
+      },
+    });
+  };
+
+  return (
+    <div className="flex h-screen bg-gray-100">
+      <div className="w-64 bg-white shadow-md">
+        <div className="p-4">
+          {store ? (
+            <div className="flex items-center space-x-3">
+              {store.main_image ? (
+                <Image
+                  src={
+                    store.main_image.startsWith('http')
+                      ? store.main_image
+                      : store.main_image.startsWith('/')
+                        ? store.main_image
+                        : '/' + store.main_image.replace(/^(\.\.\/)+/, '')
+                  }
+                  alt={store.name}
+                  width={40}
+                  height={40}
+                  className="rounded-full object-cover"
+                  unoptimized
+                />
+              ) : (
+                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                  <span className="text-gray-400 text-xl">🏬</span>
+                </div>
+              )}
+              <div>
+                <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
+                <p className="text-sm text-pink-600 font-semibold">{store.name}</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
+              <p className="text-sm text-pink-600 font-semibold">Loading...</p>
+            </>
+          )}
+        </div>
+        <nav className="mt-4">
+          <a href="#" className="flex items-center px-4 py-2 text-gray-600 hover:bg-gray-200">
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+            Search Orders
+          </a>
+          <a
+            href="#"
+            className={`flex items-center px-4 py-2 ${
+              sidebarSection === 'Dashboard' ? 'bg-gray-200 text-gray-800 font-semibold' : 'text-gray-600 hover:bg-gray-200'
+            }`}
+            onClick={() => setSidebarSection('Dashboard')}
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7 a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            </svg>
+            Dashboard
+          </a>
+          <div className="relative">
+            <button
+              onClick={() => setDropdownOpen((prev) => !prev)}
+              className="flex items-center w-full px-4 py-2 text-gray-600 hover:bg-gray-200 focus:outline-none"
+              aria-haspopup="true"
+              aria-expanded={dropdownOpen}
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h18M3 9h18M3 15h18M3 21h18"></path>
+              </svg>
+              <span className="flex-1 text-left">Manage Bookings</span>
+              <svg className={`w-4 h-4 ml-auto transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {dropdownOpen && (
+              <div className="ml-8 mt-1 bg-white border rounded shadow absolute z-10 w-40">
+                <a
+                  href="#"
+                  className="flex items-center px-4 py-2 hover:bg-gray-100 text-gray-700"
+                  onClick={() => setSidebarSection('Orders')}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                  </svg>
+                  Orders
+                </a>
+                <a
+                  href="#"
+                  className="flex items-center px-4 py-2 hover:bg-gray-100 text-gray-700"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setSidebarSection('Inventory');
+                    setDropdownOpen(false);
+                    router.push('/vendor/dashboard?section=inventory');
+                  }}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  Inventory
+                </a>
+              </div>
+            )}
+          </div>
+        </nav>
+      </div>
+
+      <div className="flex-1 p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-semibold">{sidebarSection === 'Inventory' ? 'Inventory' : sidebarSection === 'Orders' ? 'Orders' : 'Dashboard'}</h2>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 cursor-pointer hover:text-blue-600" onClick={handleProfileClick}>
+              <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                <span className="text-gray-400 text-lg">👤</span>
+              </div>
+              <span className="text-gray-600">Welcome, {userName}</span>
+            </div>
+            <button onClick={handleSignOut} className="bg-green-500 text-white px-4 py-2 rounded">
+              Sign Out
+            </button>
+          </div>
+        </div>
+
+        {isProfileModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold">Vendor Profile</h3>
+                <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              {error && <p className="text-red-600 mb-4">{error}</p>}
+              {isEditing ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-gray-700">Vendor Name</label>
+                    <input
+                      type="text"
+                      value={editUserName}
+                      onChange={(e) => setEditUserName(e.target.value)}
+                      className="w-full px-4 py-2 border rounded"
+                      placeholder="Enter your name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700">Store Name</label>
+                    <input
+                      type="text"
+                      value={editStoreName}
+                      onChange={(e) => setEditStoreName(e.target.value)}
+                      className="w-full px-4 py-2 border rounded"
+                      placeholder="Enter store name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700">New Password</label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full px-4 py-2 border rounded"
+                      placeholder="Enter new password"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700">Confirm Password</label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full px-4 py-2 border rounded"
+                      placeholder="Confirm new password"
+                    />
+                  </div>
+                  <div className="flex space-x-4">
+                    <button
+                      onClick={handleSaveProfile}
+                      className="w-full bg-blue-500 text-white px-4 py-2 rounded"
+                      disabled={!editUserName || !editStoreName}
+                    >
+                      Save
+                    </button>
+                    <button onClick={() => setIsEditing(false)} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center space-x-4 mb-4">
+                    <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center">
+                      <span className="text-gray-400 text-2xl">👤</span>
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-semibold">{userName}</h4>
+                      <p className="text-gray-600">Email: {userEmail}</p>
+                      <p className="text-gray-600">Store: {store?.name || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsEditing(true)} className="w-full bg-blue-500 text-white px-4 py-2 rounded mb-2">
+                    Edit Profile
+                  </button>
+                  <button onClick={handleCloseModal} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded">
+                    Close
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {sidebarSection === 'Dashboard' && (
+          <>
+            <div className="mb-8">
+              <input type="text" placeholder="Search..." className="border rounded px-3 py-1 mb-4 w-56" />
+              <div className="text-xl font-semibold mb-1">Welcome back, {userName}</div>
+              <div className="text-gray-500 mb-6">Track, manage and forecast your customers and orders.</div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
+                  <div className="text-gray-500">Total Revenue</div>
+                  <div className="text-3xl font-bold">2,420</div>
+                  <div className="text-green-500 text-sm mt-2">↑ 40% vs last month</div>
+                </div>
+                <div className="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
+                  <div className="text-gray-500">Total Product Sales</div>
+                  <div className="text-3xl font-bold">316</div>
+                  <div className="text-green-500 text-sm mt-2">↑ 20% vs last month</div>
+                </div>
+                <div className="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
+                  <div className="text-gray-500">Out for Delivery</div>
+                  <div className="text-3xl font-bold">23</div>
+                  <div className="text-green-500 text-sm mt-2">↑ 20%</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white rounded-xl shadow p-6 border-2 border-blue-400">
+                  <div className="text-gray-500">Pending</div>
+                  <div className="text-3xl font-bold">54</div>
+                  <div className="text-red-500 text-sm mt-2">↓ 20%</div>
+                </div>
+                <div className="bg-white rounded-xl shadow p-6">
+                  <div className="text-gray-500">Returned</div>
+                  <div className="text-3xl font-bold">4</div>
+                  <div className="text-red-500 text-sm mt-2">↓ 10%</div>
+                </div>
+                <div className="bg-white rounded-xl shadow p-6">
+                  <div className="text-gray-500">Failed Delivery</div>
+                  <div className="text-3xl font-bold">3</div>
+                  <div className="text-red-500 text-sm mt-2">↓ 10%</div>
+                </div>
+                <div className="bg-white rounded-xl shadow p-6">
+                  <div className="text-gray-500">Cancelled Orders</div>
+                  <div className="text-3xl font-bold">16</div>
+                  <div className="text-red-500 text-sm mt-2">↓ 30% vs last month</div>
+                </div>
+              </div>
+              <div className="mb-2 font-semibold">Recent Notifications</div>
+              <div className="space-y-2">
+                <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center justify-between">
+                  <div>
+                    You just got a new order <span className="text-green-600 font-semibold">#123456</span>
+                    <div className="text-xs text-gray-500">A new order has been placed.</div>
+                  </div>
+                  <button className="text-gray-400 hover:text-gray-600">×</button>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center justify-between">
+                  <div>
+                    Order <span className="text-red-600 font-semibold">#124235</span> has been Canceled
+                    <div className="text-xs text-gray-500">An order has been canceled.</div>
+                  </div>
+                  <button className="text-gray-400 hover:text-gray-600">×</button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+        
+
+        {sidebarSection === 'Inventory' && (
+          <>
+            <div className="flex space-x-2 mb-4">
+              {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'All'].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-4 py-2 rounded ${filter === f ? 'bg-gray-200' : 'bg-white'} border`}
+                >
+                  {f}
+                </button>
+              ))}
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="px-4 py-2 border rounded"
+              />
+              <button onClick={handleEditInventory} className="bg-blue-500 text-white px-4 py-2 rounded">
+                Add Inventory
+              </button>
+              <button
+                onClick={() => router.push('/vendor/edit-inventory')}
+                className="bg-yellow-500 text-white px-4 py-2 rounded"
+              >
+                Edit Inventory
+              </button>
+              <button onClick={handleSortByNewest} className="bg-blue-500 text-white px-4 py-2 rounded">
+                Sort by {sortOrder === 'desc' ? 'Oldest' : 'Newest'}
+              </button>
+              <button
+                onClick={handleExportCSV}
+                className="bg-green-500 text-white px-4 py-2 rounded"
+                disabled={products.length === 0}
+              >
+                Export CSV
+              </button>
+              <label className="bg-blue-500 text-white px-4 py-2 rounded cursor-pointer">
+                Import CSV
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleImportCSV}
+                  className="hidden"
+                />
+              </label>
+              <label className={`bg-purple-500 text-white px-4 py-2 rounded cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                {uploading ? 'Uploading...' : 'Upload Images'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,image/bmp,image/svg+xml"
+                  onChange={handleMultipleImageUpload}
+                  className="hidden"
+                  multiple
+                  disabled={uploading}
+                />
+              </label>
+            </div>
+            {loading ? (
+              <p>Loading...</p>
+            ) : error ? (
+              <p className="text-red-600">{error}</p>
+            ) : filteredProducts.length === 0 ? (
+              <p>No products found for the selected filter or search.</p>
+            ) : (
+              <div className="bg-white shadow-md rounded">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="p-4">Product</th>
+                      <th className="p-4">Date Added</th>
+                      <th className="p-4">Amount</th>
+                      <th className="p-4">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedProducts.map((product) => {
+                      const stockStatus = getStockStatus(product.quantity || 0);
+                      return (
+                        <tr key={product.id} className="border-b">
+                          <td className="p-4 flex items-center space-x-2">
+                            {product.image ? (
+                              <Image
+                                src={
+                                  product.image.startsWith('http')
+                                    ? product.image
+                                    : product.image.startsWith('/')
+                                      ? product.image
+                                      : '/' + product.image.replace(/^(\.\.\/)+/, '')
+                                }
+                                alt={product.name}
+                                width={40}
+                                height={40}
+                                className="w-10 h-10 rounded object-cover"
+                                unoptimized
+                              />
+                            ) : (
+                              <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center">
+                                <span className="text-gray-400 text-xl">🛒</span>
+                              </div>
+                            )}
+                            <span>{product.name}</span>
+                          </td>
+                          <td className="p-4">{new Date(product.date_added).toLocaleDateString()}</td>
+                          <td className="p-4">${product.price?.toFixed(2) || '0.00'}</td>
+                          <td className="p-4">
+                            <span className={`px-3 py-1 rounded-full text-sm ${stockStatus.color}`}>
+                              {stockStatus.text}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="flex justify-center mt-4 space-x-2">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className={`px-4 py-2 mb-8 rounded ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+              >
+                Previous
+              </button>
+              {pageNumbers.map((number) => (
+                <button
+                  key={number}
+                  onClick={() => handlePageChange(number)}
+                  className={`px-4 py-2 mb-8 rounded ${currentPage === number ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                >
+                  {number}
+                </button>
+              ))}
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className={`px-4 py-2 mb-8 rounded ${currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+              >
+                Next
+              </button>
+            </div>
+          </>
+        )}
+
+        {sidebarSection === 'Orders' && (
+          <div className="bg-white rounded-xl shadow flex flex-col items-center justify-center min-h-[350px]">
+            <h2 className="text-2xl font-bold text-blue-700 mb-2">Orders Page</h2>
+            <p className="text-gray-500 text-center max-w-xs mb-4">
+              This is the orders page. There are currently no orders for your store.<br />
+              Once customers place orders, they will appear here.
+            </p>
+            <svg
+              className="w-16 h-16 text-gray-300 mb-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 48 48"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect x="8" y="16" width="32" height="20" rx="2" strokeWidth="2" stroke="currentColor" fill="none" />
+              <path d="M16 16V12a8 8 0 0116 0v4" strokeWidth="2" stroke="currentColor" fill="none" />
+            </svg>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
