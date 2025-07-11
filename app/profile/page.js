@@ -38,7 +38,18 @@ export function ProfileSidebar({ onClose }) {
     try {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, quantity, total_amount, payment_id, status, created_at, products!inner(name)")
+        .select(`
+          id,
+          quantity,
+          total_amount,
+          payment_id,
+          status,
+          created_at,
+          products!inner(
+            name,
+            description
+          )
+        `)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -144,7 +155,7 @@ export function ProfileSidebar({ onClose }) {
   if (loading || !user) return null;
 
   return (
-    <div className="fixed top-0 mt-20 right-0 w-full sm:w-[360px] bg-[#022B3A] text-white min-h-screen shadow-lg z-50">
+    <div className="fixed top-0 mt-20 right-0 w-full sm:w-[400px] bg-[#022B3A] text-white min-h-screen shadow-2xl z-50 overflow-y-auto">
       <button
         onClick={onClose}
         className="absolute top-4 right-4 text-white text-2xl bg-gray-700 bg-opacity-60 rounded-full w-9 h-9 flex items-center justify-center hover:bg-red-500 transition"
@@ -154,59 +165,76 @@ export function ProfileSidebar({ onClose }) {
       </button>
 
       {showOrderHistory ? (
-        <div className="py-6 px-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Order History</h2>
+        <div className="py-8 px-6 flex flex-col min-h-[calc(100vh-5rem)]">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold">Order History</h2>
             <button
               onClick={() => setShowOrderHistory(false)}
-              className="text-gray-300 hover:text-white"
+              className="text-gray-300 hover:text-white font-medium px-3 py-1 rounded hover:bg-gray-700 transition"
             >
               Back
             </button>
           </div>
-          {error && <p className="text-red-400 mb-4">{error}</p>}
+          {error && (
+            <p className="text-red-400 bg-red-900 bg-opacity-20 p-3 rounded-lg mb-6">
+              {error}
+            </p>
+          )}
           {ordersLoading ? (
-            <p>Loading orders...</p>
+            <div className="flex justify-center items-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+            </div>
           ) : orders.length === 0 ? (
-            <p>No orders found.</p>
+            <p className="text-gray-400 text-center py-8">No orders found.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-gray-600">
-                    <th className="p-2">Order ID</th>
-                    <th className="p-2">Product</th>
-                    <th className="p-2">Quantity</th>
-                    <th className="p-2">Total</th>
-                    <th className="p-2">Status</th>
-                    <th className="p-2">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map((order) => (
-                    <tr key={order.id} className="border-b border-gray-700">
-                      <td className="p-2">{order.id.slice(0, 8)}</td>
-                      <td className="p-2">{order.products?.name || "Unknown Product"}</td>
-                      <td className="p-2">{order.quantity}</td>
-                      <td className="p-2">₹{order.total_amount.toFixed(2)}</td>
-                      <td className="p-2">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs ${
-                            order.status === "completed"
-                              ? "bg-green-100 text-green-800"
-                              : order.status === "pending"
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {order.status}
-                        </span>
-                      </td>
-                      <td className="p-2">{new Date(order.created_at).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex-1 max-h-[calc(100vh-12rem)] overflow-y-auto space-y-4 pr-2">
+              {orders.map((order) => (
+                <div
+                  key={order.id}
+                  className="bg-gray-800 bg-opacity-50 rounded-lg p-4 shadow-md hover:shadow-lg transition"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">
+                        {order.products?.name || "Unknown Product"}
+                      </h3>
+                      <p className="text-sm text-gray-400 mt-1">
+                        {order.products?.description || "No description available"}
+                      </p>
+                      <p className="text-sm text-gray-300 mt-1">
+                        Order ID: {order.id.slice(0, 8)}
+                      </p>
+                    </div>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        order.status === "completed"
+                          ? "bg-green-600 text-white"
+                          : order.status === "pending"
+                          ? "bg-yellow-600 text-black"
+                          : "bg-red-600 text-white"
+                      }`}
+                    >
+                      {order.status}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-gray-400">Quantity:</span> {order.quantity}
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Total:</span> ₹{order.total_amount.toFixed(2)}
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Date:</span>{" "}
+                      {new Date(order.created_at).toLocaleDateString()}
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Payment ID:</span>{" "}
+                      {order.payment_id?.slice(0, 8) || "N/A"}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
