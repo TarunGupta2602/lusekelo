@@ -28,7 +28,14 @@ export default function VendorDashboard() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [uploading, setUploading] = useState(false);
+  
+  // Orders state variables
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [orderCurrentPage, setOrderCurrentPage] = useState(1);
+  
   const productsPerPage = 10;
+  const ordersPerPage = 10;
 
   // Store mapping of uploaded image names to their generated URLs
   const [uploadedImageMap, setUploadedImageMap] = useState({});
@@ -175,6 +182,84 @@ export default function VendorDashboard() {
     fetchData();
   }, [router, sortOrder]);
 
+  // Fetch orders for the vendor's supermarket
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!store) return;
+      
+      try {
+        setOrdersLoading(true);
+        setError('');
+
+        // First get all product IDs for this supermarket
+        const { data: productIds, error: productError } = await supabase
+          .from('products')
+          .select('id')
+          .eq('supermarketid', store.id);
+
+        if (productError) {
+          setError('Error fetching products: ' + productError.message);
+          setOrdersLoading(false);
+          return;
+        }
+
+        if (!productIds || productIds.length === 0) {
+          setOrders([]);
+          setOrdersLoading(false);
+          return;
+        }
+
+        const productIdList = productIds.map(p => p.id);
+
+        // Fetch orders for these products with product details
+        const { data: ordersData, error: ordersError } = await supabase
+          .from('orders')
+          .select(`
+            id,
+            user_id,
+            product_id,
+            quantity,
+            total_amount,
+            payment_id,
+            status,
+            created_at,
+            products!inner(
+              id,
+              name,
+              price,
+              image,
+              description,
+              supermarketid
+            )
+          `)
+          .in('product_id', productIdList)
+          .order('created_at', { ascending: false });
+
+        if (ordersError) {
+          setError('Error fetching orders: ' + ordersError.message);
+          setOrdersLoading(false);
+          return;
+        }
+
+        const normalizedOrders = (ordersData || []).map((order) => ({
+          ...order,
+          products: {
+            ...order.products,
+            image: normalizeImagePath(order.products.image),
+          },
+        }));
+
+        setOrders(normalizedOrders);
+        setOrdersLoading(false);
+      } catch (err) {
+        setError('Unexpected error fetching orders: ' + err.message);
+        setOrdersLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [store]);
+
   useEffect(() => {
     const filtered = products.filter((product) => {
       const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -236,6 +321,46 @@ export default function VendorDashboard() {
   for (let i = 1; i <= totalPages; i++) {
     pageNumbers.push(i);
   }
+
+  // Orders pagination
+  const totalOrderPages = Math.ceil(orders.length / ordersPerPage);
+  const orderStartIndex = (orderCurrentPage - 1) * ordersPerPage;
+  const paginatedOrders = orders.slice(orderStartIndex, orderStartIndex + ordersPerPage);
+
+  const handleOrderPageChange = (page) => {
+    if (page >= 1 && page <= totalOrderPages) {
+      setOrderCurrentPage(page);
+    }
+  };
+
+  const orderPageNumbers = [];
+  for (let i = 1; i <= totalOrderPages; i++) {
+    orderPageNumbers.push(i);
+  }
+
+  // Delete order functionality
+  const handleDeleteOrder = async (orderId) => {
+    if (!confirm('Are you sure you want to delete this order? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId);
+
+      if (error) {
+        setError('Error deleting order: ' + error.message);
+        return;
+      }
+
+      // Remove the order from local state
+      setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+    } catch (err) {
+      setError('Unexpected error deleting order: ' + err.message);
+    }
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -932,23 +1057,140 @@ export default function VendorDashboard() {
         )}
 
         {sidebarSection === 'Orders' && (
-          <div className="bg-white rounded-xl shadow flex flex-col items-center justify-center min-h-[350px]">
-            <h2 className="text-2xl font-bold text-blue-700 mb-2">Orders Page</h2>
-            <p className="text-gray-500 text-center max-w-xs mb-4">
-              This is the orders page. There are currently no orders for your store.<br />
-              Once customers place orders, they will appear here.
-            </p>
-            <svg
-              className="w-16 h-16 text-gray-300 mb-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 48 48"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <rect x="8" y="16" width="32" height="20" rx="2" strokeWidth="2" stroke="currentColor" fill="none" />
-              <path d="M16 16V12a8 8 0 0116 0v4" strokeWidth="2" stroke="currentColor" fill="none" />
-            </svg>
-          </div>
+          <>
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">Orders ({orders.length})</h3>
+            </div>
+            
+            {ordersLoading ? (
+              <p>Loading orders...</p>
+            ) : error ? (
+              <p className="text-red-600">{error}</p>
+            ) : orders.length === 0 ? (
+              <div className="bg-white rounded-xl shadow flex flex-col items-center justify-center min-h-[350px]">
+                <h2 className="text-2xl font-bold text-blue-700 mb-2">No Orders Found</h2>
+                <p className="text-gray-500 text-center max-w-xs mb-4">
+                  There are currently no orders for your store.<br />
+                  Once customers place orders, they will appear here.
+                </p>
+                <svg
+                  className="w-16 h-16 text-gray-300 mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 48 48"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect x="8" y="16" width="32" height="20" rx="2" strokeWidth="2" stroke="currentColor" fill="none" />
+                  <path d="M16 16V12a8 8 0 0116 0v4" strokeWidth="2" stroke="currentColor" fill="none" />
+                </svg>
+              </div>
+            ) : (
+              <div className="bg-white shadow-md rounded">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="p-4">Order ID</th>
+                      <th className="p-4">Product</th>
+                      <th className="p-4">Customer ID</th>
+                      <th className="p-4">Quantity</th>
+                      <th className="p-4">Total Amount</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4">Date</th>
+                      <th className="p-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedOrders.map((order) => (
+                      <tr key={order.id} className="border-b">
+                        <td className="p-4">
+                          <span className="font-mono text-sm">{order.id.slice(0, 8)}...</span>
+                        </td>
+                        <td className="p-4 flex items-center space-x-2">
+                          {order.products.image ? (
+                            <Image
+                              src={
+                                order.products.image.startsWith('http')
+                                  ? order.products.image
+                                  : order.products.image.startsWith('/')
+                                    ? order.products.image
+                                    : '/' + order.products.image.replace(/^(\.\.\/)+/, '')
+                              }
+                              alt={order.products.name}
+                              width={40}
+                              height={40}
+                              className="w-10 h-10 rounded object-cover"
+                              unoptimized
+                            />
+                          ) : (
+                            <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center">
+                              <span className="text-gray-400 text-xl">🛒</span>
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-medium">{order.products.name}</div>
+                            <div className="text-sm text-gray-500">${order.products.price?.toFixed(2) || '0.00'}</div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <span className="font-mono text-sm">{order.user_id.slice(0, 8)}...</span>
+                        </td>
+                        <td className="p-4">{order.quantity}</td>
+                        <td className="p-4">${order.total_amount?.toFixed(2) || '0.00'}</td>
+                        <td className="p-4">
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            order.status === 'completed'
+                              ? 'bg-green-100 text-green-600'
+                              : order.status === 'pending'
+                              ? 'bg-yellow-100 text-yellow-600'
+                              : 'bg-red-100 text-red-600'
+                          }`}>
+                            {order.status}
+                          </span>
+                        </td>
+                        <td className="p-4">{new Date(order.created_at).toLocaleDateString()}</td>
+                        <td className="p-4">
+                          <button
+                            onClick={() => handleDeleteOrder(order.id)}
+                            className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            
+            {orders.length > 0 && (
+              <div className="flex justify-center mt-4 space-x-2">
+                <button
+                  onClick={() => handleOrderPageChange(orderCurrentPage - 1)}
+                  disabled={orderCurrentPage === 1}
+                  className={`px-4 py-2 mb-8 rounded ${orderCurrentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+                >
+                  Previous
+                </button>
+                {orderPageNumbers.map((number) => (
+                  <button
+                    key={number}
+                    onClick={() => handleOrderPageChange(number)}
+                    className={`px-4 py-2 mb-8 rounded ${orderCurrentPage === number ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                  >
+                    {number}
+                  </button>
+                ))}
+                <button
+                  onClick={() => handleOrderPageChange(orderCurrentPage + 1)}
+                  disabled={orderCurrentPage === totalOrderPages}
+                  className={`px-4 py-2 mb-8 rounded ${orderCurrentPage === totalOrderPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
