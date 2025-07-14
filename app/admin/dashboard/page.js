@@ -50,6 +50,12 @@ export default function AdminDashboard() {
   const [searchAgent, setSearchAgent] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const agentsPerPage = 10;
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const ordersPerPage = 10;
+  const [ordersTotalPages, setOrdersTotalPages] = useState(1);
+  const [searchOrders, setSearchOrders] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -88,8 +94,16 @@ export default function AdminDashboard() {
         .then(({ data }) => setVendors(data || []));
     } else if (activeTab === "agents") {
       fetchAgents();
+    } else if (activeTab === "orders") {
+      fetchOrders(ordersPage);
     }
-  }, [activeTab]);
+    // eslint-disable-next-line
+  }, [activeTab, ordersPage]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setOrdersPage(1);
+  }, [searchOrders]);
 
   const fetchAgents = async () => {
     const { data } = await supabase
@@ -97,6 +111,36 @@ export default function AdminDashboard() {
       .select("*")
       .order("created_at", { ascending: false });
     setAgents(data || []);
+  };
+
+  const fetchOrders = async (page = 1) => {
+    setOrdersLoading(true);
+    const from = (page - 1) * ordersPerPage;
+    const to = from + ordersPerPage - 1;
+    const { data, error, count } = await supabase
+      .from("orders")
+      .select(`
+        id,
+        quantity,
+        total_amount,
+        status,
+        created_at,
+        products:product_id (
+          id,
+          name,
+          supermarket:supermarketid (
+            id,
+            name
+          )
+        )
+      `, { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(from, to);
+    if (!error) {
+      setOrders(data || []);
+      setOrdersTotalPages(Math.ceil((count || 0) / ordersPerPage));
+    }
+    setOrdersLoading(false);
   };
 
   const handleProfileUpdate = async () => {
@@ -321,6 +365,23 @@ export default function AdminDashboard() {
     )
     .slice(indexOfFirstAgent, indexOfLastAgent);
   const totalPages = Math.ceil(agents.length / agentsPerPage);
+
+  // Filtered orders for search
+  const filteredOrders = orders.filter((order) => {
+    const search = searchOrders.toLowerCase();
+    return (
+      order.id?.toLowerCase().includes(search) ||
+      order.products?.name?.toLowerCase().includes(search) ||
+      order.products?.supermarket?.name?.toLowerCase().includes(search) ||
+      order.status?.toLowerCase().includes(search) ||
+      String(order.quantity).includes(search) ||
+      String(order.total_amount).includes(search)
+    );
+  });
+  const indexOfLastOrder = ordersPage * ordersPerPage;
+  const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
+  const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+  const filteredTotalPages = Math.max(1, Math.ceil(filteredOrders.length / ordersPerPage));
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
@@ -652,6 +713,8 @@ export default function AdminDashboard() {
                   type="text"
                   placeholder="Search Orders"
                   className="w-full mt-2 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                  value={searchOrders}
+                  onChange={e => setSearchOrders(e.target.value)}
                 />
               </li>
               <li>
@@ -728,8 +791,61 @@ export default function AdminDashboard() {
             {TABS.find((t) => t.key === activeTab)?.label}
           </h1>
           {activeTab === "orders" && (
-            <div className="bg-white rounded-xl shadow p-8 text-center text-gray-500 text-lg">
-              We do not have orders yet.
+            <div className="bg-white rounded-xl shadow p-8">
+              <h2 className="text-xl font-bold mb-4">Orders</h2>
+              {ordersLoading ? (
+                <div className="text-center text-gray-500">Loading orders...</div>
+              ) : currentOrders.length === 0 ? (
+                <div className="text-center text-gray-400 py-8">No orders found.</div>
+              ) : (
+                <>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Order ID</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Product</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Supermarket</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Quantity</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Total Amount</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Status</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Created At</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {currentOrders.map((order) => (
+                        <tr key={order.id}>
+                          <td className="px-4 py-2">{order.id}</td>
+                          <td className="px-4 py-2">{order.products?.name || "N/A"}</td>
+                          <td className="px-4 py-2">{order.products?.supermarket?.name || "N/A"}</td>
+                          <td className="px-4 py-2">{order.quantity}</td>
+                          <td className="px-4 py-2">{order.total_amount}</td>
+                          <td className="px-4 py-2">{order.status}</td>
+                          <td className="px-4 py-2">{new Date(order.created_at).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="mt-4 flex justify-center gap-2">
+                    <button
+                      className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300 disabled:opacity-50"
+                      onClick={() => setOrdersPage((prev) => Math.max(prev - 1, 1))}
+                      disabled={ordersPage === 1}
+                    >
+                      Previous
+                    </button>
+                    <span className="px-4 py-2">
+                      Page {ordersPage} of {filteredTotalPages}
+                    </span>
+                    <button
+                      className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300 disabled:opacity-50"
+                      onClick={() => setOrdersPage((prev) => Math.min(prev + 1, filteredTotalPages))}
+                      disabled={ordersPage === filteredTotalPages}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
           {activeTab === "invoices" && (
