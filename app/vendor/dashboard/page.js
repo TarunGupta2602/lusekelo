@@ -35,6 +35,9 @@ export default function VendorDashboard() {
   const [orderCurrentPage, setOrderCurrentPage] = useState(1);
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [filteredOrders, setFilteredOrders] = useState([]);
+  // Notification state
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   
   const productsPerPage = 10;
   const ordersPerPage = 10;
@@ -254,6 +257,15 @@ export default function VendorDashboard() {
 
         setOrders(normalizedOrders);
         setFilteredOrders(normalizedOrders); // Initialize filteredOrders
+        // Generate notifications from orders
+        setNotifications(
+          normalizedOrders.map(order => ({
+            id: order.id,
+            message: `New order #${order.id.slice(0, 8)}... for ${order.products?.name || 'Product'}`,
+            date: order.created_at,
+            read: false,
+          }))
+        );
         setOrdersLoading(false);
       } catch (err) {
         setError('Unexpected error fetching orders: ' + err.message);
@@ -766,6 +778,50 @@ export default function VendorDashboard() {
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-semibold">{sidebarSection === 'Inventory' ? 'Inventory' : sidebarSection === 'Orders' ? 'Orders' : 'Dashboard'}</h2>
           <div className="flex items-center space-x-4">
+            {/* Notification Bell Icon */}
+            <div className="relative">
+              <button
+                className="relative"
+                onClick={() => setShowNotifications((prev) => !prev)}
+              >
+                {/* Bell Icon */}
+                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {/* Badge for unread notifications (show count) */}
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">
+                    {notifications.filter(n => !n.read).length}
+                  </span>
+                )}
+              </button>
+              {/* Notification Dropdown */}
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white border rounded shadow-lg z-50 max-h-96 overflow-y-auto">
+                  <div className="p-4 font-bold border-b">Notifications</div>
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-gray-500">No notifications</div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div key={n.id} className={`p-4 border-b last:border-b-0 flex items-start justify-between ${!n.read ? 'bg-blue-50 font-semibold' : ''}`}>
+                        <div>
+                          <div className="font-medium">{n.message}</div>
+                          <div className="text-xs text-gray-400">{new Date(n.date).toLocaleString()}</div>
+                        </div>
+                        <button
+                          className={`ml-2 px-2 py-1 rounded text-xs ${n.read ? 'bg-gray-200 text-gray-600' : 'bg-blue-500 text-white'}`}
+                          onClick={() => {
+                            setNotifications(prev => prev.map(notif => notif.id === n.id ? { ...notif, read: !notif.read } : notif));
+                          }}
+                        >
+                          {n.read ? 'Mark Unread' : 'Mark Read'}
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
             <div className="flex items-center space-x-2 cursor-pointer hover:text-blue-600" onClick={handleProfileClick}>
               <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
                 <span className="text-gray-400 text-lg">👤</span>
