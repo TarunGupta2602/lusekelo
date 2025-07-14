@@ -56,9 +56,6 @@ export default function AdminDashboard() {
   const ordersPerPage = 10;
   const [ordersTotalPages, setOrdersTotalPages] = useState(1);
   const [searchOrders, setSearchOrders] = useState("");
-  const [notifications, setNotifications] = useState([]);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -107,11 +104,6 @@ export default function AdminDashboard() {
   useEffect(() => {
     setOrdersPage(1);
   }, [searchOrders]);
-
-  // Fetch notifications on mount and when orders change
-  useEffect(() => {
-    fetchNotifications();
-  }, [orders]);
 
   const fetchAgents = async () => {
     const { data } = await supabase
@@ -342,15 +334,6 @@ export default function AdminDashboard() {
         alert("Error parsing CSV file: " + error.message);
       },
     });
-  };
-
-  // Mark all notifications as read
-  const markNotificationsRead = async () => {
-    if (notifications.length === 0) return;
-    const ids = notifications.map(n => n.id);
-    await supabase.from("notifications").update({ is_read: true }).in("id", ids);
-    setNotifications([]);
-    setShowNotifications(false);
   };
 
   if (loading) {
@@ -690,44 +673,6 @@ export default function AdminDashboard() {
           <Image src="/logo.svg" alt="Logo" width={90} height={40} />
         </div>
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <button
-              className="relative focus:outline-none"
-              onClick={() => setShowNotifications((prev) => !prev)}
-              title="Notifications"
-            >
-              <FaBell className="text-2xl text-gray-700" />
-              {notifications.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
-                  {notifications.length}
-                </span>
-              )}
-            </button>
-            {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg z-50 border">
-                <div className="flex justify-between items-center px-4 py-2 border-b">
-                  <span className="font-bold text-gray-800">Notifications</span>
-                  <button className="text-xs text-blue-600 hover:underline" onClick={markNotificationsRead}>
-                    Mark all as read
-                  </button>
-                </div>
-                <div className="max-h-64 overflow-y-auto">
-                  {notificationsLoading ? (
-                    <div className="p-4 text-gray-500 text-center">Loading...</div>
-                  ) : notifications.length === 0 ? (
-                    <div className="p-4 text-gray-400 text-center">No new notifications.</div>
-                  ) : (
-                    notifications.map((n) => (
-                      <div key={n.id} className="px-4 py-3 border-b last:border-b-0 flex flex-col">
-                        <span className="text-gray-800">{n.message}</span>
-                        <span className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
           <button
             className="flex items-center gap-2"
             onClick={() => setShowAdminModal(true)}
