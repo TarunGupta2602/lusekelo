@@ -1,13 +1,13 @@
-import { NextResponse } from 'next/server';
+// app/api/stores/route.js
 import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
 
-// Initialize Supabase client with anon key for public API routes
+// Initialize Supabase client with server-side environment variables
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// Handler for GET /api/stores
 export async function GET(request) {
   try {
     const { data, error } = await supabase
@@ -28,9 +28,10 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Failed to fetch stores', details: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(data);
+    // Ensure data is an array; return empty array if no data
+    return NextResponse.json(data || [], { status: 200 });
   } catch (err) {
-    console.error('Server error:', err);
+    console.error('Server error in /api/stores:', err);
     return NextResponse.json({ error: 'Internal Server Error', details: err.message }, { status: 500 });
   }
 }
