@@ -33,6 +33,8 @@ export default function VendorDashboard() {
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [orderCurrentPage, setOrderCurrentPage] = useState(1);
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [filteredOrders, setFilteredOrders] = useState([]);
   
   const productsPerPage = 10;
   const ordersPerPage = 10;
@@ -205,6 +207,7 @@ export default function VendorDashboard() {
 
         if (!productIds || productIds.length === 0) {
           setOrders([]);
+          setFilteredOrders([]); // Initialize filteredOrders
           setOrdersLoading(false);
           return;
         }
@@ -250,6 +253,7 @@ export default function VendorDashboard() {
         }));
 
         setOrders(normalizedOrders);
+        setFilteredOrders(normalizedOrders); // Initialize filteredOrders
         setOrdersLoading(false);
       } catch (err) {
         setError('Unexpected error fetching orders: ' + err.message);
@@ -288,6 +292,23 @@ export default function VendorDashboard() {
     setCurrentPage(1);
   }, [searchQuery, filter, products]);
 
+  // Filter orders based on search query
+  useEffect(() => {
+    if (!orderSearchQuery) {
+      setFilteredOrders(orders);
+      return;
+    }
+    const query = orderSearchQuery.toLowerCase();
+    setFilteredOrders(
+      orders.filter(order =>
+        order.id.toLowerCase().includes(query) ||
+        order.user_id.toLowerCase().includes(query) ||
+        (order.products?.name?.toLowerCase().includes(query))
+      )
+    );
+    setOrderCurrentPage(1); // Reset to first page on search
+  }, [orders, orderSearchQuery]);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/vendor');
@@ -323,9 +344,9 @@ export default function VendorDashboard() {
   }
 
   // Orders pagination
-  const totalOrderPages = Math.ceil(orders.length / ordersPerPage);
+  const totalOrderPages = Math.ceil(filteredOrders.length / ordersPerPage);
   const orderStartIndex = (orderCurrentPage - 1) * ordersPerPage;
-  const paginatedOrders = orders.slice(orderStartIndex, orderStartIndex + ordersPerPage);
+  const paginatedOrders = filteredOrders.slice(orderStartIndex, orderStartIndex + ordersPerPage);
 
   const handleOrderPageChange = (page) => {
     if (page >= 1 && page <= totalOrderPages) {
@@ -357,6 +378,7 @@ export default function VendorDashboard() {
 
       // Remove the order from local state
       setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+      setFilteredOrders(prevFilteredOrders => prevFilteredOrders.filter(order => order.id !== orderId)); // Update filteredOrders
     } catch (err) {
       setError('Unexpected error deleting order: ' + err.message);
     }
@@ -669,13 +691,17 @@ export default function VendorDashboard() {
             </>
           )}
         </div>
+        {/* Orders Search Bar */}
+        <div className="p-4">
+          <input
+            type="text"
+            placeholder="Search Orders..."
+            value={orderSearchQuery}
+            onChange={e => setOrderSearchQuery(e.target.value)}
+            className="border rounded px-3 py-1 w-full"
+          />
+        </div>
         <nav className="mt-4">
-          <a href="#" className="flex items-center px-4 py-2 text-gray-600 hover:bg-gray-200">
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-            </svg>
-            Search Orders
-          </a>
           <a
             href="#"
             className={`flex items-center px-4 py-2 ${
@@ -1059,14 +1085,14 @@ export default function VendorDashboard() {
         {sidebarSection === 'Orders' && (
           <>
             <div className="mb-4">
-              <h3 className="text-lg font-semibold mb-2">Orders ({orders.length})</h3>
+              <h3 className="text-lg font-semibold mb-2">Orders ({filteredOrders.length})</h3>
             </div>
             
             {ordersLoading ? (
               <p>Loading orders...</p>
             ) : error ? (
               <p className="text-red-600">{error}</p>
-            ) : orders.length === 0 ? (
+            ) : filteredOrders.length === 0 ? (
               <div className="bg-white rounded-xl shadow flex flex-col items-center justify-center min-h-[350px]">
                 <h2 className="text-2xl font-bold text-blue-700 mb-2">No Orders Found</h2>
                 <p className="text-gray-500 text-center max-w-xs mb-4">
@@ -1163,7 +1189,7 @@ export default function VendorDashboard() {
               </div>
             )}
             
-            {orders.length > 0 && (
+            {filteredOrders.length > 0 && (
               <div className="flex justify-center mt-4 space-x-2">
                 <button
                   onClick={() => handleOrderPageChange(orderCurrentPage - 1)}
