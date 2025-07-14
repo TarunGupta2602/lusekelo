@@ -8,9 +8,7 @@ export default async function HomePage() {
   try {
     const baseUrl =
       process.env.VERCEL_URL // Automatically set in Vercel
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-
+        
     const res = await fetch(`${baseUrl}/api/stores`, {
       next: { revalidate: 3600 },
       headers: {
