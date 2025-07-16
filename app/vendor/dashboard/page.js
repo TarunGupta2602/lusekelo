@@ -229,6 +229,7 @@ export default function VendorDashboard() {
             payment_id,
             status,
             created_at,
+            vendor_decision,
             products!inner(
               id,
               name,
@@ -1178,6 +1179,7 @@ export default function VendorDashboard() {
                       <th className="p-4">Total Amount</th>
                       <th className="p-4">Status</th>
                       <th className="p-4">Date</th>
+                      <th className="p-4">Vendor Decision</th>
                       <th className="p-4">Actions</th>
                     </tr>
                   </thead>
@@ -1230,6 +1232,53 @@ export default function VendorDashboard() {
                           </span>
                         </td>
                         <td className="p-4">{new Date(order.created_at).toLocaleDateString()}</td>
+                        <td className="p-4">
+                          {/* Vendor Decision Status and Actions */}
+                          {order.vendor_decision === 'pending' ? (
+                            <div className="flex space-x-2">
+                              <button
+                                className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600"
+                                onClick={async () => {
+                                  const { error } = await supabase
+                                    .from('orders')
+                                    .update({ vendor_decision: 'accepted' })
+                                    .eq('id', order.id);
+                                  if (!error) {
+                                    setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'accepted' } : o));
+                                    setFilteredOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'accepted' } : o));
+                                  }
+                                }}
+                              >
+                                Accept
+                              </button>
+                              <button
+                                className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600"
+                                onClick={async () => {
+                                  const { error } = await supabase
+                                    .from('orders')
+                                    .update({ vendor_decision: 'rejected' })
+                                    .eq('id', order.id);
+                                  if (!error) {
+                                    setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'rejected' } : o));
+                                    setFilteredOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'rejected' } : o));
+                                  }
+                                }}
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              order.vendor_decision === 'accepted'
+                                ? 'bg-green-100 text-green-600'
+                                : order.vendor_decision === 'rejected'
+                                ? 'bg-red-100 text-red-600'
+                                : 'bg-yellow-100 text-yellow-600'
+                            }`}>
+                              {order.vendor_decision?.charAt(0).toUpperCase() + order.vendor_decision?.slice(1) || 'Pending'}
+                            </span>
+                          )}
+                        </td>
                         <td className="p-4">
                           <button
                             onClick={() => handleDeleteOrder(order.id)}

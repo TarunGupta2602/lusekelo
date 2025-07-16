@@ -4,7 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { useState, useEffect, use } from 'react';
-import NewPage from '@/app/new/page';
+import Link from 'next/link';
+
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -17,6 +18,8 @@ export default function StoreDetailPage({ params }) {
   const [store, setStore] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
 
   const id = use(params).id;
 
@@ -52,6 +55,35 @@ export default function StoreDetailPage({ params }) {
 
     fetchStore();
   }, [id]);
+
+  // Fetch products and categories for this supermarket
+  useEffect(() => {
+    if (!id) return;
+    const fetchProductsAndCategories = async () => {
+      const [{ data: productsData }, { data: categoriesData }] = await Promise.all([
+        supabase
+          .from('products')
+          .select('*')
+          .eq('supermarketid', id),
+        supabase
+          .from('categories')
+          .select('*'),
+      ]);
+      setProducts(productsData || []);
+      setCategories(categoriesData || []);
+    };
+    fetchProductsAndCategories();
+  }, [id]);
+
+  // Helper to get product image
+  const getProductImage = (product) => {
+    const img = product.image || product.image_url;
+    if (!img) return '/placeholder-product.jpg';
+    if (img.startsWith('http://') || img.startsWith('https://')) return img;
+    if (img.startsWith('/')) return img;
+    // If it's just a filename or relative path, prepend '/'
+    return `/${img}`;
+  };
 
   if (loading) {
     return (
@@ -127,7 +159,44 @@ export default function StoreDetailPage({ params }) {
           </div>
         </div>
         <div className="mt-12">
-          <NewPage/>
+          {/* Products grouped by category */}
+          {categories.length > 0 && products.length > 0 ? (
+            categories.map(category => {
+              const categoryProducts = products.filter(p => p.categoryid === category.id);
+              if (categoryProducts.length === 0) return null;
+              return (
+                <div key={category.id} className="mb-10">
+                  <h2 className="text-2xl font-bold text-green-800 mb-4">{category.name}</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {categoryProducts.map(product => (
+                      <Link key={product.id} href={`/products/${product.id}`} className="block hover:shadow-lg transition-shadow duration-200">
+                        <div className="bg-white rounded-xl shadow p-4 flex flex-col items-center border border-green-100 h-full">
+                          <div className="w-full h-40 relative mb-3">
+                            <Image
+                              src={getProductImage(product)}
+                              alt={product.name}
+                              fill
+                              className="object-contain rounded-lg"
+                            />
+                          </div>
+                          <div className="w-full flex-1 flex flex-col justify-between">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-1">{product.name}</h3>
+                            <p className="text-gray-500 text-sm mb-2">{product.description}</p>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-green-700 font-bold text-lg">${product.price}</span>
+                              {/* Add to cart or other actions can go here */}
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-gray-400 text-center py-12 text-lg">No products found for this supermarket.</div>
+          )}
         </div>
       </div>
     </div>

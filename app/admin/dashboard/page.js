@@ -125,6 +125,8 @@ export default function AdminDashboard() {
         total_amount,
         status,
         created_at,
+        vendor_decision,
+        agent_id,
         products:product_id (
           id,
           name,
@@ -781,6 +783,18 @@ export default function AdminDashboard() {
                       Agents
                     </button>
                   </li>
+                  <li>
+                    <button
+                      className={`w-full text-left px-3 py-2 rounded-lg font-medium transition ${
+                        activeTab === "assignOrder"
+                          ? "bg-blue-100 text-blue-700"
+                          : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                      onClick={() => setActiveTab("assignOrder")}
+                    >
+                      Assign Order
+                    </button>
+                  </li>
                 </ul>
               </li>
             </ul>
@@ -809,6 +823,7 @@ export default function AdminDashboard() {
                         <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Total Amount</th>
                         <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Status</th>
                         <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Created At</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Vendor Decision</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
@@ -821,6 +836,17 @@ export default function AdminDashboard() {
                           <td className="px-4 py-2">{order.total_amount}</td>
                           <td className="px-4 py-2">{order.status}</td>
                           <td className="px-4 py-2">{new Date(order.created_at).toLocaleString()}</td>
+                          <td className="px-4 py-2">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              order.vendor_decision === 'accepted'
+                                ? 'bg-green-100 text-green-600'
+                                : order.vendor_decision === 'rejected'
+                                ? 'bg-red-100 text-red-600'
+                                : 'bg-yellow-100 text-yellow-600'
+                            }`}>
+                              {order.vendor_decision?.charAt(0).toUpperCase() + order.vendor_decision?.slice(1) || 'Pending'}
+                            </span>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1082,6 +1108,61 @@ export default function AdminDashboard() {
                 >
                   Next
                 </button>
+              </div>
+            </div>
+          )}
+          {activeTab === "assignOrder" && (
+            <div className="bg-white rounded-xl shadow p-6 mt-6">
+              <h2 className="text-xl font-bold mb-4">Assign Order</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Order ID</th>
+                      <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Product</th>
+                      <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Supermarket</th>
+                      <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Assign Agent</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {orders.filter(o => o.vendor_decision === 'accepted' && !o.agent_id).length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center text-gray-400 py-8">No accepted orders to assign.</td>
+                      </tr>
+                    ) : (
+                      orders.filter(o => o.vendor_decision === 'accepted' && !o.agent_id).map(order => (
+                        <tr key={order.id}>
+                          <td className="px-4 py-2">{order.id}</td>
+                          <td className="px-4 py-2">{order.products?.name || 'N/A'}</td>
+                          <td className="px-4 py-2">{order.products?.supermarket?.name || 'N/A'}</td>
+                          <td className="px-4 py-2">
+                            <select
+                              className="border px-2 py-1 rounded"
+                              defaultValue=""
+                              onChange={async (e) => {
+                                const agentId = e.target.value;
+                                if (!agentId) return;
+                                const { error } = await supabase
+                                  .from('orders')
+                                  .update({ agent_id: agentId })
+                                  .eq('id', order.id);
+                                if (!error) {
+                                  // Update UI
+                                  setOrders(prev => prev.map(o => o.id === order.id ? { ...o, agent_id: agentId } : o));
+                                }
+                              }}
+                            >
+                              <option value="" disabled>Select agent</option>
+                              {agents.map(agent => (
+                                <option key={agent.id} value={agent.id}>{agent.name} ({agent.email})</option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
