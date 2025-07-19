@@ -43,7 +43,9 @@ export default function CreateStore() {
           address: form.address,
           delivery_time: form.delivery_time,
           main_image: form.main_image,
-          gallery_images: form.gallery_images,
+          gallery_images: form.gallery_images
+            ? form.gallery_images.split(',').map(url => url.trim()).filter(Boolean)
+            : [],
           vendor_id: user.id,
         }]);
 

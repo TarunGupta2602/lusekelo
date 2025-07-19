@@ -97,7 +97,6 @@ export default function AdminDashboard() {
     } else if (activeTab === "orders") {
       fetchOrders(ordersPage);
     }
-    // eslint-disable-next-line
   }, [activeTab, ordersPage]);
 
   // Reset to page 1 when search changes

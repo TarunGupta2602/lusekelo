@@ -43,7 +43,14 @@ export default function VendorDashboard() {
   const ordersPerPage = 10;
 
   // Store mapping of uploaded image names to their generated URLs
-  const [uploadedImageMap, setUploadedImageMap] = useState({});
+  const [uploadedImageMap, setUploadedImageMap] = useState(() => {
+    // Load from localStorage on component mount
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('uploadedImageMap');
+      return saved ? JSON.parse(saved) : {};
+    }
+    return {};
+  });
 
   const normalizeImagePath = (path) => {
     if (!path) return '/default-vendor.png';
@@ -104,7 +111,14 @@ export default function VendorDashboard() {
       successfulUploads.forEach(({ fileName, publicUrl }) => {
         imageMap[fileName] = publicUrl;
       });
-      setUploadedImageMap((prev) => ({ ...prev, ...imageMap }));
+      setUploadedImageMap((prev) => {
+        const newMap = { ...prev, ...imageMap };
+        // Save to localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('uploadedImageMap', JSON.stringify(newMap));
+        }
+        return newMap;
+      });
 
       if (failedUploads.length > 0) {
         setError(`Some uploads failed: ${failedUploads.join(', ')}`);
@@ -632,11 +646,16 @@ export default function VendorDashboard() {
       skipEmptyLines: true,
       complete: async (results) => {
         try {
+          console.log('Uploaded Image Map:', uploadedImageMap); // Debug log
+          
           const productsToInsert = results.data.map((row) => {
             // If image name matches uploaded image, use the generated URL
             let imageUrl = row.image || null;
             if (imageUrl && uploadedImageMap[imageUrl]) {
               imageUrl = uploadedImageMap[imageUrl];
+              console.log(`Found mapping for ${row.image}: ${imageUrl}`); // Debug log
+            } else if (imageUrl) {
+              console.log(`No mapping found for ${row.image}`); // Debug log
             }
             return {
               name: row.name,
@@ -1052,6 +1071,57 @@ export default function VendorDashboard() {
                 />
               </label>
             </div>
+            
+            {/* Display uploaded images and their mappings */}
+            {Object.keys(uploadedImageMap).length > 0 && (
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="font-semibold">Uploaded Images Available for CSV Import:</h4>
+                  <button
+                    onClick={() => {
+                      setUploadedImageMap({});
+                      if (typeof window !== 'undefined') {
+                        localStorage.removeItem('uploadedImageMap');
+                      }
+                    }}
+                    className="text-red-500 text-sm hover:text-red-700"
+                  >
+                    Clear All
+                  </button>
+                </div>
+                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                  <strong>Instructions:</strong> Use the filename shown in the &quot;CSV should use&quot; field in your CSV file&apos;s image column. 
+                  For example, if you uploaded &quot;headphone.jpg&quot;, use &quot;headphone.jpg&quot; in your CSV file.
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(uploadedImageMap).map(([originalName, url]) => (
+                    <div key={originalName} className="bg-white p-3 rounded border">
+                      <div className="text-sm font-medium text-gray-700 mb-2">
+                        CSV should use: <code className="bg-gray-100 px-1 rounded">{originalName}</code>
+                      </div>
+                      <div className="text-xs text-gray-500 mb-2">
+                        Generated URL: <code className="bg-gray-100 px-1 rounded break-all">{url}</code>
+                      </div>
+                      <div className="w-full h-20 bg-gray-100 rounded flex items-center justify-center">
+                        <Image 
+                          src={url} 
+                          alt={originalName}
+                          width={80}
+                          height={80}
+                          className="max-w-full max-h-full object-contain"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                          unoptimized
+                        />
+                        <div className="hidden text-gray-400 text-xs">Image not found</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {loading ? (
               <p>Loading...</p>
             ) : error ? (
