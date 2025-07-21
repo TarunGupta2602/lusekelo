@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FaSearch, FaClipboardList, FaChevronDown, FaUserFriends } from "react-icons/fa";
+import { FaSearch, FaClipboardList, FaChevronDown, FaUserFriends, FaBars, FaTimes } from "react-icons/fa";
 
 export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSearchOrders }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -9,6 +9,7 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
   });
   const [sidebarWidth, setSidebarWidth] = useState(256); // px
   const [dragging, setDragging] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleDropdown = (key) => {
     setOpenDropdowns((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -44,22 +45,43 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
     };
   }, [dragging]);
 
-  return (
+  // Hamburger for mobile
+  React.useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) setCollapsed(false);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Sidebar content
+  const sidebarContent = (
     <aside
-      className={`bg-gray-50 border-r min-h-screen flex flex-col transition-all duration-200 ${collapsed ? "w-16" : ""}`}
+      className={`bg-gray-50 border-r min-h-screen flex flex-col transition-all duration-200 fixed md:static top-0 left-0 z-50 md:z-auto ${mobileOpen ? "w-64" : "w-0 md:w-auto"}`}
       style={{ width: collapsed ? 64 : sidebarWidth }}
+      aria-label="Sidebar"
     >
       <div className="flex items-center justify-between px-2 py-3 border-b">
         {!collapsed && <span className="font-bold text-lg text-blue-700">Admin</span>}
-        <button
-          className="p-1 text-gray-500 hover:text-blue-600 focus:outline-none"
-          onClick={() => setCollapsed((c) => !c)}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <svg width="20" height="20" fill="none" viewBox="0 0 20 20">
-            <path d="M7 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="p-1 text-gray-500 hover:text-blue-600 focus:outline-none md:hidden"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close sidebar"
+          >
+            <FaTimes />
+          </button>
+          <button
+            className="p-1 text-gray-500 hover:text-blue-600 focus:outline-none hidden md:block"
+            onClick={() => setCollapsed((c) => !c)}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <svg width="20" height="20" fill="none" viewBox="0 0 20 20">
+              <path d="M7 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
       </div>
       <nav className="flex-1 px-2 py-4 overflow-y-auto">
         {/* Search Orders */}
@@ -93,7 +115,7 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
               <li>
                 <button
                   className={`w-full text-left px-3 py-2 rounded-lg font-medium transition ${activeTab === "orders" ? "bg-blue-100 text-blue-700" : "text-gray-700 hover:bg-gray-100"}`}
-                  onClick={() => setActiveTab("orders")}
+                  onClick={() => { setActiveTab("orders"); setMobileOpen(false); }}
                 >
                   Orders
                 </button>
@@ -101,7 +123,7 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
               <li>
                 <button
                   className={`w-full text-left px-3 py-2 rounded-lg font-medium transition ${activeTab === "vendors" ? "bg-blue-100 text-blue-700" : "text-gray-700 hover:bg-gray-100"}`}
-                  onClick={() => setActiveTab("vendors")}
+                  onClick={() => { setActiveTab("vendors"); setMobileOpen(false); }}
                 >
                   Vendors
                 </button>
@@ -109,7 +131,7 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
               <li>
                 <button
                   className={`w-full text-left px-3 py-2 rounded-lg font-medium transition ${activeTab === "invoices" ? "bg-blue-100 text-blue-700" : "text-gray-700 hover:bg-gray-100"}`}
-                  onClick={() => setActiveTab("invoices")}
+                  onClick={() => { setActiveTab("invoices"); setMobileOpen(false); }}
                 >
                   Invoices
                 </button>
@@ -132,7 +154,7 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
               <li>
                 <button
                   className={`w-full text-left px-3 py-2 rounded-lg font-medium transition ${activeTab === "agents" ? "bg-blue-100 text-blue-700" : "text-gray-700 hover:bg-gray-100"}`}
-                  onClick={() => setActiveTab("agents")}
+                  onClick={() => { setActiveTab("agents"); setMobileOpen(false); }}
                 >
                   Agents
                 </button>
@@ -140,7 +162,7 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
               <li>
                 <button
                   className={`w-full text-left px-3 py-2 rounded-lg font-medium transition ${activeTab === "assignOrder" ? "bg-blue-100 text-blue-700" : "text-gray-700 hover:bg-gray-100"}`}
-                  onClick={() => setActiveTab("assignOrder")}
+                  onClick={() => { setActiveTab("assignOrder"); setMobileOpen(false); }}
                 >
                   Assign Order
                 </button>
@@ -149,14 +171,31 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
           )}
         </div>
       </nav>
-      {/* Sidebar resizer */}
+      {/* Sidebar resizer only on desktop */}
       {!collapsed && (
         <div
-          className="absolute top-0 right-0 h-full w-2 cursor-col-resize z-20"
+          className="absolute top-0 right-0 h-full w-2 cursor-col-resize z-20 hidden md:block"
           onMouseDown={handleMouseDown}
           style={{ userSelect: dragging ? "none" : "auto" }}
         />
       )}
     </aside>
+  );
+
+  // Hamburger button for mobile
+  return (
+    <>
+      <button
+        className="md:hidden fixed top-4 left-4 z-50 bg-white border rounded-full p-2 shadow-lg"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open sidebar"
+      >
+        <FaBars />
+      </button>
+      {/* Sidebar overlay for mobile */}
+      <div className={`fixed inset-0 bg-black bg-opacity-40 z-40 transition-opacity ${mobileOpen ? "block" : "hidden"}`} onClick={() => setMobileOpen(false)} />
+      {/* Sidebar content */}
+      <div className={`${mobileOpen ? "block" : "hidden"} md:block`}>{sidebarContent}</div>
+    </>
   );
 } 
