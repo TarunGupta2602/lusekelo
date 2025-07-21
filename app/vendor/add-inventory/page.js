@@ -248,21 +248,32 @@ const ProductForm = () => {
             <label className="block text-sm font-semibold text-blue-700 mb-1">
               Upload Image
             </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:border-0 file:rounded-full file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            />
-            {previewUrl && (
-              <Image
-                src={previewUrl}
-                alt="Preview"
-                width={240}
-                height={240}
-                className="mt-4 rounded-xl shadow-lg max-h-60 object-contain border border-blue-100 mx-auto"
+            <div className="relative border-2 border-dashed rounded-xl p-4 bg-blue-50 flex flex-col items-center justify-center transition-all duration-200 hover:border-blue-400">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                style={{ height: '100%' }}
               />
-            )}
+              {previewUrl ? (
+                <Image
+                  src={previewUrl}
+                  alt="Preview"
+                  width={180}
+                  height={180}
+                  className="rounded-xl shadow-lg max-h-48 object-contain border border-blue-100 mx-auto"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-40">
+                  <svg className="w-12 h-12 text-blue-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4a1 1 0 011-1h8a1 1 0 011 1v12m-4 4h-4a1 1 0 01-1-1v-1h10v1a1 1 0 01-1 1h-4z" />
+                  </svg>
+                  <span className="text-blue-400 font-medium">No image selected</span>
+                  <span className="text-xs text-gray-400">Product will use a default image</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Submit Button & Message */}

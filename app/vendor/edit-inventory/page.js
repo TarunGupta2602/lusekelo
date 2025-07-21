@@ -22,6 +22,7 @@ export default function EditInventoryPage() {
   const [editImageFile, setEditImageFile] = useState(null);
   const [editImagePreview, setEditImagePreview] = useState(null);
   const productsPerPage = 10;
+  const [sortField, setSortField] = useState('date_added');
 
   // Normalize image path if you use images
   const normalizeImagePath = (path) => {
@@ -73,7 +74,7 @@ export default function EditInventoryPage() {
           .from('products')
           .select('id, name, price, image, quantity, date_added, supermarketid')
           .eq('supermarketid', supermarketId)
-          .order('date_added', { ascending: sortOrder === 'asc' });
+          .order(sortField, { ascending: sortOrder === 'asc' });
 
         if (productsError) {
           setError('Error fetching products: ' + productsError.message);
@@ -105,7 +106,7 @@ export default function EditInventoryPage() {
     };
 
     fetchData();
-  }, [sortOrder]);
+  }, [sortOrder, sortField]);
 
   // Filtering and searching
   useEffect(() => {
@@ -286,200 +287,216 @@ export default function EditInventoryPage() {
   };
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
-      <h2 className="text-3xl font-bold mb-6">Edit Inventory</h2>
-      <div className="flex flex-wrap gap-2 mb-4">
-        {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'All'].map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-4 py-2 rounded ${filter === f ? 'bg-gray-200 font-semibold' : 'bg-white'} border`}
-          >
-            {f}
-          </button>
-        ))}
-        <input
-          type="text"
-          placeholder="Search..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="px-4 py-2 border rounded"
-        />
-        <button onClick={handleSortByNewest} className="bg-gray-800 text-white px-4 py-2 rounded">
-          Sort by: {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
-        </button>
-      </div>
-      {loading ? (
-        <p>Loading...</p>
-      ) : error ? (
-        <p className="text-red-600">{error}</p>
-      ) : filteredProducts.length === 0 ? (
-        <p>No products found.</p>
-      ) : (
-        <div className="bg-white shadow-md rounded-lg overflow-x-auto border-2 border-blue-300">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b-2 border-blue-300 bg-gray-50">
-                <th className="p-3 font-bold border-r border-blue-200 w-24">Product ID</th>
-                <th className="p-3 font-bold border-r border-blue-200">Product Image</th>
-                <th className="p-3 font-bold border-r border-blue-200">Product Name</th>
-                <th className="p-3 font-bold border-r border-blue-200">Date Added</th>
-                <th className="p-3 font-bold border-r border-blue-200">Amount</th>
-                <th className="p-3 font-bold border-r border-blue-200">Units in Stock</th>
-                <th className="p-3 font-bold">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedProducts.map((product) => {
-                const isEditing = editId === product.id;
-                return (
-                  <tr key={product.id} className="border-b border-blue-200 hover:bg-blue-50 transition">
-                    <td className="p-3 border-r border-blue-100 text-gray-700 font-mono font-semibold w-24">
-                      #{product.id}
-                    </td>
-                    <td className="p-3 border-r border-blue-100">
-                      {isEditing ? (
-                        <div className="flex flex-col items-center gap-2">
-                          {editImagePreview ? (
-                            <Image
-                              src={normalizeImagePath(editImagePreview) || '/file.svg'}
-                              alt={editForm.name}
-                              width={40}
-                              height={40}
-                              className="rounded object-cover"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 bg-gray-200 flex items-center justify-center rounded text-gray-400">
-                              <span className="text-xs">No Image</span>
-                            </div>
-                          )}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleEditImageChange}
-                            className="text-xs"
-                          />
-                        </div>
-                      ) : product.image && normalizeImagePath(product.image) ? (
-                        <Image
-                          src={normalizeImagePath(product.image)}
-                          alt={product.name}
-                          width={40}
-                          height={40}
-                          className="rounded object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 bg-gray-200 flex items-center justify-center rounded text-gray-400">
-                          <span className="text-xs">No Image</span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-3 border-r border-blue-100">
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={editForm.name}
-                          onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                          className="border px-2 py-1 rounded w-full"
-                        />
-                      ) : (
-                        product.name
-                      )}
-                    </td>
-                    <td className="p-3 border-r border-blue-100">{product.date_added}</td>
-                    <td className="p-3 border-r border-blue-100">
-                      {isEditing ? (
-                        <input
-                          type="number"
-                          value={editForm.price}
-                          onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
-                          className="border px-2 py-1 rounded w-full"
-                        />
-                      ) : (
-                        `$${parseFloat(product.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                      )}
-                    </td>
-                    <td className="p-3 border-r border-blue-100">
-                      {isEditing ? (
-                        <input
-                          type="number"
-                          value={editForm.quantity}
-                          onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
-                          className="border px-2 py-1 rounded w-full"
-                        />
-                      ) : (
-                        product.quantity
-                      )}
-                    </td>
-                    <td className="p-3 flex gap-2">
-                      {isEditing ? (
-                        <>
-                          <button
-                            onClick={() => handleSaveEdit(product.id)}
-                            className="bg-green-500 text-white px-2 py-1 rounded"
-                            title="Save"
-                          >
-                            ✓
-                          </button>
-                          <button
-                            onClick={handleCancelEdit}
-                            className="bg-gray-400 text-white px-2 py-1 rounded"
-                            title="Cancel"
-                          >
-                            ×
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleEdit(product)}
-                            className="bg-transparent text-blue-600 hover:bg-blue-100 px-2 py-1 rounded"
-                            title="Edit"
-                          >
-                            <FaRegEdit className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(product.id)}
-                            className="bg-transparent text-red-600 hover:bg-red-100 px-2 py-1 rounded"
-                            title="Delete"
-                          >
-                            <FaRegTrashAlt className="w-5 h-5" />
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+    <div className="p-2 sm:p-4 md:p-8 bg-gradient-to-br from-blue-50 via-white to-pink-50 min-h-screen">
+      <div className="max-w-6xl mx-auto">
+        <h2 className="text-3xl md:text-4xl font-bold mb-8 text-center text-blue-800 drop-shadow">Edit Inventory</h2>
+        <div className="flex flex-wrap gap-2 mb-8 items-center bg-white p-4 rounded-lg shadow border border-blue-100 justify-center">
+          <div className="flex gap-2 flex-wrap items-center">
+            {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'All'].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-4 py-2 rounded ${filter === f ? 'bg-blue-100 font-semibold text-blue-700' : 'bg-white'} border`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="px-4 py-2 border rounded ml-2"
+          />
+          <div className="flex items-center gap-2 ml-2">
+            <label className="font-semibold text-gray-700">Sort By:</label>
+            <select
+              value={sortField}
+              onChange={e => setSortField(e.target.value)}
+              className="border rounded px-2 py-1 bg-gray-50"
+            >
+              <option value="id">Product ID</option>
+              <option value="name">Name</option>
+              <option value="price">Price</option>
+              <option value="date_added">Date Added</option>
+              <option value="quantity">Quantity</option>
+            </select>
+            <button onClick={handleSortByNewest} className="bg-blue-500 text-white px-4 py-2 rounded">
+              {sortOrder === 'desc' ? '↓' : '↑'}
+            </button>
+          </div>
         </div>
-      )}
-      {/* Pagination */}
-      <div className="flex justify-center mt-6 space-x-2">
-        <button
-          onClick={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-          className={`px-4 py-2 rounded ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
-        >
-          Previous
-        </button>
-        {Array.from({ length: totalPages }, (_, i) => (
+        {loading ? (
+          <p className="text-center text-lg text-blue-600">Loading...</p>
+        ) : error ? (
+          <p className="text-center text-red-600 text-lg">{error}</p>
+        ) : filteredProducts.length === 0 ? (
+          <p className="text-center text-gray-500 text-lg">No products found.</p>
+        ) : (
+          <div className="bg-white shadow-lg rounded-xl overflow-x-auto border-2 border-blue-300 mt-4">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b-2 border-blue-300 bg-blue-50">
+                  <th className="p-4 font-bold border-r border-blue-200">Product Image</th>
+                  <th className="p-4 font-bold border-r border-blue-200">Product Name</th>
+                  <th className="p-4 font-bold border-r border-blue-200">Date Added</th>
+                  <th className="p-4 font-bold border-r border-blue-200">Amount</th>
+                  <th className="p-4 font-bold border-r border-blue-200">Units in Stock</th>
+                  <th className="p-4 font-bold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedProducts.map((product, idx) => {
+                  const isEditing = editId === product.id;
+                  return (
+                    <tr key={product.id} className={`border-b border-blue-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'} hover:bg-blue-100 transition-all`}>
+                      <td className="p-3 border-r border-blue-100 text-center">
+                        {isEditing ? (
+                          <div className="flex flex-col items-center gap-2">
+                            {editImagePreview ? (
+                              <Image
+                                src={normalizeImagePath(editImagePreview) || '/file.svg'}
+                                alt={editForm.name}
+                                width={40}
+                                height={40}
+                                className="rounded object-cover"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 bg-gray-200 flex items-center justify-center rounded text-gray-400">
+                                <span className="text-xs">No Image</span>
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleEditImageChange}
+                              className="text-xs"
+                            />
+                          </div>
+                        ) : product.image && normalizeImagePath(product.image) ? (
+                          <Image
+                            src={normalizeImagePath(product.image)}
+                            alt={product.name}
+                            width={40}
+                            height={40}
+                            className="rounded object-cover mx-auto"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-gray-200 flex items-center justify-center rounded text-gray-400 mx-auto">
+                            <span className="text-xs">No Image</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-3 border-r border-blue-100 font-semibold text-blue-900">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editForm.name}
+                            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                            className="border px-2 py-1 rounded w-full"
+                          />
+                        ) : (
+                          product.name
+                        )}
+                      </td>
+                      <td className="p-3 border-r border-blue-100 text-gray-600">
+                        {product.date_added}
+                      </td>
+                      <td className="p-3 border-r border-blue-100">
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            value={editForm.price}
+                            onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                            className="border px-2 py-1 rounded w-full"
+                          />
+                        ) : (
+                          `$${parseFloat(product.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                        )}
+                      </td>
+                      <td className="p-3 border-r border-blue-100">
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            value={editForm.quantity}
+                            onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
+                            className="border px-2 py-1 rounded w-full"
+                          />
+                        ) : (
+                          product.quantity
+                        )}
+                      </td>
+                      <td className="p-3 flex gap-2 justify-center">
+                        {isEditing ? (
+                          <>
+                            <button
+                              onClick={() => handleSaveEdit(product.id)}
+                              className="bg-green-500 text-white px-2 py-1 rounded shadow hover:bg-green-600"
+                              title="Save"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="bg-gray-400 text-white px-2 py-1 rounded shadow hover:bg-gray-500"
+                              title="Cancel"
+                            >
+                              ×
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleEdit(product)}
+                              className="bg-transparent text-blue-600 hover:bg-blue-100 px-2 py-1 rounded shadow"
+                              title="Edit"
+                            >
+                              <FaRegEdit className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(product.id)}
+                              className="bg-transparent text-red-600 hover:bg-red-100 px-2 py-1 rounded shadow"
+                              title="Delete"
+                            >
+                              <FaRegTrashAlt className="w-5 h-5" />
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {/* Pagination */}
+        <div className="flex justify-center mt-8 space-x-2">
           <button
-            key={i + 1}
-            onClick={() => handlePageChange(i + 1)}
-            className={`px-4 py-2 rounded ${currentPage === i + 1 ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className={`px-4 py-2 rounded shadow ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-200 hover:bg-blue-300 text-blue-800'}`}
           >
-            {i + 1}
+            Previous
           </button>
-        ))}
-        <button
-          onClick={() => handlePageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
-          className={`px-4 py-2 rounded ${currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
-        >
-          Next
-        </button>
+          {Array.from({ length: totalPages }, (_, i) => (
+            <button
+              key={i + 1}
+              onClick={() => handlePageChange(i + 1)}
+              className={`px-4 py-2 rounded shadow ${currentPage === i + 1 ? 'bg-blue-600 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'}`}
+            >
+              {i + 1}
+            </button>
+          ))}
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className={`px-4 py-2 rounded shadow ${currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-200 hover:bg-blue-300 text-blue-800'}`}
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );

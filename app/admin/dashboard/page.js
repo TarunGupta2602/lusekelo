@@ -6,6 +6,7 @@ import Image from "next/image";
 import React from "react";
 import { FaSearch, FaUser, FaChevronDown, FaClipboardList, FaUserFriends, FaBell } from "react-icons/fa";
 import Papa from "papaparse";
+import Sidebar from "./Sidebar";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -57,6 +58,9 @@ export default function AdminDashboard() {
   const [ordersTotalPages, setOrdersTotalPages] = useState(1);
   const [searchOrders, setSearchOrders] = useState("");
   const router = useRouter();
+  const [showEditVendorModal, setShowEditVendorModal] = useState(false);
+  const [editVendorForm, setEditVendorForm] = useState({ id: '', full_name: '', email: '', newPassword: '' });
+  const [editedVendorPassword, setEditedVendorPassword] = useState('');
 
   useEffect(() => {
     const getUser = async () => {
@@ -129,6 +133,7 @@ export default function AdminDashboard() {
         products:product_id (
           id,
           name,
+          image,
           supermarket:supermarketid (
             id,
             name
@@ -669,11 +674,69 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
-      <header className="w-full flex items-center justify-between px-10 py-4 bg-white border-b shadow-sm">
+      {showEditVendorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full text-center relative">
+            <h2 className="text-xl font-bold mb-4 text-gray-800">Edit Vendor</h2>
+            <div className="mb-4">
+              <label className="block text-left text-gray-700 font-semibold mb-1">Full Name</label>
+              <input
+                type="text"
+                value={editVendorForm.full_name}
+                onChange={e => setEditVendorForm(f => ({ ...f, full_name: e.target.value }))}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-left text-gray-700 font-semibold mb-1">Email</label>
+              <input
+                type="email"
+                value={editVendorForm.email}
+                onChange={e => setEditVendorForm(f => ({ ...f, email: e.target.value }))}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold px-4 py-2 rounded shadow"
+                onClick={() => setShowEditVendorModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded shadow"
+                onClick={async () => {
+                  // Update vendor info
+                  const { error } = await supabase
+                    .from('profiles')
+                    .update({ full_name: editVendorForm.full_name, email: editVendorForm.email })
+                    .eq('id', editVendorForm.id);
+                  if (error) {
+                    alert('Error updating vendor: ' + error.message);
+                    return;
+                  }
+                  setShowEditVendorModal(false);
+                  alert('Vendor updated successfully!');
+                  // Refresh vendor list
+                  supabase
+                    .from('profiles')
+                    .select('id, full_name, email, role')
+                    .eq('role', 'vendor')
+                    .then(({ data }) => setVendors(data || []));
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Responsive header */}
+      <header className="w-full flex flex-col sm:flex-row items-center justify-between px-4 sm:px-10 py-4 bg-white border-b shadow-sm gap-4 sm:gap-0">
         <div className="flex items-center gap-2">
           <Image src="/logo.svg" alt="Logo" width={90} height={40} />
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
           <button
             className="flex items-center gap-2"
             onClick={() => setShowAdminModal(true)}
@@ -686,12 +749,10 @@ export default function AdminDashboard() {
                 />
               </svg>
             </div>
-            <div className="text-gray-800 font-semibold">
-              {profile?.full_name || "Admin"}
-            </div>
+            <div className="text-gray-800 font-semibold truncate max-w-[120px]">{profile?.full_name || "Admin"}</div>
           </button>
           <button
-            className="bg-lime-400 hover:bg-lime-500 text-gray-900 font-bold px-5 py-2 rounded-lg shadow transition"
+            className="bg-lime-400 hover:bg-lime-500 text-gray-900 font-bold px-5 py-2 rounded-lg shadow transition w-full sm:w-auto"
             onClick={async () => {
               await supabase.auth.signOut();
               router.push("/admin");
@@ -701,158 +762,91 @@ export default function AdminDashboard() {
           </button>
         </div>
       </header>
-      <div className="flex flex-1">
-        <aside className="w-64 bg-gray-50 border-r min-h-screen flex flex-col">
-          <nav className="flex-1 px-4 py-6">
-            <ul className="space-y-4">
-              <li>
-                <div className="flex items-center gap-2 text-gray-700 font-semibold mb-2">
-                  <FaSearch className="text-lg" />
-                  <span>Search Orders</span>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search Orders"
-                  className="w-full mt-2 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
-                  value={searchOrders}
-                  onChange={e => setSearchOrders(e.target.value)}
-                />
-              </li>
-              <li>
-                <div className="flex items-center gap-2 text-gray-700 font-semibold mb-2">
-                  <FaClipboardList className="text-lg" />
-                  <span>Manage Bookings</span>
-                  <FaChevronDown className="ml-auto text-xs" />
-                </div>
-                <ul className="ml-6 mt-2 space-y-1">
-                  <li>
-                    <button
-                      className={`w-full text-left px-3 py-2 rounded-lg font-medium transition ${
-                        activeTab === "orders"
-                          ? "bg-blue-100 text-blue-700"
-                          : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                      onClick={() => setActiveTab("orders")}
-                    >
-                      Orders
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      className={`w-full text-left px-3 py-2 rounded-lg font-medium transition ${
-                        activeTab === "vendors"
-                          ? "bg-blue-100 text-blue-700"
-                          : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                      onClick={() => setActiveTab("vendors")}
-                    >
-                      Vendors
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      className={`w-full text-left px-3 py-2 rounded-lg font-medium transition ${
-                        activeTab === "invoices"
-                          ? "bg-blue-100 text-blue-700"
-                          : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                      onClick={() => setActiveTab("invoices")}
-                    >
-                      Invoices
-                    </button>
-                  </li>
-                </ul>
-              </li>
-              <li>
-                <div className="flex items-center gap-2 text-gray-700 font-semibold mb-2 mt-4">
-                  <FaUserFriends className="text-lg" />
-                  <span>Delivery Agents</span>
-                  <FaChevronDown className="ml-auto text-xs" />
-                </div>
-                <ul className="ml-6 mt-2 space-y-1">
-                  <li>
-                    <button
-                      className={`w-full text-left px-3 py-2 rounded-lg font-medium transition ${
-                        activeTab === "agents"
-                          ? "bg-blue-100 text-blue-700"
-                          : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                      onClick={() => setActiveTab("agents")}
-                    >
-                      Agents
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      className={`w-full text-left px-3 py-2 rounded-lg font-medium transition ${
-                        activeTab === "assignOrder"
-                          ? "bg-blue-100 text-blue-700"
-                          : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                      onClick={() => setActiveTab("assignOrder")}
-                    >
-                      Assign Order
-                    </button>
-                  </li>
-                </ul>
-              </li>
-            </ul>
-          </nav>
-        </aside>
-        <main className="flex-1 p-10">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">
+      <div className="flex flex-1 flex-col md:flex-row">
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          searchOrders={searchOrders}
+          setSearchOrders={setSearchOrders}
+        />
+        <main className="flex-1 p-2 sm:p-4 md:p-10 w-full overflow-x-auto">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 sm:mb-8">
             {TABS.find((t) => t.key === activeTab)?.label}
           </h1>
+          {/* Responsive table wrapper for orders, vendors, agents */}
           {activeTab === "orders" && (
-            <div className="bg-white rounded-xl shadow p-8">
-              <h2 className="text-xl font-bold mb-4">Orders</h2>
+            <div className="bg-white rounded-xl shadow p-2 sm:p-8 overflow-x-auto">
+              <h2 className="text-lg sm:text-xl font-bold mb-4">Orders</h2>
               {ordersLoading ? (
                 <div className="text-center text-gray-500">Loading orders...</div>
               ) : currentOrders.length === 0 ? (
                 <div className="text-center text-gray-400 py-8">No orders found.</div>
               ) : (
                 <>
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead>
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Order ID</th>
-                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Product</th>
-                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Supermarket</th>
-                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Quantity</th>
-                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Total Amount</th>
-                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Status</th>
-                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Created At</th>
-                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Vendor Decision</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
-                      {currentOrders.map((order) => (
-                        <tr key={order.id}>
-                          <td className="px-4 py-2">{order.id}</td>
-                          <td className="px-4 py-2">{order.products?.name || "N/A"}</td>
-                          <td className="px-4 py-2">{order.products?.supermarket?.name || "N/A"}</td>
-                          <td className="px-4 py-2">{order.quantity}</td>
-                          <td className="px-4 py-2">{order.total_amount}</td>
-                          <td className="px-4 py-2">{order.status}</td>
-                          <td className="px-4 py-2">{new Date(order.created_at).toLocaleString()}</td>
-                          <td className="px-4 py-2">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              order.vendor_decision === 'accepted'
-                                ? 'bg-green-100 text-green-600'
-                                : order.vendor_decision === 'rejected'
-                                ? 'bg-red-100 text-red-600'
-                                : 'bg-yellow-100 text-yellow-600'
-                            }`}>
-                              {order.vendor_decision?.charAt(0).toUpperCase() + order.vendor_decision?.slice(1) || 'Pending'}
-                            </span>
-                          </td>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[600px] w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                      <thead>
+                        <tr>
+                          <th className="px-2 sm:px-4 py-2 text-left font-bold text-gray-600 uppercase">Product</th>
+                          <th className="px-2 sm:px-4 py-2 text-left font-bold text-gray-600 uppercase">Supermarket</th>
+                          <th className="px-2 sm:px-4 py-2 text-left font-bold text-gray-600 uppercase">Quantity</th>
+                          <th className="px-2 sm:px-4 py-2 text-left font-bold text-gray-600 uppercase">Total Amount</th>
+                          <th className="px-2 sm:px-4 py-2 text-left font-bold text-gray-600 uppercase">Status</th>
+                          <th className="px-2 sm:px-4 py-2 text-left font-bold text-gray-600 uppercase">Created At</th>
+                          <th className="px-2 sm:px-4 py-2 text-left font-bold text-gray-600 uppercase">Vendor Decision</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div className="mt-4 flex justify-center gap-2">
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-100">
+                        {currentOrders.map((order) => (
+                          <tr key={order.id} className="hover:bg-blue-50 transition-all">
+                            <td className="px-2 sm:px-4 py-2 flex items-center gap-2 sm:gap-3">
+                              {order.products?.image ? (
+                                <Image
+                                  src={order.products.image}
+                                  alt={order.products.name || 'Product'}
+                                  width={32}
+                                  height={32}
+                                  className="rounded object-cover border w-8 h-8 sm:w-10 sm:h-10"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded bg-gray-200 flex items-center justify-center text-gray-400">🛒</div>
+                              )}
+                              <span className="font-semibold text-gray-900 truncate max-w-[80px] sm:max-w-[160px]">{order.products?.name || "N/A"}</span>
+                            </td>
+                            <td className="px-2 sm:px-4 py-2 truncate max-w-[80px] sm:max-w-[160px]">{order.products?.supermarket?.name || "N/A"}</td>
+                            <td className="px-2 sm:px-4 py-2">{order.quantity}</td>
+                            <td className="px-2 sm:px-4 py-2">{order.total_amount}</td>
+                            <td className="px-2 sm:px-4 py-2">
+                              <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
+                                order.status === 'completed'
+                                  ? 'bg-green-100 text-green-600'
+                                  : order.status === 'pending'
+                                  ? 'bg-yellow-100 text-yellow-600'
+                                  : 'bg-red-100 text-red-600'
+                              }`}>
+                                {order.status}
+                              </span>
+                            </td>
+                            <td className="px-2 sm:px-4 py-2 whitespace-nowrap">{new Date(order.created_at).toLocaleString()}</td>
+                            <td className="px-2 sm:px-4 py-2">
+                              <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
+                                order.vendor_decision === 'accepted'
+                                  ? 'bg-green-100 text-green-600'
+                                  : order.vendor_decision === 'rejected'
+                                  ? 'bg-red-100 text-red-600'
+                                  : 'bg-yellow-100 text-yellow-600'
+                              }`}>
+                                {order.vendor_decision?.charAt(0).toUpperCase() + order.vendor_decision?.slice(1) || 'Pending'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-2">
                     <button
-                      className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300 disabled:opacity-50"
+                      className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300 disabled:opacity-50 w-full sm:w-auto"
                       onClick={() => setOrdersPage((prev) => Math.max(prev - 1, 1))}
                       disabled={ordersPage === 1}
                     >
@@ -862,7 +856,7 @@ export default function AdminDashboard() {
                       Page {ordersPage} of {filteredTotalPages}
                     </span>
                     <button
-                      className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300 disabled:opacity-50"
+                      className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300 disabled:opacity-50 w-full sm:w-auto"
                       onClick={() => setOrdersPage((prev) => Math.min(prev + 1, filteredTotalPages))}
                       disabled={ordersPage === filteredTotalPages}
                     >
@@ -884,35 +878,7 @@ export default function AdminDashboard() {
                 <span className="text-xl font-bold text-gray-800">Vendors</span>
                 <button
                   className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded shadow transition"
-                  onClick={async () => {
-                    const name = prompt("Enter vendor full name:");
-                    const email = prompt("Enter vendor email:");
-                    const avatar_url = prompt("Enter avatar URL (optional):");
-                    if (!name || !email) return;
-                    try {
-                      const res = await fetch("/api/add-vendor", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ name, email, avatar_url }),
-                      });
-                      const result = await res.json();
-                      if (result.success) {
-                        setNewVendorPassword(result.password || "");
-                        setShowPasswordModal(true);
-                        const { data } = await supabase
-                          .from("profiles")
-                          .select("id, full_name, avatar_url, email, role")
-                          .eq("role", "vendor");
-                        setVendors(data || []);
-                      } else if (result.error && result.error.includes('duplicate key value')) {
-                        alert("A vendor with this email already exists or the user already exists in the system.");
-                      } else {
-                        alert("Error adding vendor: " + result.error);
-                      }
-                    } catch (e) {
-                      alert("Network or server error: " + e.message);
-                    }
-                  }}
+                  onClick={() => router.push("/admin/add-vendor")}
                 >
                   + Add Vendor
                 </button>
@@ -948,21 +914,9 @@ export default function AdminDashboard() {
                     vendors.map((vendor) => (
                       <tr key={vendor.id} className="hover:bg-blue-50">
                         <td className="px-4 py-2">
-                          {vendor.avatar_url ? (
-                            <Image
-                              src={vendor.avatar_url}
-                              alt={vendor.full_name || "Vendor"}
-                              width={40}
-                              height={40}
-                              className="rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-bold">
-                              {vendor.full_name
-                                ? vendor.full_name[0]
-                                : "V"}
-                            </div>
-                          )}
+                          <div className="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-bold">
+                            {vendor.full_name ? vendor.full_name[0] : "V"}
+                          </div>
                         </td>
                         <td className="px-4 py-2 font-semibold text-gray-800">
                           {vendor.full_name}
@@ -973,7 +927,17 @@ export default function AdminDashboard() {
                         <td className="px-4 py-2 text-gray-500 text-xs">
                           {vendor.id}
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2 flex gap-2">
+                          <button
+                            className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold px-3 py-1 rounded shadow text-xs"
+                            onClick={() => {
+                              setEditVendorForm({ id: vendor.id, full_name: vendor.full_name, email: vendor.email, newPassword: '' });
+                              setEditedVendorPassword('');
+                              setShowEditVendorModal(true);
+                            }}
+                          >
+                            Edit
+                          </button>
                           <button
                             className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-1 rounded shadow text-xs"
                             onClick={() => {
@@ -1117,21 +1081,33 @@ export default function AdminDashboard() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead>
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Order ID</th>
+                      <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Product</th>
                       <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Product</th>
                       <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Supermarket</th>
                       <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Assign Agent</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-100">
-                    {orders.filter(o => o.vendor_decision === 'accepted' && !o.agent_id).length === 0 ? (
+                    {filteredOrders.filter(o => o.vendor_decision === 'accepted' && !o.agent_id).length === 0 ? (
                       <tr>
                         <td colSpan={4} className="text-center text-gray-400 py-8">No accepted orders to assign.</td>
                       </tr>
                     ) : (
-                      orders.filter(o => o.vendor_decision === 'accepted' && !o.agent_id).map(order => (
+                      filteredOrders.filter(o => o.vendor_decision === 'accepted' && !o.agent_id).map(order => (
                         <tr key={order.id}>
-                          <td className="px-4 py-2">{order.id}</td>
+                          <td className="px-4 py-2">
+                            {order.products?.image ? (
+                              <Image
+                                src={order.products.image}
+                                alt={order.products.name || 'Product'}
+                                width={40}
+                                height={40}
+                                className="rounded object-cover border"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center text-gray-400">🛒</div>
+                            )}
+                          </td>
                           <td className="px-4 py-2">{order.products?.name || 'N/A'}</td>
                           <td className="px-4 py-2">{order.products?.supermarket?.name || 'N/A'}</td>
                           <td className="px-4 py-2">

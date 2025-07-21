@@ -52,6 +52,8 @@ export default function VendorDashboard() {
     return {};
   });
 
+  const [showManageImages, setShowManageImages] = useState(false);
+
   const normalizeImagePath = (path) => {
     if (!path) return '/default-vendor.png';
     return path.replace(/^(\.\.\/)+assets\//, '/');
@@ -686,117 +688,125 @@ export default function VendorDashboard() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <div className="w-64 bg-white shadow-md">
-        <div className="p-4">
-          {store ? (
-            <div className="flex items-center space-x-3">
-              {store.main_image ? (
-                <Image
-                  src={
-                    store.main_image.startsWith('http')
-                      ? store.main_image
-                      : store.main_image.startsWith('/')
+    <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
+      {/* Sidebar: collapses to a top bar or drawer on mobile */}
+      <div className="w-full md:w-64 bg-white shadow-lg z-20 md:relative fixed md:static top-0 left-0 h-16 md:h-auto flex md:block items-center justify-between px-4 md:px-0 border-b md:border-b-0">
+        {/* Hamburger for mobile */}
+        <button className="md:hidden p-2" onClick={() => setDropdownOpen((prev) => !prev)}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </button>
+        {/* Sidebar content: show/hide on mobile */}
+        <div className={`absolute md:static top-16 left-0 w-full md:w-auto bg-white md:bg-transparent shadow-lg md:shadow-none transition-all duration-200 ${dropdownOpen ? 'block' : 'hidden'} md:block`}>
+          <div className="p-4 border-b md:border-b-0">
+            {store ? (
+              <div className="flex items-center space-x-3">
+                {store.main_image ? (
+                  <Image
+                    src={
+                      store.main_image.startsWith('http')
                         ? store.main_image
-                        : '/' + store.main_image.replace(/^(\.\.\/)+/, '')
-                  }
-                  alt={store.name}
-                  width={40}
-                  height={40}
-                  className="rounded-full object-cover"
-                  unoptimized
-                />
-              ) : (
-                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                  <span className="text-gray-400 text-xl">🏬</span>
+                        : store.main_image.startsWith('/')
+                          ? store.main_image
+                          : '/' + store.main_image.replace(/^(\.\.\/)+/, '')
+                    }
+                    alt={store.name}
+                    width={40}
+                    height={40}
+                    className="rounded-full object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                    <span className="text-gray-400 text-xl">🏬</span>
+                  </div>
+                )}
+                <div>
+                  <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
+                  <p className="text-sm text-pink-600 font-semibold">{store.name}</p>
                 </div>
-              )}
-              <div>
+              </div>
+            ) : (
+              <>
                 <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
-                <p className="text-sm text-pink-600 font-semibold">{store.name}</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
-              <p className="text-sm text-pink-600 font-semibold">Loading...</p>
-            </>
-          )}
-        </div>
-        {/* Orders Search Bar */}
-        <div className="p-4">
-          <input
-            type="text"
-            placeholder="Search Orders..."
-            value={orderSearchQuery}
-            onChange={e => setOrderSearchQuery(e.target.value)}
-            className="border rounded px-3 py-1 w-full"
-          />
-        </div>
-        <nav className="mt-4">
-          <a
-            href="#"
-            className={`flex items-center px-4 py-2 ${
-              sidebarSection === 'Dashboard' ? 'bg-gray-200 text-gray-800 font-semibold' : 'text-gray-600 hover:bg-gray-200'
-            }`}
-            onClick={() => setSidebarSection('Dashboard')}
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7 a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-            </svg>
-            Dashboard
-          </a>
-          <div className="relative">
-            <button
-              onClick={() => setDropdownOpen((prev) => !prev)}
-              className="flex items-center w-full px-4 py-2 text-gray-600 hover:bg-gray-200 focus:outline-none"
-              aria-haspopup="true"
-              aria-expanded={dropdownOpen}
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h18M3 9h18M3 15h18M3 21h18"></path>
-              </svg>
-              <span className="flex-1 text-left">Manage Bookings</span>
-              <svg className={`w-4 h-4 ml-auto transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {dropdownOpen && (
-              <div className="ml-8 mt-1 bg-white border rounded shadow absolute z-10 w-40">
-                <a
-                  href="#"
-                  className="flex items-center px-4 py-2 hover:bg-gray-100 text-gray-700"
-                  onClick={() => setSidebarSection('Orders')}
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
-                  </svg>
-                  Orders
-                </a>
-                <a
-                  href="#"
-                  className="flex items-center px-4 py-2 hover:bg-gray-100 text-gray-700"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setSidebarSection('Inventory');
-                    setDropdownOpen(false);
-                    router.push('/vendor/dashboard?section=inventory');
-                  }}
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                  Inventory
-                </a>
-              </div>
+                <p className="text-sm text-pink-600 font-semibold">Loading...</p>
+              </>
             )}
           </div>
-        </nav>
+          {/* Orders Search Bar */}
+          <div className="p-4 border-b md:border-b-0">
+            <input
+              type="text"
+              placeholder="Search Orders..."
+              value={orderSearchQuery}
+              onChange={e => setOrderSearchQuery(e.target.value)}
+              className="border rounded px-3 py-2 w-full focus:ring-2 focus:ring-blue-400 focus:outline-none"
+            />
+          </div>
+          <nav className="mt-4">
+            <a
+              href="#"
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors duration-200 ${
+                sidebarSection === 'Dashboard' ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+              onClick={() => setSidebarSection('Dashboard')}
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7 a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+              </svg>
+              Dashboard
+            </a>
+            <div className="relative">
+              <button
+                onClick={() => setDropdownOpen((prev) => !prev)}
+                className="flex items-center w-full px-4 py-2 rounded-lg transition-colors duration-200 text-gray-600 hover:bg-gray-100 focus:outline-none"
+                aria-haspopup="true"
+                aria-expanded={dropdownOpen}
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h18M3 9h18M3 15h18M3 21h18"></path>
+                </svg>
+                <span className="flex-1 text-left">Manage Bookings</span>
+                <svg className={`w-4 h-4 ml-auto transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {dropdownOpen && (
+                <div className="ml-8 mt-1 bg-white border rounded shadow absolute z-10 w-40">
+                  <a
+                    href="#"
+                    className="flex items-center px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-gray-100 text-gray-700"
+                    onClick={() => setSidebarSection('Orders')}
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                    </svg>
+                    Orders
+                  </a>
+                  <a
+                    href="#"
+                    className="flex items-center px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-gray-100 text-gray-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setSidebarSection('Inventory');
+                      setDropdownOpen(false);
+                      router.push('/vendor/dashboard?section=inventory');
+                    }}
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Inventory
+                  </a>
+                </div>
+              )}
+            </div>
+          </nav>
+        </div>
       </div>
-
-      <div className="flex-1 p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-semibold">{sidebarSection === 'Inventory' ? 'Inventory' : sidebarSection === 'Orders' ? 'Orders' : 'Dashboard'}</h2>
+      {/* Main content: responsive padding and scroll */}
+      <div className="flex-1 p-2 sm:p-4 md:p-8 overflow-x-auto">
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-800">{sidebarSection === 'Inventory' ? 'Inventory' : sidebarSection === 'Orders' ? 'Orders' : 'Dashboard'}</h2>
           <div className="flex items-center space-x-4">
             {/* Notification Bell Icon */}
             <div className="relative">
@@ -823,7 +833,7 @@ export default function VendorDashboard() {
                     <div className="p-4 text-gray-500">No notifications</div>
                   ) : (
                     notifications.map((n) => (
-                      <div key={n.id} className={`p-4 border-b last:border-b-0 flex items-start justify-between ${!n.read ? 'bg-blue-50 font-semibold' : ''}`}>
+                      <div key={n.id} className={`p-4 border-b last:border-b-0 flex items-start justify-between rounded-lg transition-colors duration-200 ${!n.read ? 'bg-blue-50 font-semibold' : ''}`}>
                         <div>
                           <div className="font-medium">{n.message}</div>
                           <div className="text-xs text-gray-400">{new Date(n.date).toLocaleString()}</div>
@@ -848,7 +858,7 @@ export default function VendorDashboard() {
               </div>
               <span className="text-gray-600">Welcome, {userName}</span>
             </div>
-            <button onClick={handleSignOut} className="bg-green-500 text-white px-4 py-2 rounded">
+            <button onClick={handleSignOut} className="bg-green-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-green-600">
               Sign Out
             </button>
           </div>
@@ -856,7 +866,7 @@ export default function VendorDashboard() {
 
         {isProfileModalOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-lg">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold">Vendor Profile</h3>
                 <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
@@ -911,12 +921,12 @@ export default function VendorDashboard() {
                   <div className="flex space-x-4">
                     <button
                       onClick={handleSaveProfile}
-                      className="w-full bg-blue-500 text-white px-4 py-2 rounded"
+                      className="w-full bg-blue-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-blue-600"
                       disabled={!editUserName || !editStoreName}
                     >
                       Save
                     </button>
-                    <button onClick={() => setIsEditing(false)} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded">
+                    <button onClick={() => setIsEditing(false)} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-gray-400">
                       Cancel
                     </button>
                   </div>
@@ -933,10 +943,10 @@ export default function VendorDashboard() {
                       <p className="text-gray-600">Store: {store?.name || 'N/A'}</p>
                     </div>
                   </div>
-                  <button onClick={() => setIsEditing(true)} className="w-full bg-blue-500 text-white px-4 py-2 rounded mb-2">
+                  <button onClick={() => setIsEditing(true)} className="w-full bg-blue-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-blue-600">
                     Edit Profile
                   </button>
-                  <button onClick={handleCloseModal} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded">
+                  <button onClick={handleCloseModal} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-gray-400">
                     Close
                   </button>
                 </div>
@@ -1014,12 +1024,12 @@ export default function VendorDashboard() {
 
         {sidebarSection === 'Inventory' && (
           <>
-            <div className="flex space-x-2 mb-4">
+            <div className="flex flex-wrap gap-2 mb-6 items-center bg-white p-4 rounded-lg shadow border border-blue-100">
               {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'All'].map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`px-4 py-2 rounded ${filter === f ? 'bg-gray-200' : 'bg-white'} border`}
+                  className={`px-4 py-2 rounded-lg transition-colors duration-200 ${filter === f ? 'bg-blue-200 text-blue-800' : 'bg-white text-gray-700 hover:bg-gray-100'} border`}
                 >
                   {f}
                 </button>
@@ -1031,26 +1041,26 @@ export default function VendorDashboard() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="px-4 py-2 border rounded"
               />
-              <button onClick={handleEditInventory} className="bg-blue-500 text-white px-4 py-2 rounded">
+              <button onClick={handleEditInventory} className="bg-blue-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-blue-600">
                 Add Inventory
               </button>
               <button
                 onClick={() => router.push('/vendor/edit-inventory')}
-                className="bg-yellow-500 text-white px-4 py-2 rounded"
+                className="bg-yellow-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-yellow-600"
               >
                 Edit Inventory
               </button>
-              <button onClick={handleSortByNewest} className="bg-blue-500 text-white px-4 py-2 rounded">
+              <button onClick={handleSortByNewest} className="bg-blue-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-blue-600">
                 Sort by {sortOrder === 'desc' ? 'Oldest' : 'Newest'}
               </button>
               <button
                 onClick={handleExportCSV}
-                className="bg-green-500 text-white px-4 py-2 rounded"
+                className="bg-green-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-green-600"
                 disabled={products.length === 0}
               >
                 Export CSV
               </button>
-              <label className="bg-blue-500 text-white px-4 py-2 rounded cursor-pointer">
+              <label className="bg-blue-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 cursor-pointer hover:bg-blue-600">
                 Import CSV
                 <input
                   type="file"
@@ -1059,7 +1069,7 @@ export default function VendorDashboard() {
                   className="hidden"
                 />
               </label>
-              <label className={`bg-purple-500 text-white px-4 py-2 rounded cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <label className={`bg-purple-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 cursor-pointer hover:bg-purple-600 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 {uploading ? 'Uploading...' : 'Upload Images'}
                 <input
                   type="file"
@@ -1070,56 +1080,76 @@ export default function VendorDashboard() {
                   disabled={uploading}
                 />
               </label>
+              <button
+                onClick={() => setShowManageImages((prev) => !prev)}
+                className="bg-purple-600 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-purple-700"
+              >
+                {showManageImages ? 'Hide' : 'Manage'} Images
+              </button>
             </div>
             
-            {/* Display uploaded images and their mappings */}
-            {Object.keys(uploadedImageMap).length > 0 && (
-              <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="font-semibold">Uploaded Images Available for CSV Import:</h4>
-                  <button
-                    onClick={() => {
-                      setUploadedImageMap({});
-                      if (typeof window !== 'undefined') {
-                        localStorage.removeItem('uploadedImageMap');
-                      }
-                    }}
-                    className="text-red-500 text-sm hover:text-red-700"
-                  >
-                    Clear All
-                  </button>
-                </div>
-                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
-                  <strong>Instructions:</strong> Use the filename shown in the &quot;CSV should use&quot; field in your CSV file&apos;s image column. 
-                  For example, if you uploaded &quot;headphone.jpg&quot;, use &quot;headphone.jpg&quot; in your CSV file.
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Object.entries(uploadedImageMap).map(([originalName, url]) => (
-                    <div key={originalName} className="bg-white p-3 rounded border">
-                      <div className="text-sm font-medium text-gray-700 mb-2">
-                        CSV should use: <code className="bg-gray-100 px-1 rounded">{originalName}</code>
-                      </div>
-                      <div className="text-xs text-gray-500 mb-2">
-                        Generated URL: <code className="bg-gray-100 px-1 rounded break-all">{url}</code>
-                      </div>
-                      <div className="w-full h-20 bg-gray-100 rounded flex items-center justify-center">
-                        <Image 
-                          src={url} 
-                          alt={originalName}
-                          width={80}
-                          height={80}
-                          className="max-w-full max-h-full object-contain"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'flex';
-                          }}
-                          unoptimized
-                        />
-                        <div className="hidden text-gray-400 text-xs">Image not found</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            {showManageImages && (
+              <div className="mb-6 p-6 bg-white rounded-lg shadow border border-purple-200">
+                <h3 className="text-xl font-bold mb-4 text-purple-700">Manage Uploaded Images</h3>
+                {Object.keys(uploadedImageMap).length === 0 ? (
+                  <div className="text-gray-500">No images uploaded yet.</div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {Object.entries(uploadedImageMap).map(([originalName, url]) => {
+                      // Find products using this image
+                      const usedInProducts = products.filter(p => (p.image === url || p.image?.endsWith(originalName)));
+                      return (
+                        <div key={originalName} className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col items-center shadow hover:shadow-lg transition-all">
+                          <Image src={url} alt={originalName} width={100} height={100} className="rounded mb-2 object-contain border bg-white" unoptimized />
+                          <div className="text-sm font-semibold text-gray-700 mb-1 break-all text-center">{originalName}</div>
+                          <div className="text-xs text-gray-500 mb-2 break-all text-center">{url}</div>
+                          <div className="mb-2 w-full">
+                            <span className="font-medium text-blue-700">Used in:</span>
+                            {usedInProducts.length === 0 ? (
+                              <span className="ml-2 text-gray-400">No products</span>
+                            ) : (
+                              <ul className="list-disc ml-5 text-xs text-gray-700">
+                                {usedInProducts.map(prod => (
+                                  <li key={prod.id}>{prod.name} (ID: {prod.id})</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                          <button
+                            className="mt-2 bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600 w-full"
+                            onClick={async () => {
+                              if (!window.confirm('Delete this image from storage? Products using it will be set to default image.')) return;
+                              // Delete from Supabase Storage
+                              const filePath = url.split('/').slice(-2).join('/'); // e.g. public/12345_filename.jpg
+                              const { error } = await supabase.storage.from('images').remove([filePath]);
+                              if (error) {
+                                alert('Failed to delete image: ' + error.message);
+                                return;
+                              }
+                              // Update products using this image
+                              for (const prod of usedInProducts) {
+                                await supabase.from('products').update({ image: null }).eq('id', prod.id);
+                              }
+                              // Remove from uploadedImageMap
+                              setUploadedImageMap(prev => {
+                                const newMap = { ...prev };
+                                delete newMap[originalName];
+                                if (typeof window !== 'undefined') {
+                                  localStorage.setItem('uploadedImageMap', JSON.stringify(newMap));
+                                }
+                                return newMap;
+                              });
+                              alert('Image deleted and products updated.');
+                              window.location.reload();
+                            }}
+                          >
+                            Delete Image
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
             {loading ? (
@@ -1130,7 +1160,7 @@ export default function VendorDashboard() {
               <p>No products found for the selected filter or search.</p>
             ) : (
               <div className="bg-white shadow-md rounded">
-                <table className="w-full text-left">
+                <table className="w-full text-left min-w-full">
                   <thead>
                     <tr className="border-b">
                       <th className="p-4">Product</th>
@@ -1185,7 +1215,7 @@ export default function VendorDashboard() {
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className={`px-4 py-2 mb-8 rounded ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+                className={`px-4 py-2 mb-8 rounded-lg transition-colors duration-200 ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
               >
                 Previous
               </button>
@@ -1193,7 +1223,7 @@ export default function VendorDashboard() {
                 <button
                   key={number}
                   onClick={() => handlePageChange(number)}
-                  className={`px-4 py-2 mb-8 rounded ${currentPage === number ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                  className={`px-4 py-2 mb-8 rounded-lg transition-colors duration-200 ${currentPage === number ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
                 >
                   {number}
                 </button>
@@ -1201,7 +1231,7 @@ export default function VendorDashboard() {
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className={`px-4 py-2 mb-8 rounded ${currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+                className={`px-4 py-2 mb-8 rounded-lg transition-colors duration-200 ${currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
               >
                 Next
               </button>
@@ -1214,7 +1244,6 @@ export default function VendorDashboard() {
             <div className="mb-4">
               <h3 className="text-lg font-semibold mb-2">Orders ({filteredOrders.length})</h3>
             </div>
-            
             {ordersLoading ? (
               <p>Loading orders...</p>
             ) : error ? (
@@ -1238,138 +1267,86 @@ export default function VendorDashboard() {
                 </svg>
               </div>
             ) : (
-              <div className="bg-white shadow-md rounded">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="p-4">Order ID</th>
-                      <th className="p-4">Product</th>
-                      <th className="p-4">Customer ID</th>
-                      <th className="p-4">Quantity</th>
-                      <th className="p-4">Total Amount</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4">Date</th>
-                      <th className="p-4">Vendor Decision</th>
-                      <th className="p-4">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedOrders.map((order) => (
-                      <tr key={order.id} className="border-b">
-                        <td className="p-4">
-                          <span className="font-mono text-sm">{order.id.slice(0, 8)}...</span>
-                        </td>
-                        <td className="p-4 flex items-center space-x-2">
-                          {order.products.image ? (
-                            <Image
-                              src={
-                                order.products.image.startsWith('http')
-                                  ? order.products.image
-                                  : order.products.image.startsWith('/')
-                                    ? order.products.image
-                                    : '/' + order.products.image.replace(/^(\.\.\/)+/, '')
-                              }
-                              alt={order.products.name}
-                              width={40}
-                              height={40}
-                              className="w-10 h-10 rounded object-cover"
-                              unoptimized
-                            />
-                          ) : (
-                            <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center">
-                              <span className="text-gray-400 text-xl">🛒</span>
-                            </div>
-                          )}
-                          <div>
-                            <div className="font-medium">{order.products.name}</div>
-                            <div className="text-sm text-gray-500">${order.products.price?.toFixed(2) || '0.00'}</div>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <span className="font-mono text-sm">{order.user_id.slice(0, 8)}...</span>
-                        </td>
-                        <td className="p-4">{order.quantity}</td>
-                        <td className="p-4">${order.total_amount?.toFixed(2) || '0.00'}</td>
-                        <td className="p-4">
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            order.status === 'completed'
-                              ? 'bg-green-100 text-green-600'
-                              : order.status === 'pending'
-                              ? 'bg-yellow-100 text-yellow-600'
-                              : 'bg-red-100 text-red-600'
-                          }`}>
-                            {order.status}
-                          </span>
-                        </td>
-                        <td className="p-4">{new Date(order.created_at).toLocaleDateString()}</td>
-                        <td className="p-4">
-                          {/* Vendor Decision Status and Actions */}
-                          {order.vendor_decision === 'pending' ? (
-                            <div className="flex space-x-2">
-                              <button
-                                className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600"
-                                onClick={async () => {
-                                  const { error } = await supabase
-                                    .from('orders')
-                                    .update({ vendor_decision: 'accepted' })
-                                    .eq('id', order.id);
-                                  if (!error) {
-                                    setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'accepted' } : o));
-                                    setFilteredOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'accepted' } : o));
-                                  }
-                                }}
-                              >
-                                Accept
-                              </button>
-                              <button
-                                className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600"
-                                onClick={async () => {
-                                  const { error } = await supabase
-                                    .from('orders')
-                                    .update({ vendor_decision: 'rejected' })
-                                    .eq('id', order.id);
-                                  if (!error) {
-                                    setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'rejected' } : o));
-                                    setFilteredOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'rejected' } : o));
-                                  }
-                                }}
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          ) : (
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              order.vendor_decision === 'accepted'
-                                ? 'bg-green-100 text-green-600'
-                                : order.vendor_decision === 'rejected'
-                                ? 'bg-red-100 text-red-600'
-                                : 'bg-yellow-100 text-yellow-600'
-                            }`}>
-                              {order.vendor_decision?.charAt(0).toUpperCase() + order.vendor_decision?.slice(1) || 'Pending'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4">
+              <div className="bg-white rounded-xl shadow divide-y divide-gray-100">
+                {paginatedOrders.map((order) => (
+                  <div key={order.id} className="flex items-center px-6 py-4 gap-4 hover:bg-blue-50 transition-all">
+                    {/* Product Image */}
+                    {order.products.image ? (
+                      <Image
+                        src={order.products.image.startsWith('http') ? order.products.image : order.products.image.startsWith('/') ? order.products.image : '/' + order.products.image.replace(/^(\.\.+\/)+/, '')}
+                        alt={order.products.name}
+                        width={48}
+                        height={48}
+                        className="w-12 h-12 rounded object-cover border"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-2xl">🛒</div>
+                    )}
+                    {/* Product Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-gray-900 truncate">{order.products.name}</div>
+                      <div className="text-gray-500 text-xs">Qty: <span className="font-semibold">{order.quantity}</span> &bull; Total: <span className="font-semibold">${order.total_amount?.toFixed(2) || '0.00'}</span></div>
+                    </div>
+                    {/* Statuses */}
+                    <div className="flex flex-col items-start gap-1 min-w-[120px]">
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${order.status === 'completed' ? 'bg-green-100 text-green-600' : order.status === 'pending' ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>{order.status}</span>
+                      <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleDateString()}</span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${order.vendor_decision === 'accepted' ? 'bg-green-100 text-green-600' : order.vendor_decision === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'}`}>{order.vendor_decision?.charAt(0).toUpperCase() + order.vendor_decision?.slice(1) || 'Pending'}</span>
+                    </div>
+                    {/* Actions */}
+                    <div className="flex gap-2 ml-4">
+                      {order.vendor_decision === 'pending' && (
+                        <>
                           <button
-                            onClick={() => handleDeleteOrder(order.id)}
-                            className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+                            className="bg-green-500 text-white px-3 py-1 rounded text-xs hover:bg-green-600"
+                            onClick={async () => {
+                              const { error } = await supabase
+                                .from('orders')
+                                .update({ vendor_decision: 'accepted' })
+                                .eq('id', order.id);
+                              if (!error) {
+                                setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'accepted' } : o));
+                                setFilteredOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'accepted' } : o));
+                              }
+                            }}
                           >
-                            Delete
+                            Accept
                           </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          <button
+                            className="bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600"
+                            onClick={async () => {
+                              const { error } = await supabase
+                                .from('orders')
+                                .update({ vendor_decision: 'rejected' })
+                                .eq('id', order.id);
+                              if (!error) {
+                                setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'rejected' } : o));
+                                setFilteredOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'rejected' } : o));
+                              }
+                            }}
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleDeleteOrder(order.id)}
+                        className="bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
-            
             {filteredOrders.length > 0 && (
-              <div className="flex justify-center mt-4 space-x-2">
+              <div className="flex justify-center mt-8 space-x-2">
                 <button
                   onClick={() => handleOrderPageChange(orderCurrentPage - 1)}
                   disabled={orderCurrentPage === 1}
-                  className={`px-4 py-2 mb-8 rounded ${orderCurrentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+                  className={`px-4 py-2 rounded-lg transition-colors duration-200 ${orderCurrentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
                 >
                   Previous
                 </button>
@@ -1377,7 +1354,7 @@ export default function VendorDashboard() {
                   <button
                     key={number}
                     onClick={() => handleOrderPageChange(number)}
-                    className={`px-4 py-2 mb-8 rounded ${orderCurrentPage === number ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                    className={`px-4 py-2 rounded-lg transition-colors duration-200 ${orderCurrentPage === number ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
                   >
                     {number}
                   </button>
@@ -1385,7 +1362,7 @@ export default function VendorDashboard() {
                 <button
                   onClick={() => handleOrderPageChange(orderCurrentPage + 1)}
                   disabled={orderCurrentPage === totalOrderPages}
-                  className={`px-4 py-2 mb-8 rounded ${orderCurrentPage === totalOrderPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+                  className={`px-4 py-2 rounded-lg transition-colors duration-200 ${orderCurrentPage === totalOrderPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
                 >
                   Next
                 </button>
