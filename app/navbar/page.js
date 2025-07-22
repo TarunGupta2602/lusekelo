@@ -431,7 +431,7 @@ export default function Navbar() {
                 </Link>
               ) : (
                 <Link
-                  href="/login"
+                  href="/auth"
                   className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition duration-150"
                   onClick={() => setMobileMenuOpen(false)}
                 >
