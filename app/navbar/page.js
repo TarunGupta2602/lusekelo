@@ -662,95 +662,26 @@ export default function Navbar() {
 
         {/* Desktop User and Cart Icons */}
         <div className="hidden lg:flex items-center space-x-4">
-          {/* User Profile Dropdown */}
-          <div className="relative user-dropdown">
-            <button 
-              onClick={() => setUserDropdownVisible(!userDropdownVisible)}
-              className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition duration-150"
-            >
-              <div className="w-8 h-8 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center font-medium text-sm">
-                {getUserAvatar() ? (
-                  <Image
-                    src={getUserAvatar()}
-                    alt={getUserDisplayName()}
-                    width={32}
-                    height={32}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  getUserInitials()
-                )}
-              </div>
-              <span className="text-sm font-medium">{getUserDisplayName()}</span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className={`h-4 w-4 transition-transform ${userDropdownVisible ? "rotate-180" : ""}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            
-            {userDropdownVisible && user && (
-              <div className="absolute right-0 mt-2 w-64 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
-                <div className="px-4 py-3 border-b bg-gray-50">
-                  <p className="text-sm font-semibold text-gray-800">{getUserDisplayName()}</p>
-                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                </div>
-                <div className="py-1">
-                  <button
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    onClick={() => {
-                      setProfileSidebarOpen(true);
-                      setUserDropdownVisible(false);
-                    }}
-                  >
-                    Your Profile
-                  </button>
-                  <Link 
-                    href="/orders" 
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    onClick={() => setUserDropdownVisible(false)}
-                  >
-                    Your Orders
-                  </Link>
-                  <button 
-                    onClick={async () => {
-                      await supabase.auth.signOut();
-                      setUserDropdownVisible(false);
-                    }}
-                    className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
-                  >
-                    Sign Out
-                  </button>
-                </div>
-              </div>
-            )}
-            
-            {userDropdownVisible && !user && (
-              <div className="absolute right-0 mt-2 w-64 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
-                <div className="py-1">
-                  <Link 
-                    href="/login" 
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    onClick={() => setUserDropdownVisible(false)}
-                  >
-                    Sign In
-                  </Link>
-                  <Link 
-                    href="/signup" 
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    onClick={() => setUserDropdownVisible(false)}
-                  >
-                    Create Account
-                  </Link>
-                </div>
-              </div>
-            )}
-          </div>
-
+          {/* User Profile Button (no dropdown) */}
+          <Link
+            href={user ? "/profile" : "/auth"}
+            className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition duration-150"
+          >
+            <div className="w-8 h-8 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center font-medium text-sm">
+              {getUserAvatar() ? (
+                <Image
+                  src={getUserAvatar()}
+                  alt={getUserDisplayName()}
+                  width={32}
+                  height={32}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                getUserInitials()
+              )}
+            </div>
+            <span className="text-sm font-medium">{getUserDisplayName()}</span>
+          </Link>
           {/* Cart Link */}
           <Link 
             href="/cart" 
