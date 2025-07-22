@@ -662,9 +662,10 @@ export default function Navbar() {
 
         {/* Desktop User and Cart Icons */}
         <div className="hidden lg:flex items-center space-x-4">
-          {/* User Profile Button (no dropdown) */}
-          <Link
-            href={user ? "/profile" : "/auth"}
+          {/* User Profile Button (opens sidebar, not a link) */}
+          <button
+            type="button"
+            onClick={() => user ? setProfileSidebarOpen(true) : window.location.assign('/auth')}
             className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition duration-150"
           >
             <div className="w-8 h-8 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center font-medium text-sm">
@@ -681,7 +682,7 @@ export default function Navbar() {
               )}
             </div>
             <span className="text-sm font-medium">{getUserDisplayName()}</span>
-          </Link>
+          </button>
           {/* Cart Link */}
           <Link 
             href="/cart" 
