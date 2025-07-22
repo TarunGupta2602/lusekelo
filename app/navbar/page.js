@@ -359,12 +359,23 @@ export default function Navbar() {
                       className="flex items-center px-4 py-2 hover:bg-gray-100"
                       onClick={() => setSearchQuery("")}
                     >
-                      <div>
-                        <p className="text-sm font-medium">{item.name}</p>
-                        {item.price && (
-                          <p className="text-xs text-green-600">${item.price}</p>
+                      <>
+                        {item.image && (
+                          <Image
+                            src={typeof item.image === 'string' && (item.image.startsWith('http') || item.image.startsWith('/')) ? item.image : '/store.png'}
+                            alt={item.name}
+                            width={36}
+                            height={36}
+                            className="rounded mr-3 object-cover"
+                          />
                         )}
-                      </div>
+                        <div>
+                          <p className="text-sm font-medium">{item.name}</p>
+                          {item.price && (
+                            <p className="text-xs text-green-600">${item.price}</p>
+                          )}
+                        </div>
+                      </>
                     </Link>
                   ) : (
                     <Link
@@ -631,12 +642,23 @@ export default function Navbar() {
                     className="flex items-center px-4 py-2 hover:bg-gray-50"
                     onClick={() => setSearchQuery("")}
                   >
-                    <div>
-                      <p className="text-sm font-medium">{item.name}</p>
-                      {item.price && (
-                        <p className="text-xs text-green-600 font-medium">${item.price}</p>
+                    <>
+                      {item.image && (
+                        <Image
+                          src={typeof item.image === 'string' && (item.image.startsWith('http') || item.image.startsWith('/')) ? item.image : '/store.png'}
+                          alt={item.name}
+                          width={36}
+                          height={36}
+                          className="rounded mr-3 object-cover"
+                        />
                       )}
-                    </div>
+                      <div>
+                        <p className="text-sm font-medium">{item.name}</p>
+                        {item.price && (
+                          <p className="text-xs text-green-600 font-medium">${item.price}</p>
+                        )}
+                      </div>
+                    </>
                   </Link>
                 ) : (
                   <Link

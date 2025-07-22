@@ -20,6 +20,24 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [sortOrder] = useState('desc') // or 'asc' if you want oldest first
+  const [categories, setCategories] = useState([])
+  const [selectedCategory, setSelectedCategory] = useState(null)
+
+  useEffect(() => {
+    // Fetch categories
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch('/api/categories')
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          setCategories(data)
+        }
+      } catch (err) {
+        // ignore for now
+      }
+    }
+    fetchCategories()
+  }, [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -30,7 +48,7 @@ export default function ProductsPage() {
         // Fetch products from products table
         const { data: productsData, error: productsError } = await supabase
           .from('products')
-          .select('id, name, price, image, quantity, description, date_added, supermarketid')
+          .select('id, name, price, image, quantity, description, date_added, supermarketid, categoryid')
           .order('date_added', { ascending: sortOrder === 'asc' })
 
         if (productsError) {
@@ -62,9 +80,37 @@ export default function ProductsPage() {
     fetchData()
   }, [sortOrder])
 
+  // Filter products by selected category
+  const filteredProducts = selectedCategory
+    ? products.filter(p => p.categoryid === selectedCategory)
+    : products
+
+  // Find selected category name
+  const selectedCategoryName = selectedCategory
+    ? (categories.find(c => c.id === selectedCategory)?.name || 'Category')
+    : 'All Products'
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-10">
-      <h1 className="text-3xl font-bold mb-8 text-teal-900">All Products</h1>
+      <h1 className="text-3xl font-bold mb-2 text-teal-900">Browse Products</h1>
+      <div className="mb-6 flex flex-wrap gap-2 items-center">
+        <button
+          className={`px-4 py-2 rounded-full border ${selectedCategory === null ? 'bg-teal-600 text-white' : 'bg-white text-teal-700 border-teal-200'} font-semibold shadow-sm transition`}
+          onClick={() => setSelectedCategory(null)}
+        >
+          All
+        </button>
+        {categories.map(cat => (
+          <button
+            key={cat.id}
+            className={`px-4 py-2 rounded-full border ${selectedCategory === cat.id ? 'bg-teal-600 text-white' : 'bg-white text-teal-700 border-teal-200'} font-semibold shadow-sm transition`}
+            onClick={() => setSelectedCategory(cat.id)}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
+      <h2 className="text-xl font-semibold mb-6 text-gray-700">{selectedCategoryName}</h2>
       {error && (
         <div className="mb-6 text-red-600 text-center">{error}</div>
       )}
@@ -72,9 +118,9 @@ export default function ProductsPage() {
         <div className="flex justify-center items-center h-64">
           <span className="text-gray-400 text-lg">Loading products...</span>
         </div>
-      ) : products.length ? (
+      ) : filteredProducts.length ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-          {products.map(product => (
+          {filteredProducts.map(product => (
             <Link
               key={product.id}
               href={`/products/${product.id}`}
