@@ -406,10 +406,10 @@ export default function Navbar() {
             <div className="bg-white border rounded-lg shadow-lg p-4 space-y-4">
               {/* User Profile or Sign In in Mobile Menu */}
               {user ? (
-                <Link
-                  href="/profile"
-                  className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition duration-150"
-                  onClick={() => setMobileMenuOpen(false)}
+                <button
+                  type="button"
+                  className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition duration-150 w-full"
+                  onClick={() => { setProfileSidebarOpen(true); setMobileMenuOpen(false); }}
                 >
                   <div className="w-8 h-8 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center mr-3 font-medium text-sm">
                     {getUserAvatar() ? (
@@ -428,7 +428,7 @@ export default function Navbar() {
                     <span className="font-medium text-gray-800">{getUserDisplayName()}</span>
                     <p className="text-xs text-gray-500 truncate max-w-[200px]">{user.email}</p>
                   </div>
-                </Link>
+                </button>
               ) : (
                 <Link
                   href="/auth"
