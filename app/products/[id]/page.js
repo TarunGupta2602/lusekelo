@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
+import CustomAuthModal from '../../../components/CustomAuthModal';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -24,6 +25,7 @@ export default function ProductDetailPage({ params }) {
   const [quantity, setQuantity] = useState(1);
   const [cartMessage, setCartMessage] = useState("");
   const [user, setUser] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const scrollContainerRef = useRef(null);
 
   useEffect(() => {
@@ -106,6 +108,10 @@ export default function ProductDetailPage({ params }) {
   };
 
   const handleAddToCart = (productToAdd = product, qty = quantity) => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
     if (!productToAdd) return;
 
     const cartKey = getCartKey();
@@ -308,6 +314,7 @@ export default function ProductDetailPage({ params }) {
           }
         `}</style>
       </div>
+      <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
     </div>
   );
 }

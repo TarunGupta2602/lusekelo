@@ -5,6 +5,8 @@ import Link from "next/link";
 import { createClient } from '@supabase/supabase-js';
 import { FaTrashAlt } from "react-icons/fa";
 import { MdOutlineShoppingCart } from "react-icons/md";
+import CustomAuthModal from '../../components/CustomAuthModal';
+import { useRouter } from "next/navigation";
 
 // Shared cart key utility
 export function getCartKeyFromUser(user) {
@@ -30,6 +32,8 @@ export default function CartPage() {
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [user, setUser] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const router = useRouter();
 
   // Fetch user on mount
   useEffect(() => {
@@ -72,6 +76,15 @@ export default function CartPage() {
     window.addEventListener('cartUpdated', handleCartUpdate);
     return () => window.removeEventListener('cartUpdated', handleCartUpdate);
   }, [user, getCartKey]);
+
+  // Protect cart page: show modal or redirect if not authenticated
+  useEffect(() => {
+    if (user === null && !loading) {
+      setShowAuthModal(true);
+      // Optionally, redirect instead:
+      // router.push("/auth");
+    }
+  }, [user, loading]);
 
   const handleAddToCart = (product) => {
     const cartKey = getCartKey();
@@ -164,6 +177,14 @@ export default function CartPage() {
     window.dispatchEvent(new Event("cartUpdated"));
   };
 
+  const handleProceedToCheckout = (e) => {
+    if (!user) {
+      e.preventDefault();
+      setShowAuthModal(true);
+    }
+    // else, let the Link work as normal
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen text-gray-600 text-xl">
@@ -171,6 +192,11 @@ export default function CartPage() {
         Loading your cart...
       </div>
     );
+  }
+
+  // If not authenticated, show only the modal
+  if (user === null) {
+    return <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />;
   }
 
   if (cartItems.length === 0) {
@@ -271,11 +297,12 @@ export default function CartPage() {
           >
             Clear Cart
           </button>
-          <Link href="/checkout">
+          <Link href="/checkout" onClick={handleProceedToCheckout}>
             <button className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-10 rounded-lg font-bold shadow border border-blue-700 transition-all text-lg">
               Proceed to Checkout
             </button>
           </Link>
+          <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
         </div>
       </div>
     </div>

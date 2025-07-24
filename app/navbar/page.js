@@ -480,12 +480,12 @@ export default function Navbar() {
                   </svg>
                 </button>
                 {dropdownVisible && (
-                  <ul className="mt-2 w-full bg-white border rounded-lg shadow-inner">
+                  <ul className="mt-2 w-full bg-white border rounded-xl shadow-xl">
                     {stores.length > 0 ? (
                       stores.map((store) => (
                         <li
                           key={store.id}
-                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition cursor-pointer border-b last:border-b-0"
                         >
                           <Link 
                             href={`/store/${store.id}`} 
@@ -493,9 +493,16 @@ export default function Navbar() {
                               setDropdownVisible(false);
                               setMobileMenuOpen(false);
                             }}
-                            className="block w-full text-gray-700"
+                            className="flex items-center gap-3 w-full text-gray-700"
                           >
-                            {store.name}
+                            <Image
+                              src={store.image || '/store.png'}
+                              alt={store.name}
+                              width={32}
+                              height={32}
+                              className="rounded-lg object-cover border border-gray-200 bg-white"
+                            />
+                            <span className="font-medium text-base">{store.name}</span>
                           </Link>
                         </li>
                       ))
@@ -574,25 +581,33 @@ export default function Navbar() {
           </svg>
         </button>
         {dropdownVisible && (
-          <ul className="absolute mt-2 w-64 bg-white border rounded-lg shadow-lg z-10 py-1">
+          <ul className="absolute mt-2 w-64 bg-white border rounded-xl shadow-xl z-10 py-1">
             {stores.length > 0 ? (
               stores.map((store) => (
                 <li
                   key={store.id}
-                  className="hover:bg-gray-50"
+                  className="hover:bg-gray-50 transition flex items-center gap-3 px-4 py-3 cursor-pointer border-b last:border-b-0"
                 >
                   <Link 
                     href={`/store/${store.id}`} 
                     onClick={() => setDropdownVisible(false)}
-                    className="block px-4 py-2 text-gray-700"
+                    className="flex items-center gap-3 w-full text-gray-700"
                   >
-                    {store.name}
+                    <Image
+                      src={store.image || '/store.png'}
+                      alt={store.name}
+                      width={36}
+                      height={36}
+                      className="rounded-lg object-cover border border-gray-200 bg-white"
+                    />
+                    <span className="font-medium text-base">{store.name}</span>
                   </Link>
                 </li>
               ))
             ) : (
               <li className="px-4 py-2 text-gray-500">No stores available</li>
-            )}          </ul>
+            )}
+          </ul>
         )}
       </div>
       {/* Desktop Search Bar */}
