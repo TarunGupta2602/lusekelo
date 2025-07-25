@@ -156,7 +156,7 @@ export default function VendorDashboard() {
 
         const { data: stores, error: storeError } = await supabase
           .from('supermarkets')
-          .select('id, name, main_image')
+          .select('id, name, main_image, vendor_id, created_at, location, gallery_images, address, price')
           .eq('vendor_id', user.id)
           .limit(1);
 
@@ -176,8 +176,8 @@ export default function VendorDashboard() {
 
         const { data: productsData, error: productsError } = await supabase
           .from('products')
-          .select('id, name, price, image, quantity, date_added, supermarketid, description, categoryid')
-          .eq('supermarketid', supermarket.id)
+          .select('id, name, price, image, quantity, date_added, supermarket_id, description, categoryid')
+          .eq('supermarket_id', supermarket.id)
           .order('date_added', { ascending: sortOrder === 'asc' });
 
         if (productsError) {
@@ -216,7 +216,7 @@ export default function VendorDashboard() {
         const { data: productIds, error: productError } = await supabase
           .from('products')
           .select('id')
-          .eq('supermarketid', store.id);
+          .eq('supermarket_id', store.id);
 
         if (productError) {
           setError('Error fetching products: ' + productError.message);
@@ -252,7 +252,7 @@ export default function VendorDashboard() {
               price,
               image,
               description,
-              supermarketid
+              supermarket_id
             )
           `)
           .in('product_id', productIdList)
@@ -624,7 +624,7 @@ export default function VendorDashboard() {
       description: product.description,
       quantity: product.quantity,
       category: getCategoryNameById(product.categoryid),
-      supermarketid: product.supermarketid,
+      supermarket_id: product.supermarket_id,
       date_added: product.date_added,
       image: product.image,
     }));
@@ -665,7 +665,7 @@ export default function VendorDashboard() {
               description: row.description,
               quantity: parseInt(row.quantity),
               categoryid: getCategoryIdByName(row.category),
-              supermarketid: store.id,
+              supermarket_id: store.id,
               date_added: row.date_added || new Date().toISOString(),
               image: imageUrl,
             };
@@ -723,6 +723,9 @@ export default function VendorDashboard() {
                 <div>
                   <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
                   <p className="text-sm text-pink-600 font-semibold">{store.name}</p>
+                  {/* Optionally show price, created_at, or location here */}
+                  {/* <div className="text-xs text-gray-500">Created: {store.created_at ? new Date(store.created_at).toLocaleDateString() : ''}</div> */}
+                  {/* <div className="text-xs text-gray-500">Location: {store.location}</div> */}
                 </div>
               </div>
             ) : (

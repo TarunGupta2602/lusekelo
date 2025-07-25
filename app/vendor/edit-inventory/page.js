@@ -53,7 +53,7 @@ export default function EditInventoryPage() {
         // 2. Get supermarket for this vendor
         const { data: stores, error: storeError } = await supabase
           .from('supermarkets')
-          .select('id')
+          .select('id, vendor_id, created_at, location, price')
           .eq('vendor_id', user.id)
           .limit(1);
 
@@ -67,13 +67,13 @@ export default function EditInventoryPage() {
           setLoading(false);
           return;
         }
-        const supermarketId = stores[0].id;
+        const supermarket_Id = stores[0].id;
 
         // 3. Fetch products for this supermarket only
         const { data: productsData, error: productsError } = await supabase
           .from('products')
-          .select('id, name, price, image, quantity, date_added, supermarketid')
-          .eq('supermarketid', supermarketId)
+          .select('id, name, price, image, quantity, date_added, supermarket_id')
+          .eq('supermarket_id', supermarket_Id)
           .order(sortField, { ascending: sortOrder === 'asc' });
 
         if (productsError) {
@@ -272,8 +272,8 @@ export default function EditInventoryPage() {
       // Refresh product list
       const { data: productsData, error: productsError } = await supabase
         .from('products')
-        .select('id, name, price, image, quantity, date_added, supermarketid')
-        .eq('supermarketid', supermarketId)
+        .select('id, name, price, image, quantity, date_added, supermarket_id')
+        .eq('supermarket_id', supermarket_Id)
         .order('date_added', { ascending: sortOrder === 'asc' });
       if (productsError) throw productsError;
       setProducts(productsData);

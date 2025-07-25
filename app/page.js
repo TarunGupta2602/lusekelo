@@ -53,6 +53,45 @@ const SkeletonLoader = () => (
   </div>
 );
 
+// Fixed gallery images parsing function
+const getGalleryImages = (gallery_images) => {
+  if (Array.isArray(gallery_images)) {
+    // Handle array where first element might be comma-separated URLs
+    const allUrls = [];
+    gallery_images.forEach(item => {
+      if (typeof item === 'string') {
+        // Split by comma in case multiple URLs are in one string
+        const urls = item.split(',').map(url => url.trim()).filter(Boolean);
+        allUrls.push(...urls);
+      } else if (item) {
+        allUrls.push(item);
+      }
+    });
+    return allUrls;
+  }
+  if (typeof gallery_images === 'string') {
+    // Handle JSON string
+    try {
+      const parsed = JSON.parse(gallery_images);
+      if (Array.isArray(parsed)) {
+        return getGalleryImages(parsed); // Recursively process the parsed array
+      }
+    } catch (e) {
+      // If not JSON, try comma-separated
+      const split = gallery_images.split(',').map(url => url.trim()).filter(Boolean);
+      return split;
+    }
+  }
+  return [];
+};
+
+const normalizeImageUrl = (url) => {
+  if (!url) return '/placeholder-store.jpg';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/')) return url;
+  return url;
+};
+
 const ShopContent = () => {
   const [stores, setStores] = useState([]);
   const [showAll, setShowAll] = useState(false);
@@ -115,38 +154,63 @@ const ShopContent = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               {stores.slice(0, showAll ? stores.length : 4).map((store) => {
-                const storeImages = store.gallery_images && store.gallery_images.length > 0
-                  ? [store.main_image, ...store.gallery_images]
-                  : [store.main_image, store.main_image, store.main_image];
+                const galleryImages = getGalleryImages(store.gallery_images);
+                
+                // Create array of all images: main image + gallery images
+                const allImages = [];
+                if (store.main_image) {
+                  allImages.push(normalizeImageUrl(store.main_image));
+                }
+                galleryImages.forEach(img => {
+                  if (img) {
+                    allImages.push(normalizeImageUrl(img));
+                  }
+                });
+
+                // If no images, use placeholder
+                if (allImages.length === 0) {
+                  allImages.push('/placeholder-store.jpg');
+                }
 
                 return (
                   <Link href={`/store/${store.id}`} key={store.id} className="block">
                     <div className="flex flex-col sm:flex-row bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                      {/* Main Image */}
                       <div className="w-full sm:w-2/5 relative">
                         <div className="relative h-48 sm:h-full w-full">
                           <Image
-                            src={`/${store.main_image}`}
+                            src={allImages[0]}
                             alt={store.name}
                             fill
                             className="object-cover"
                           />
                         </div>
                       </div>
+                      
+                      {/* Thumbnail Gallery */}
                       <div className="w-full sm:w-1/5 flex flex-row sm:flex-col justify-start p-2 gap-2 bg-white">
-                        {storeImages.slice(0, 3).map((img, index) => (
-                          <div
-                            key={index}
-                            className="relative h-14 w-1/3 sm:w-full rounded overflow-hidden border border-gray-200"
-                          >
+                        {allImages.slice(1, 4).map((img, index) => (
+                          <div key={index} className="relative h-14 w-1/3 sm:w-full rounded overflow-hidden border border-gray-200">
                             <Image
-                              src={`/${img}`}
+                              src={img}
                               alt={`${store.name} thumbnail ${index + 1}`}
                               fill
                               className="object-cover"
                             />
                           </div>
                         ))}
+                        
+                        {/* Show remaining images count if more than 3 additional images */}
+                        {allImages.length > 4 && (
+                          <div className="relative h-14 w-1/3 sm:w-full rounded overflow-hidden border border-gray-200 bg-gray-800 flex items-center justify-center">
+                            <span className="text-white text-xs font-medium">
+                              +{allImages.length - 4}
+                            </span>
+                          </div>
+                        )}
                       </div>
+                      
+                      {/* Store Info */}
                       <div className="w-full sm:w-2/5 bg-[#013033] text-white p-4 flex flex-col justify-between">
                         <div>
                           <h3 className="text-lg sm:text-xl font-semibold">{store.name}</h3>
@@ -159,7 +223,24 @@ const ShopContent = () => {
                             </span>
                             <p className="text-sm leading-tight">{store.address}</p>
                           </div>
+                          
+                          {/* Optional: Display price if available */}
+                          {store.price && (
+                            <div className="mt-2">
+                              <span className="text-[#BBEB6D] font-semibold text-lg">
+                                ${parseFloat(store.price).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Optional: Show gallery image count */}
+                          <div className="mt-2">
+                            <span className="text-xs text-gray-400">
+                              {allImages.length} image{allImages.length !== 1 ? 's' : ''} available
+                            </span>
+                          </div>
                         </div>
+                        
                         <button className="mt-4 w-full bg-[#BBEB6D] text-black font-medium py-2 rounded text-center transition-all duration-200 hover:scale-105 hover:shadow-md">
                           Shop from here
                         </button>

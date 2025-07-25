@@ -17,10 +17,11 @@ export async function GET(request) {
         name,
         address,
         price,
-        delivery_time,
-        delivery_fee,
         main_image,
-        gallery_images
+        gallery_images,
+        vendor_id,
+        created_at,
+        location
       `);
 
     if (error) {

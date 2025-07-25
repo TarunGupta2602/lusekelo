@@ -22,7 +22,7 @@ const ProductForm = () => {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
-  const [supermarketId, setSupermarketId] = useState(null);
+  const [supermarket_Id, setSupermarket_Id] = useState(null);
 
   // Fetch the current user's supermarket id
   useEffect(() => {
@@ -47,7 +47,7 @@ const ProductForm = () => {
         setMessage({ type: "error", text: "No store found for this vendor." });
         return;
       }
-      setSupermarketId(stores[0].id);
+      setSupermarket_Id(stores[0].id);
     };
     fetchSupermarket();
   }, []);
@@ -89,7 +89,7 @@ const ProductForm = () => {
     setMessage(null);
 
     try {
-      if (!supermarketId) {
+      if (!supermarket_Id) {
         setMessage({
           type: "error",
           text: "Supermarket not found. Please refresh the page.",
@@ -111,7 +111,7 @@ const ProductForm = () => {
           quantity: parseInt(formData.quantity),
           image: imageUrl,
           categoryid: parseInt(formData.categoryid),
-          supermarketid: supermarketId,
+          supermarket_id: supermarket_Id,
           date_added: new Date().toISOString(),
         },
       ]);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -9,16 +9,60 @@ export default function CreateStore() {
   const [form, setForm] = useState({
     name: '',
     address: '',
-    delivery_time: '',
+    price: '',
     main_image: '',
     gallery_images: '',
+    location: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  useEffect(() => {
+    const checkStore = async () => {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
+      const { data: stores } = await supabase
+        .from('supermarkets')
+        .select('id')
+        .eq('vendor_id', user.id)
+        .limit(1);
+      if (stores && stores.length > 0) {
+        router.push('/vendor/dashboard');
+      }
+    };
+    checkStore();
+  }, [router]);
+
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleMainImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const filePath = `supermarkets/${Date.now()}_${file.name}`;
+    const { data, error } = await supabase.storage.from('images').upload(filePath, file);
+    if (error) {
+      setError('Image upload failed: ' + error.message);
+      return;
+    }
+    const { publicUrl } = supabase.storage.from('images').getPublicUrl(filePath).data;
+    setForm({ ...form, main_image: publicUrl });
+  };
+
+  const handleGalleryImagesUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    const urls = [];
+    for (const file of files) {
+      const filePath = `supermarkets/gallery/${Date.now()}_${file.name}`;
+      const { error } = await supabase.storage.from('images').upload(filePath, file);
+      if (!error) {
+        const { publicUrl } = supabase.storage.from('images').getPublicUrl(filePath).data;
+        urls.push(publicUrl);
+      }
+    }
+    setForm({ ...form, gallery_images: urls });
   };
 
   const handleSubmit = async (e) => {
@@ -41,12 +85,14 @@ export default function CreateStore() {
         .insert([{
           name: form.name,
           address: form.address,
-          delivery_time: form.delivery_time,
+          price: form.price ? parseFloat(form.price) : null,
           main_image: form.main_image,
           gallery_images: form.gallery_images
             ? form.gallery_images.split(',').map(url => url.trim()).filter(Boolean)
             : [],
           vendor_id: user.id,
+          created_at: new Date().toISOString(),
+          location: form.location,
         }]);
 
       if (insertError) {
@@ -101,16 +147,27 @@ export default function CreateStore() {
           />
         </div>
         <div className="mb-5">
-          <label className="block mb-2 font-semibold text-blue-700">Delivery Time (in minutes)</label>
+          <label className="block mb-2 font-semibold text-blue-700">Price (optional)</label>
           <input
             type="number"
-            name="delivery_time"
-            value={form.delivery_time}
+            name="price"
+            value={form.price}
             onChange={handleChange}
-            required
             className="w-full border-2 border-blue-200 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-            placeholder="e.g. 30"
-            min={1}
+            placeholder="e.g. 100"
+            min={0}
+            step="0.01"
+          />
+        </div>
+        <div className="mb-5">
+          <label className="block mb-2 font-semibold text-blue-700">Location (optional)</label>
+          <input
+            type="text"
+            name="location"
+            value={form.location}
+            onChange={handleChange}
+            className="w-full border-2 border-blue-200 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+            placeholder="e.g. POINT(77.5946 12.9716)"
           />
         </div>
         <div className="mb-5">
@@ -124,6 +181,7 @@ export default function CreateStore() {
             required
             className="w-full border-2 border-blue-200 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
           />
+          <input type="file" accept="image/*" onChange={handleMainImageUpload} />
         </div>
         <div className="mb-8">
           <label className="block mb-2 font-semibold text-blue-700">Gallery Images <span className="text-xs text-gray-400">(comma separated URLs)</span></label>
@@ -135,6 +193,7 @@ export default function CreateStore() {
             placeholder="https://img1.jpg,https://img2.jpg"
             className="w-full border-2 border-blue-200 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
           />
+          <input type="file" accept="image/*" multiple onChange={handleGalleryImagesUpload} />
         </div>
         <button
           type="submit"

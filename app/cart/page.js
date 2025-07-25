@@ -79,10 +79,12 @@ export default function CartPage() {
 
   // Protect cart page: show modal or redirect if not authenticated
   useEffect(() => {
-    if (user === null && !loading) {
+    if (!loading && (!user || !user.id)) {
       setShowAuthModal(true);
       // Optionally, redirect instead:
       // router.push("/auth");
+    } else {
+      setShowAuthModal(false);
     }
   }, [user, loading]);
 
@@ -195,7 +197,7 @@ export default function CartPage() {
   }
 
   // If not authenticated, show only the modal
-  if (user === null) {
+  if (!user || !user.id) {
     return <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />;
   }
 
