@@ -687,6 +687,73 @@ export default function VendorDashboard() {
     });
   };
 
+  // Supermarket edit state
+  const [editSupermarketOpen, setEditSupermarketOpen] = useState(false);
+  const [supermarketForm, setSupermarketForm] = useState({
+    name: '',
+    address: '',
+    price: '',
+    main_image: '',
+    gallery_images: [],
+  });
+
+  // Sync form state when store loads
+  useEffect(() => {
+    if (store) {
+      setSupermarketForm({
+        name: store.name || '',
+        address: store.address || '',
+        price: store.price || '',
+        main_image: store.main_image || '',
+        gallery_images: Array.isArray(store.gallery_images) ? store.gallery_images : [],
+      });
+    }
+  }, [store]);
+
+  const handleSupermarketFormChange = (e) => {
+    const { name, value } = e.target;
+    setSupermarketForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleGalleryImagesChange = (e) => {
+    setSupermarketForm((prev) => ({
+      ...prev,
+      gallery_images: e.target.value.split(',').map((url) => url.trim()).filter(Boolean),
+    }));
+  };
+
+  const handleUpdateSupermarket = async () => {
+    setError('');
+    try {
+      const { error: updateError } = await supabase
+        .from('supermarkets')
+        .update({
+          name: supermarketForm.name,
+          address: supermarketForm.address,
+          price: supermarketForm.price,
+          main_image: supermarketForm.main_image,
+          gallery_images: supermarketForm.gallery_images,
+        })
+        .eq('id', store.id);
+
+      if (updateError) {
+        setError('Error updating supermarket: ' + updateError.message);
+        return;
+      }
+      setStore((prev) => ({
+        ...prev,
+        ...supermarketForm,
+      }));
+      setEditSupermarketOpen(false);
+      alert('Supermarket updated successfully!');
+    } catch (err) {
+      setError('Unexpected error: ' + err.message);
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       {/* Sidebar: collapses to a top bar or drawer on mobile */}
@@ -699,7 +766,13 @@ export default function VendorDashboard() {
         <div className={`absolute md:static top-16 left-0 w-full md:w-auto bg-white md:bg-transparent shadow-lg md:shadow-none transition-all duration-200 ${dropdownOpen ? 'block' : 'hidden'} md:block`}>
           <div className="p-4 border-b md:border-b-0">
             {store ? (
-              <div className="flex items-center space-x-3">
+              // Make the supermarket info clickable to open the edit modal
+              <button
+                type="button"
+                className="flex items-center space-x-3 w-full text-left focus:outline-none"
+                onClick={() => setEditSupermarketOpen(true)}
+                title="Edit Supermarket"
+              >
                 {store.main_image ? (
                   <Image
                     src={
@@ -723,11 +796,8 @@ export default function VendorDashboard() {
                 <div>
                   <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
                   <p className="text-sm text-pink-600 font-semibold">{store.name}</p>
-                  {/* Optionally show price, created_at, or location here */}
-                  {/* <div className="text-xs text-gray-500">Created: {store.created_at ? new Date(store.created_at).toLocaleDateString() : ''}</div> */}
-                  {/* <div className="text-xs text-gray-500">Location: {store.location}</div> */}
                 </div>
-              </div>
+              </button>
             ) : (
               <>
                 <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
@@ -954,6 +1024,87 @@ export default function VendorDashboard() {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Supermarket Edit Modal */}
+        {editSupermarketOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-lg w-full shadow-lg">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold">Edit Supermarket</h3>
+                <button onClick={() => setEditSupermarketOpen(false)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              {error && <p className="text-red-600 mb-2">{error}</p>}
+              <div className="mb-3">
+                <label className="block text-gray-700">Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={supermarketForm.name}
+                  onChange={handleSupermarketFormChange}
+                  className="w-full px-4 py-2 border rounded"
+                />
+              </div>
+              <div className="mb-3">
+                <label className="block text-gray-700">Address</label>
+                <input
+                  type="text"
+                  name="address"
+                  value={supermarketForm.address}
+                  onChange={handleSupermarketFormChange}
+                  className="w-full px-4 py-2 border rounded"
+                />
+              </div>
+              <div className="mb-3">
+                <label className="block text-gray-700">Price</label>
+                <input
+                  type="number"
+                  name="price"
+                  value={supermarketForm.price}
+                  onChange={handleSupermarketFormChange}
+                  className="w-full px-4 py-2 border rounded"
+                />
+              </div>
+              <div className="mb-3">
+                <label className="block text-gray-700">Main Image URL</label>
+                <input
+                  type="text"
+                  name="main_image"
+                  value={supermarketForm.main_image}
+                  onChange={handleSupermarketFormChange}
+                  className="w-full px-4 py-2 border rounded"
+                />
+              </div>
+              <div className="mb-3">
+                <label className="block text-gray-700">Gallery Images (comma separated URLs)</label>
+                <input
+                  type="text"
+                  name="gallery_images"
+                  value={supermarketForm.gallery_images.join(', ')}
+                  onChange={handleGalleryImagesChange}
+                  className="w-full px-4 py-2 border rounded"
+                />
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  className="bg-green-500 text-white px-4 py-2 rounded-lg"
+                  onClick={handleUpdateSupermarket}
+                >
+                  Save Changes
+                </button>
+                <button
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg"
+                  onClick={() => setEditSupermarketOpen(false)}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         )}

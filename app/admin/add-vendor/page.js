@@ -8,6 +8,7 @@ export default function AddVendorPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [password, setPassword] = useState("");
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const router = useRouter();
 
   const handleChange = (e) => {
@@ -35,9 +36,7 @@ export default function AddVendorPage() {
         setPassword(result.password || "");
         setSuccess("Vendor added successfully!");
         setForm({ name: "", email: "", avatar_url: "" });
-        setTimeout(() => {
-          router.push("/admin/dashboard");
-        }, 1500);
+        setShowPasswordModal(true); // Show modal instead of redirect
       } else if (result.error && result.error.includes("duplicate key value")) {
         setError("A vendor with this email already exists or the user already exists in the system.");
       } else {
@@ -87,15 +86,8 @@ export default function AddVendorPage() {
             />
           </div>
           {error && <div className="text-red-500 text-sm text-left">{error}</div>}
-          {success && (
-            <div className="text-green-600 text-sm text-left mb-2">
-              {success}
-              {password && (
-                <div className="bg-gray-100 rounded p-3 font-mono text-lg mt-2 select-all border border-gray-200">
-                  Password: {password}
-                </div>
-              )}
-            </div>
+          {success && !showPasswordModal && (
+            <div className="text-green-600 text-sm text-left mb-2">{success}</div>
           )}
           <div className="flex justify-between gap-2 mt-6">
             <button
@@ -115,7 +107,31 @@ export default function AddVendorPage() {
             </button>
           </div>
         </form>
+        {showPasswordModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="bg-white rounded-xl shadow-2xl p-8 max-w-sm w-full text-center relative">
+              <h2 className="text-xl font-bold mb-4 text-gray-800">
+                Vendor Created
+              </h2>
+              <p className="mb-2 text-gray-700">
+                Copy and share this password securely with the vendor:
+              </p>
+              <div className="bg-gray-100 rounded p-3 font-mono text-lg mb-4 select-all break-all border border-gray-200">
+                Password: {password}
+              </div>
+              <button
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded shadow"
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  router.push("/admin/dashboard");
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
-} 
+}

@@ -30,6 +30,7 @@ export default function AdminDashboard() {
   const [agents, setAgents] = useState([]);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newVendorPassword, setNewVendorPassword] = useState("");
+  const [pendingVendorRedirect, setPendingVendorRedirect] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [editProfile, setEditProfile] = useState({ full_name: "", email: "" });
   const [showDisableVendorModal, setShowDisableVendorModal] = useState(false);
@@ -134,7 +135,7 @@ export default function AdminDashboard() {
           id,
           name,
           image,
-          supermarket:supermarketid (
+          supermarket:supermarket_id (
             id,
             name
           )
@@ -405,7 +406,13 @@ export default function AdminDashboard() {
             </div>
             <button
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded shadow"
-              onClick={() => setShowPasswordModal(false)}
+              onClick={() => {
+                setShowPasswordModal(false);
+                if (pendingVendorRedirect) {
+                  setPendingVendorRedirect(false);
+                  router.push("/admin/dashboard"); // or wherever you want to redirect
+                }
+              }}
             >
               Close
             </button>
