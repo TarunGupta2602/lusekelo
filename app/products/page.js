@@ -48,7 +48,7 @@ export default function ProductsPage() {
         // Fetch products from products table
         const { data: productsData, error: productsError } = await supabase
           .from('products')
-          .select('id, name, price, image, quantity, description, date_added, supermarketid, categoryid')
+          .select('id, name, price, image, quantity, description, date_added, supermarket_id, categoryid')
           .order('date_added', { ascending: sortOrder === 'asc' })
 
         if (productsError) {
@@ -145,7 +145,7 @@ export default function ProductsPage() {
               <p className="text-gray-600 mb-2">{product.description}</p>
               <div className="flex items-center justify-between text-sm text-gray-500 mb-2">
                 <span>Quantity: {product.quantity}</span>
-                <span>Supermarket: {product.supermarketid}</span>
+                <span>Supermarket: {product.supermarket_id}</span>
               </div>
               <div className="flex items-center justify-between mt-auto">
                 <span className="text-green-700 font-bold text-lg">${product.price}</span>

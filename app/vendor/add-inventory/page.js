@@ -9,6 +9,14 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// Function to generate a unique SKU
+const generateSKU = (name, categoryId) => {
+  const timestamp = Date.now().toString().slice(-6);
+  const namePart = (name || "PROD").slice(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const categoryPart = categoryId.toString().padStart(3, '0');
+  return `SKU-${namePart}-${categoryPart}-${timestamp}`;
+};
+
 const ProductForm = () => {
   const router = useRouter();
   const [formData, setFormData] = useState({
@@ -17,44 +25,54 @@ const ProductForm = () => {
     description: "",
     quantity: "",
     categoryid: "1",
+    sku: "",
   });
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [supermarket_Id, setSupermarket_Id] = useState(null);
+  const [variations, setVariations] = useState([]); // [{ size: '', color: '', price: '', stock: '' }]
 
   // Fetch the current user's supermarket id
   useEffect(() => {
     const fetchSupermarket = async () => {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !user) {
-        setMessage({
-          type: "error",
-          text: "User not found. Please log in again.",
-        });
-        return;
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError || !user) {
+          setMessage({
+            type: "error",
+            text: "User not found. Please log in again.",
+          });
+          return;
+        }
+        const { data: stores, error: storeError } = await supabase
+          .from("supermarkets")
+          .select("id")
+          .eq("vendor_id", user.id)
+          .limit(1);
+        if (storeError || !stores || stores.length === 0) {
+          setMessage({ type: "error", text: "No store found for this vendor." });
+          return;
+        }
+        setSupermarket_Id(stores[0].id);
+      } catch (err) {
+        setMessage({ type: "error", text: "Error fetching supermarket data." });
       }
-      const { data: stores, error: storeError } = await supabase
-        .from("supermarkets")
-        .select("id")
-        .eq("vendor_id", user.id)
-        .limit(1);
-      if (storeError || !stores || stores.length === 0) {
-        setMessage({ type: "error", text: "No store found for this vendor." });
-        return;
-      }
-      setSupermarket_Id(stores[0].id);
     };
     fetchSupermarket();
   }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === 'name' || name === 'categoryid' ? { sku: generateSKU(name === 'name' ? value : prev.name, name === 'categoryid' ? value : prev.categoryid) } : {})
+    }));
   };
 
   const handleImageChange = (e) => {
@@ -66,21 +84,53 @@ const ProductForm = () => {
   };
 
   const uploadImage = async (file) => {
-    const ext = file.name.split(".").pop().toLowerCase();
-    const fileName = `${Date.now()}.${ext}`;
-    const filePath = `public/${fileName}`;
+    try {
+      const ext = file.name.split(".").pop().toLowerCase();
+      const fileName = `${Date.now()}.${ext}`;
+      const filePath = `public/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("images")
-      .upload(filePath, file);
+      const { error: uploadError } = await supabase.storage
+        .from("images")
+        .upload(filePath, file);
 
-    if (uploadError) throw uploadError;
+      if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`);
 
-    const { data: urlData } = supabase.storage
-      .from("images")
-      .getPublicUrl(filePath);
+      const { data: urlData } = supabase.storage
+        .from("images")
+        .getPublicUrl(filePath);
 
-    return urlData.publicUrl;
+      if (!urlData?.publicUrl) throw new Error("Failed to get image URL");
+
+      return urlData.publicUrl;
+    } catch (err) {
+      throw new Error(`Image upload error: ${err.message}`);
+    }
+  };
+
+  // Quantity input improvement
+  const handleQuantityChange = (e) => {
+    const value = e.target.value.replace(/[^0-9]/g, '');
+    setFormData((prev) => ({ ...prev, quantity: value }));
+  };
+  const incrementQuantity = (amount) => {
+    setFormData((prev) => ({
+      ...prev,
+      quantity: String(Number(prev.quantity || 0) + amount),
+    }));
+  };
+  const setQuantity = (amount) => {
+    setFormData((prev) => ({ ...prev, quantity: String(amount) }));
+  };
+
+  // Variation handlers
+  const addVariation = () => {
+    setVariations([...variations, { size: '', color: '', price: '', stock: '' }]);
+  };
+  const removeVariation = (idx) => {
+    setVariations(variations.filter((_, i) => i !== idx));
+  };
+  const handleVariationChange = (idx, field, value) => {
+    setVariations(variations.map((v, i) => i === idx ? { ...v, [field]: value } : v));
   };
 
   const handleSubmit = async (e) => {
@@ -89,11 +139,15 @@ const ProductForm = () => {
     setMessage(null);
 
     try {
+      // Validate required fields
+      if (!formData.name || !formData.price || !formData.quantity || !formData.categoryid) {
+        setMessage({ type: "error", text: "Please fill in all required fields (Name, Price, Quantity, Category)." });
+        setLoading(false);
+        return;
+      }
+
       if (!supermarket_Id) {
-        setMessage({
-          type: "error",
-          text: "Supermarket not found. Please refresh the page.",
-        });
+        setMessage({ type: "error", text: "Supermarket not found. Please refresh the page." });
         setLoading(false);
         return;
       }
@@ -103,20 +157,35 @@ const ProductForm = () => {
         imageUrl = await uploadImage(imageFile);
       }
 
-      const { error } = await supabase.from("products").insert([
-        {
-          name: formData.name,
-          price: parseFloat(formData.price),
-          description: formData.description,
-          quantity: parseInt(formData.quantity),
-          image: imageUrl,
-          categoryid: parseInt(formData.categoryid),
-          supermarket_id: supermarket_Id,
-          date_added: new Date().toISOString(),
-        },
-      ]);
+      // Format variations for JSONB column
+      const formattedVariations = variations
+        .filter(v => v.size || v.color || v.price || v.stock) // Only include non-empty variations
+        .map(v => ({
+          size: v.size || null,
+          color: v.color || null,
+          price: v.price ? parseFloat(v.price) : null,
+          stock: v.stock ? parseInt(v.stock) : null,
+        }));
 
-      if (error) throw error;
+      // Generate SKU if not already set
+      const sku = formData.sku || generateSKU(formData.name, formData.categoryid);
+
+      const productData = {
+        name: formData.name,
+        price: parseFloat(formData.price),
+        description: formData.description || null,
+        quantity: parseInt(formData.quantity),
+        image: imageUrl || null,
+        categoryid: parseInt(formData.categoryid),
+        supermarket_id: supermarket_Id,
+        date_added: new Date().toISOString(),
+        variations: formattedVariations.length > 0 ? formattedVariations : null,
+        sku: sku,
+      };
+
+      const { error } = await supabase.from("products").insert([productData]);
+
+      if (error) throw new Error(`Database error: ${error.message}`);
 
       setMessage({ type: "success", text: "Product added successfully!" });
       setFormData({
@@ -125,9 +194,11 @@ const ProductForm = () => {
         description: "",
         quantity: "",
         categoryid: "1",
+        sku: "",
       });
       setImageFile(null);
       setPreviewUrl(null);
+      setVariations([]);
     } catch (err) {
       setMessage({ type: "error", text: err.message });
     } finally {
@@ -163,10 +234,25 @@ const ProductForm = () => {
               value={formData.price}
               onChange={handleChange}
               required
+              step="0.01"
+              min="0"
               className="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
             />
           </div>
-
+          {/* SKU Display */}
+          <div>
+            <label className="block text-sm font-semibold text-blue-700 mb-1">
+              SKU
+            </label>
+            <input
+              type="text"
+              name="sku"
+              placeholder="SKU (auto-generated)"
+              value={formData.sku}
+              readOnly
+              className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 text-gray-500"
+            />
+          </div>
           <textarea
             name="description"
             placeholder="Description"
@@ -175,17 +261,66 @@ const ProductForm = () => {
             rows={3}
             className="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
           />
-
-          <input
-            type="number"
-            name="quantity"
-            placeholder="Quantity"
-            value={formData.quantity}
-            onChange={handleChange}
-            required
-            className="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
-          />
-
+          {/* Quantity Input with Quick Buttons */}
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              type="text"
+              name="quantity"
+              placeholder="Quantity"
+              value={formData.quantity}
+              onChange={handleQuantityChange}
+              required
+              className="w-32 p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
+            />
+            <button type="button" className="px-2 py-1 bg-blue-200 rounded" onClick={() => incrementQuantity(1)}>+1</button>
+            <button type="button" className="px-2 py-1 bg-blue-200 rounded" onClick={() => incrementQuantity(10)}>+10</button>
+            <button type="button" className="px-2 py-1 bg-blue-200 rounded" onClick={() => incrementQuantity(50)}>+50</button>
+            <button type="button" className="px-2 py-1 bg-blue-200 rounded" onClick={() => setQuantity(100)}>Set 100</button>
+          </div>
+          {/* Variations Section */}
+          <div className="mb-4">
+            <label className="block text-sm font-semibold text-blue-700 mb-1">Product Variations</label>
+            {variations.length === 0 && (
+              <div className="text-xs text-gray-400 mb-2">No variations added. Add size/color/price/stock options below.</div>
+            )}
+            {variations.map((variation, idx) => (
+              <div key={idx} className="flex gap-2 mb-2 items-center">
+                <input
+                  type="text"
+                  placeholder="Size (e.g. M, L, XL)"
+                  value={variation.size}
+                  onChange={e => handleVariationChange(idx, 'size', e.target.value)}
+                  className="w-20 p-2 border border-blue-200 rounded"
+                />
+                <input
+                  type="text"
+                  placeholder="Color"
+                  value={variation.color}
+                  onChange={e => handleVariationChange(idx, 'color', e.target.value)}
+                  className="w-20 p-2 border border-blue-200 rounded"
+                />
+                <input
+                  type="number"
+                  placeholder="Price"
+                  value={variation.price}
+                  onChange={e => handleVariationChange(idx, 'price', e.target.value)}
+                  step="0.01"
+                  min="0"
+                  className="w-24 p-2 border border-blue-200 rounded"
+                />
+                <input
+                  type="number"
+                  placeholder="Stock"
+                  value={variation.stock}
+                  onChange={e => handleVariationChange(idx, 'stock', e.target.value)}
+                  min="0"
+                  className="w-20 p-2 border border-blue-200 rounded"
+                />
+                <button type="button" className="text-red-500 px-2" onClick={() => removeVariation(idx)}>✕</button>
+              </div>
+            ))}
+            <button type="button" className="bg-blue-500 text-white px-3 py-1 rounded mt-2" onClick={addVariation}>Add Variation</button>
+          </div>
           {/* Category Dropdown */}
           <div>
             <label className="block text-sm font-semibold text-blue-700 mb-1">
@@ -195,9 +330,9 @@ const ProductForm = () => {
               name="categoryid"
               value={formData.categoryid}
               onChange={handleChange}
+              required
               className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
             >
-              {/* Insert categories as needed */}
               <option value="1">Electronics</option>
               <option value="2">Breakfast</option>
               <option value="101">Vegetables</option>
@@ -239,10 +374,8 @@ const ProductForm = () => {
               <option value="802">Non-Fiction</option>
               <option value="803">Movies</option>
               <option value="804">Music</option>
-              {/* Add all other categories here */}
             </select>
           </div>
-
           {/* Image Upload */}
           <div>
             <label className="block text-sm font-semibold text-blue-700 mb-1">
@@ -275,7 +408,6 @@ const ProductForm = () => {
               )}
             </div>
           </div>
-
           {/* Submit Button & Message */}
           <div className="flex flex-col items-center mt-2">
             <button

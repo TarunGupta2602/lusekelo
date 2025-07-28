@@ -696,8 +696,12 @@ export default function VendorDashboard() {
     main_image: '',
     gallery_images: [],
   });
+  // New state for image files and previews
+  const [editMainImageFile, setEditMainImageFile] = useState(null);
+  const [editMainImagePreview, setEditMainImagePreview] = useState(null);
+  const [editGalleryImages, setEditGalleryImages] = useState([]); // [{ url, file, isNew }]
 
-  // Sync form state when store loads
+  // On store load, initialize gallery images
   useEffect(() => {
     if (store) {
       setSupermarketForm({
@@ -707,8 +711,145 @@ export default function VendorDashboard() {
         main_image: store.main_image || '',
         gallery_images: Array.isArray(store.gallery_images) ? store.gallery_images : [],
       });
+      setEditMainImagePreview(store.main_image || null);
+      setEditMainImageFile(null);
+      setEditGalleryImages(
+        Array.isArray(store.gallery_images)
+          ? store.gallery_images.map((url) => ({ url, isNew: false }))
+          : []
+      );
     }
   }, [store]);
+
+  // Image validation (reuse from create-store)
+  const validateImage = (file) => {
+    const validExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+    const extension = file.name.split('.').pop().toLowerCase();
+    if (!validExtensions.includes(extension)) {
+      return 'Image must be a JPG, JPEG, PNG, WEBP, or GIF file.';
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return 'Image must be less than 5MB.';
+    }
+    return null;
+  };
+
+  const generateFilePath = (folder, originalName) => {
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 8);
+    const extension = originalName.split('.').pop().toLowerCase();
+    const sanitizedName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    return `${folder}/${timestamp}_${randomString}_${sanitizedName}`;
+  };
+
+  const uploadImage = async (file, folder) => {
+    const filePath = generateFilePath(folder, file.name);
+    const { data, error } = await supabase.storage
+      .from('supermarket-images')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+    if (error) throw new Error(`${folder} image upload failed: ${error.message}`);
+    const { data: { publicUrl } } = supabase.storage
+      .from('supermarket-images')
+      .getPublicUrl(filePath);
+    return publicUrl;
+  };
+
+  // Handlers for image selection
+  const handleEditMainImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const validationError = validateImage(file);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    if (editMainImagePreview) URL.revokeObjectURL(editMainImagePreview);
+    setEditMainImageFile(file);
+    setEditMainImagePreview(URL.createObjectURL(file));
+    setError('');
+  };
+
+  // Gallery image upload handler
+  const handleEditGalleryImagesUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length + editGalleryImages.length > 3) {
+      setError('Maximum 3 gallery images allowed.');
+      return;
+    }
+    const newImages = [];
+    for (const file of files) {
+      const validationError = validateImage(file);
+      if (validationError) {
+        setError(`Gallery image "${file.name}": ${validationError}`);
+        return;
+      }
+      const previewUrl = URL.createObjectURL(file);
+      newImages.push({ url: previewUrl, file, isNew: true });
+    }
+    setEditGalleryImages([...editGalleryImages, ...newImages]);
+    setError('');
+  };
+
+  const removeEditGalleryImage = (index) => {
+    const img = editGalleryImages[index];
+    if (img.isNew && img.url) URL.revokeObjectURL(img.url);
+    setEditGalleryImages(editGalleryImages.filter((_, i) => i !== index));
+  };
+
+  const removeEditMainImage = () => {
+    if (editMainImagePreview) URL.revokeObjectURL(editMainImagePreview);
+    setEditMainImageFile(null);
+    setEditMainImagePreview(store?.main_image || null);
+  };
+
+  const handleUpdateSupermarket = async () => {
+    setError('');
+    try {
+      let mainImageUrl = supermarketForm.main_image;
+      // Upload new main image if selected
+      if (editMainImageFile) {
+        mainImageUrl = await uploadImage(editMainImageFile, 'main');
+      }
+      // Upload new gallery images if any
+      const galleryImageUrls = [];
+      for (const img of editGalleryImages) {
+        if (img.isNew && img.file) {
+          const url = await uploadImage(img.file, 'gallery');
+          galleryImageUrls.push(url);
+        } else {
+          galleryImageUrls.push(img.url);
+        }
+      }
+      // Update supermarket
+      const { error: updateError } = await supabase
+        .from('supermarkets')
+        .update({
+          name: supermarketForm.name,
+          address: supermarketForm.address,
+          price: supermarketForm.price,
+          main_image: mainImageUrl,
+          gallery_images: galleryImageUrls,
+        })
+        .eq('id', store.id);
+      if (updateError) {
+        setError('Error updating supermarket: ' + updateError.message);
+        return;
+      }
+      setStore((prev) => ({
+        ...prev,
+        ...supermarketForm,
+        main_image: mainImageUrl,
+        gallery_images: galleryImageUrls,
+      }));
+      setEditSupermarketOpen(false);
+      alert('Supermarket updated successfully!');
+    } catch (err) {
+      setError('Unexpected error: ' + err.message);
+    }
+  };
 
   const handleSupermarketFormChange = (e) => {
     const { name, value } = e.target;
@@ -725,32 +866,37 @@ export default function VendorDashboard() {
     }));
   };
 
-  const handleUpdateSupermarket = async () => {
-    setError('');
-    try {
-      const { error: updateError } = await supabase
-        .from('supermarkets')
-        .update({
-          name: supermarketForm.name,
-          address: supermarketForm.address,
-          price: supermarketForm.price,
-          main_image: supermarketForm.main_image,
-          gallery_images: supermarketForm.gallery_images,
-        })
-        .eq('id', store.id);
+  // Add order status options
+  const ORDER_STATUS_OPTIONS = [
+    'pending',
+    'processing',
+    'shipped',
+    'completed',
+    'returned',
+    'cancelled',
+  ];
 
-      if (updateError) {
-        setError('Error updating supermarket: ' + updateError.message);
-        return;
-      }
-      setStore((prev) => ({
-        ...prev,
-        ...supermarketForm,
-      }));
-      setEditSupermarketOpen(false);
-      alert('Supermarket updated successfully!');
-    } catch (err) {
-      setError('Unexpected error: ' + err.message);
+  // Handler to update order status
+  const handleOrderStatusChange = async (orderId, newStatus) => {
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', orderId);
+    if (!error) {
+      setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
+      setFilteredOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
+    }
+  };
+
+  // Handler to mark as returned
+  const handleReturnOrder = async (orderId) => {
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: 'returned' })
+      .eq('id', orderId);
+    if (!error) {
+      setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: 'returned' } : o));
+      setFilteredOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: 'returned' } : o));
     }
   };
 
@@ -1071,25 +1217,31 @@ export default function VendorDashboard() {
                   className="w-full px-4 py-2 border rounded"
                 />
               </div>
+              {/* Main Image Preview and Upload */}
               <div className="mb-3">
-                <label className="block text-gray-700">Main Image URL</label>
-                <input
-                  type="text"
-                  name="main_image"
-                  value={supermarketForm.main_image}
-                  onChange={handleSupermarketFormChange}
-                  className="w-full px-4 py-2 border rounded"
-                />
+                <label className="block text-gray-700">Main Image</label>
+                {editMainImagePreview ? (
+                  <div className="relative mb-2">
+                    <Image src={editMainImagePreview} alt="Main" width={80} height={80} className="rounded object-cover" unoptimized />
+                    <button type="button" onClick={removeEditMainImage} className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 text-xs">✕</button>
+                  </div>
+                ) : null}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleEditMainImageUpload} />
               </div>
+              {/* Gallery Images Preview and Upload */}
               <div className="mb-3">
-                <label className="block text-gray-700">Gallery Images (comma separated URLs)</label>
-                <input
-                  type="text"
-                  name="gallery_images"
-                  value={supermarketForm.gallery_images.join(', ')}
-                  onChange={handleGalleryImagesChange}
-                  className="w-full px-4 py-2 border rounded"
-                />
+                <label className="block text-gray-700">Gallery Images (up to 3)</label>
+                <div className="flex gap-2 mb-2 flex-wrap">
+                  {editGalleryImages.map((img, idx) => (
+                    <div key={idx} className="relative">
+                      <Image src={img.url} alt={`Gallery ${idx + 1}`} width={60} height={60} className="rounded object-cover" unoptimized />
+                      <button type="button" onClick={() => removeEditGalleryImage(idx)} className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 text-xs">✕</button>
+                    </div>
+                  ))}
+                </div>
+                {editGalleryImages.length < 3 && (
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple onChange={handleEditGalleryImagesUpload} />
+                )}
               </div>
               <div className="flex gap-2 mt-4">
                 <button
@@ -1444,7 +1596,16 @@ export default function VendorDashboard() {
                     </div>
                     {/* Statuses */}
                     <div className="flex flex-col items-start gap-1 min-w-[120px]">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${order.status === 'completed' ? 'bg-green-100 text-green-600' : order.status === 'pending' ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>{order.status}</span>
+                      {/* Status Dropdown */}
+                      <select
+                        className={`px-3 py-1 rounded-full text-xs font-medium border ${order.status === 'completed' ? 'bg-green-100 text-green-600' : order.status === 'pending' ? 'bg-yellow-100 text-yellow-600' : order.status === 'returned' ? 'bg-blue-100 text-blue-600' : order.status === 'cancelled' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}
+                        value={order.status}
+                        onChange={e => handleOrderStatusChange(order.id, e.target.value)}
+                      >
+                        {ORDER_STATUS_OPTIONS.map(opt => (
+                          <option key={opt} value={opt}>{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
+                        ))}
+                      </select>
                       <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleDateString()}</span>
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${order.vendor_decision === 'accepted' ? 'bg-green-100 text-green-600' : order.vendor_decision === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'}`}>{order.vendor_decision?.charAt(0).toUpperCase() + order.vendor_decision?.slice(1) || 'Pending'}</span>
                     </div>
@@ -1490,6 +1651,14 @@ export default function VendorDashboard() {
                       >
                         Delete
                       </button>
+                      {['completed', 'shipped'].includes(order.status) && order.status !== 'returned' && (
+                        <button
+                          className="bg-blue-500 text-white px-3 py-1 rounded text-xs hover:bg-blue-600"
+                          onClick={() => handleReturnOrder(order.id)}
+                        >
+                          Mark as Returned
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

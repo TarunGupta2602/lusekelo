@@ -12,12 +12,16 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showVerifyMessage, setShowVerifyMessage] = useState(false);
+  const [showResend, setShowResend] = useState(false);
+  const [resent, setResent] = useState(false);
   const router = useRouter();
 
   const handleSignup = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setShowResend(false);
+    setResent(false);
     try {
       const { data: authData, error: signupError } = await supabase.auth.signUp({
         email,
@@ -28,11 +32,51 @@ export default function AuthPage() {
           },
         },
       });
-      if (signupError) throw new Error(`Signup error: ${signupError.message}`);
+      if (signupError) {
+        // Check for 'user already registered' error
+        if (
+          signupError.message.toLowerCase().includes("user already registered") ||
+          signupError.message.toLowerCase().includes("user already exists") ||
+          signupError.message.toLowerCase().includes("email already registered")
+        ) {
+          setShowVerifyMessage(true);
+          setShowResend(true);
+          return;
+        }
+        throw new Error(`Signup error: ${signupError.message}`);
+      }
       if (!authData.user) throw new Error("Sign-up failed, please try again.");
       setShowVerifyMessage(true);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Resend verification email handler
+  const handleResendVerification = async () => {
+    setLoading(true);
+    setError("");
+    setResent(false);
+    try {
+      // Try to sign up again to trigger resend
+      const { error: resendError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+          },
+        },
+      });
+      if (resendError) {
+        setError("Failed to resend verification email. Please try again later.");
+      } else {
+        setResent(true);
+      }
+    } catch (err) {
+      setError("Failed to resend verification email. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -103,9 +147,21 @@ export default function AuthPage() {
               We’ve sent a verification link to <span className="font-semibold">{email}</span>.<br />
               Please check your inbox and verify your email to continue.
             </p>
+            {showResend && (
+              <div className="space-y-2">
+                <button
+                  className="mt-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-md hover:bg-blue-200 transition"
+                  onClick={handleResendVerification}
+                  disabled={loading || resent}
+                >
+                  {resent ? "Verification email resent!" : "Resend verification email"}
+                </button>
+                {resent && <p className="text-green-600 text-sm">Check your inbox again.</p>}
+              </div>
+            )}
             <button
               className="mt-4 bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition"
-              onClick={() => { setShowVerifyMessage(false); setMode("login"); }}
+              onClick={() => { setShowVerifyMessage(false); setMode("login"); setShowResend(false); setResent(false); }}
             >
               Go to Login
             </button>

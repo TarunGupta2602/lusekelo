@@ -23,6 +23,7 @@ export default function ProductDetailPage({ params }) {
   const [loading, setLoading] = useState(true);
   const [resolvedParams, setResolvedParams] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const [selectedVariation, setSelectedVariation] = useState(null);
   const [cartMessage, setCartMessage] = useState("");
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -56,10 +57,10 @@ export default function ProductDetailPage({ params }) {
       if (!id) return;
 
       try {
-        // Fetch main product with categoryid
+        // Fetch main product with categoryid, sku, and variations
         const { data, error } = await supabase
           .from('products')
-          .select('id, name, price, image, description, quantity, categoryid')
+          .select('id, name, price, image, description, quantity, categoryid, sku, variations')
           .eq('id', id)
           .single();
 
@@ -68,6 +69,10 @@ export default function ProductDetailPage({ params }) {
           setProduct(null);
         } else {
           setProduct(data);
+          // Set default variation if available
+          if (data.variations && data.variations.length > 0) {
+            setSelectedVariation(data.variations[0]);
+          }
 
           // Fetch related products from same category
           try {
@@ -107,7 +112,7 @@ export default function ProductDetailPage({ params }) {
     return 'cart_guest';
   };
 
-  const handleAddToCart = (productToAdd = product, qty = quantity) => {
+  const handleAddToCart = (productToAdd = product, qty = quantity, variation = selectedVariation) => {
     if (!user) {
       setShowAuthModal(true);
       return;
@@ -116,27 +121,28 @@ export default function ProductDetailPage({ params }) {
 
     const cartKey = getCartKey();
     const cart = JSON.parse(localStorage.getItem(cartKey)) || [];
-    const existingItem = cart.find((item) => item.product_id === productToAdd.id);
+    const itemId = variation ? `${productToAdd.id}_${JSON.stringify(variation)}` : productToAdd.id;
+    const existingItem = cart.find((item) => item.itemId === itemId);
 
     if (existingItem) {
       existingItem.quantity += qty;
     } else {
       cart.push({
+        itemId,
         product_id: productToAdd.id,
         quantity: qty,
         name: productToAdd.name,
-        price: productToAdd.price,
+        price: variation ? variation.price : productToAdd.price,
         image: productToAdd.image,
+        variation: variation || null,
       });
     }
 
     localStorage.setItem(cartKey, JSON.stringify(cart));
     window.dispatchEvent(new Event("cartUpdated"));
 
-    if (productToAdd === product) {
-      setCartMessage("Product added to cart!");
-      setTimeout(() => setCartMessage(""), 3000);
-    }
+    setCartMessage("Product added to cart!");
+    setTimeout(() => setCartMessage(""), 3000);
   };
 
   const incrementQuantity = () => setQuantity((prev) => prev + 1);
@@ -181,9 +187,37 @@ export default function ProductDetailPage({ params }) {
         </div>
 
         <div className="md:w-1/2">
-          <p className="text-sm text-gray-500 mb-1">500g</p>
+          <p className="text-sm text-gray-500 mb-1">SKU: {product.sku || 'N/A'}</p>
           <h2 className="text-2xl font-semibold mb-2">{product.name}</h2>
-          <p className="text-green-600 font-semibold text-lg mb-4">${product.price}</p>
+          <p className="text-green-600 font-semibold text-lg mb-4">
+            ${selectedVariation ? selectedVariation.price : product.price}
+          </p>
+
+          {/* Variations Selection */}
+          {product.variations && product.variations.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold mb-2">Select Variation</h3>
+              <div className="flex flex-wrap gap-2">
+                {product.variations.map((variation, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedVariation(variation)}
+                    className={`px-4 py-2 rounded border ${
+                      selectedVariation === variation
+                        ? 'bg-teal-900 text-white border-teal-900'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    {variation.size && variation.color
+                      ? `${variation.size} / ${variation.color}`
+                      : variation.size || variation.color || `Variation ${idx + 1}`}
+                    <span className="ml-2 text-sm">(${variation.price})</span>
+                    <span className="ml-2 text-sm text-gray-500">Stock: {variation.stock}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 mb-2">
             <span className="text-sm">Quantity</span>
@@ -204,7 +238,7 @@ export default function ProductDetailPage({ params }) {
               </button>
             </div>
             <span className="text-sm text-red-500 ml-2">
-              ⚠️ Limited Quantity Available
+              ⚠️ {selectedVariation ? `Stock: ${selectedVariation.stock}` : `Total Stock: ${product.quantity}`}
             </span>
           </div>
 
@@ -238,14 +272,14 @@ export default function ProductDetailPage({ params }) {
         <h2 className="text-xl font-semibold mb-6">Related Items</h2>
 
         <div className="relative">
-          <button 
+          <button
             onClick={scrollLeft}
             className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
           >
             <ChevronLeft size={24} className="text-gray-700" />
           </button>
 
-          <div 
+          <div
             ref={scrollContainerRef}
             className="flex overflow-x-auto gap-4 py-2 scroll-smooth no-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
@@ -254,8 +288,8 @@ export default function ProductDetailPage({ params }) {
               relatedProducts.map((relatedProduct) => {
                 const relatedImagePath = normalizeImagePath(relatedProduct.image);
                 return (
-                  <div 
-                    key={relatedProduct.id} 
+                  <div
+                    key={relatedProduct.id}
                     className="flex-shrink-0 w-44 bg-white rounded-lg overflow-hidden shadow-sm"
                   >
                     <a href={`/products/${relatedProduct.id}`} className="block">
@@ -280,7 +314,7 @@ export default function ProductDetailPage({ params }) {
                         <p className="text-xs text-gray-500 mb-2">100g Standard Portion</p>
                         <div className="flex justify-between items-center">
                           <span className="font-semibold">${relatedProduct.price}</span>
-                          <button 
+                          <button
                             className="bg-gray-200 rounded-md p-1 hover:bg-gray-300"
                             onClick={(e) => {
                               e.preventDefault();
@@ -300,7 +334,7 @@ export default function ProductDetailPage({ params }) {
             )}
           </div>
 
-          <button 
+          <button
             onClick={scrollRight}
             className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
           >
