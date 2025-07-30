@@ -262,7 +262,7 @@ export default function Navbar() {
         
         {/* Logo */}
         <Link href="/" className="flex items-center mx-auto lg:mx-0">
-          <Image src="/logo.svg" alt="Logo" width={40} height={40} />
+          <Image src="/logo.jpg" alt="Logo" width={40} height={40} className="rounded-lg" />
         </Link>
 
         {/* Mobile Search Button */}
@@ -357,7 +357,12 @@ export default function Navbar() {
                       href={`/products/${item.id}`}
                       key={`product-${item.id}`}
                       className="flex items-center px-4 py-2 hover:bg-gray-100"
-                      onClick={() => setSearchQuery("")}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSearchQuery("");
+                        window.location.href = `/products/${item.id}`;
+                      }}
                     >
                       <>
                         {item.image && (
@@ -382,7 +387,12 @@ export default function Navbar() {
                       href={`/categories/${item.id}`}
                       key={`category-${item.id}`}
                       className="flex items-center px-4 py-2 hover:bg-gray-100"
-                      onClick={() => setSearchQuery("")}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSearchQuery("");
+                        window.location.href = `/categories/${item.id}`;
+                      }}
                     >
                       <div>
                         <p className="text-sm font-medium text-blue-700">Category: {item.name}</p>
@@ -496,7 +506,7 @@ export default function Navbar() {
                             className="flex items-center gap-3 w-full text-gray-700"
                           >
                             <Image
-                              src={store.image || '/store.png'}
+                              src={store.main_image || '/store.png'}
                               alt={store.name}
                               width={32}
                               height={32}
@@ -594,7 +604,7 @@ export default function Navbar() {
                     className="flex items-center gap-3 w-full text-gray-700"
                   >
                     <Image
-                      src={store.image || '/store.png'}
+                      src={store.main_image || '/store.png'}
                       alt={store.name}
                       width={36}
                       height={36}
@@ -655,7 +665,12 @@ export default function Navbar() {
                     href={`/products/${item.id}`}
                     key={`product-${item.id}`}
                     className="flex items-center px-4 py-2 hover:bg-gray-50"
-                    onClick={() => setSearchQuery("")}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSearchQuery("");
+                      window.location.href = `/products/${item.id}`;
+                    }}
                   >
                     <>
                       {item.image && (
@@ -680,7 +695,12 @@ export default function Navbar() {
                     href={`/categories/${item.id}`}
                     key={`category-${item.id}`}
                     className="flex items-center px-4 py-2 hover:bg-gray-50"
-                    onClick={() => setSearchQuery("")}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSearchQuery("");
+                      window.location.href = `/categories/${item.id}`;
+                    }}
                   >
                     <div>
                       <p className="text-sm font-medium text-blue-700">Category: {item.name}</p>

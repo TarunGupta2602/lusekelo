@@ -24,7 +24,7 @@ const ProductForm = () => {
     price: "",
     description: "",
     quantity: "",
-    categoryid: "1",
+    categoryid: "",
     sku: "",
   });
   const [imageFile, setImageFile] = useState(null);
@@ -33,6 +33,24 @@ const ProductForm = () => {
   const [message, setMessage] = useState(null);
   const [supermarket_Id, setSupermarket_Id] = useState(null);
   const [variations, setVariations] = useState([]); // [{ size: '', color: '', price: '', stock: '' }]
+  
+  // Categories state
+  const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("");
+
+  // Main categories mapping
+  const mainCategories = [
+    { id: 100, name: "Food & Drinks" },
+    { id: 200, name: "Beauty & Personal Care" },
+    { id: 300, name: "Household Essentials" },
+    { id: 400, name: "Gym & Fitness" },
+    { id: 500, name: "Clothing" },
+    { id: 600, name: "Furniture" },
+    { id: 700, name: "Electronics" },
+    { id: 800, name: "Books & Media" }
+  ];
 
   // Fetch the current user's supermarket id
   useEffect(() => {
@@ -66,12 +84,86 @@ const ProductForm = () => {
     fetchSupermarket();
   }, []);
 
+  // Fetch categories and subcategories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('*')
+          .order('id');
+
+        if (error) {
+          console.error('Error fetching categories:', error);
+          return;
+        }
+
+        setCategories(data);
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  // Fetch subcategories when main category is selected
+  useEffect(() => {
+    const fetchSubcategories = async () => {
+      if (!selectedCategory) {
+        setSubcategories([]);
+        setSelectedSubcategory("");
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('parent_id', selectedCategory)
+          .order('name');
+
+        if (error) {
+          console.error('Error fetching subcategories:', error);
+          return;
+        }
+
+        setSubcategories(data);
+        setSelectedSubcategory(""); // Reset subcategory selection
+      } catch (err) {
+        console.error('Error fetching subcategories:', err);
+      }
+    };
+
+    fetchSubcategories();
+  }, [selectedCategory]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: value,
       ...(name === 'name' || name === 'categoryid' ? { sku: generateSKU(name === 'name' ? value : prev.name, name === 'categoryid' ? value : prev.categoryid) } : {})
+    }));
+  };
+
+  const handleCategoryChange = (e) => {
+    const categoryId = e.target.value;
+    setSelectedCategory(categoryId);
+    setFormData(prev => ({
+      ...prev,
+      categoryid: categoryId,
+      sku: generateSKU(prev.name, categoryId)
+    }));
+  };
+
+  const handleSubcategoryChange = (e) => {
+    const subcategoryId = e.target.value;
+    setSelectedSubcategory(subcategoryId);
+    setFormData(prev => ({
+      ...prev,
+      categoryid: subcategoryId,
+      sku: generateSKU(prev.name, subcategoryId)
     }));
   };
 
@@ -193,12 +285,14 @@ const ProductForm = () => {
         price: "",
         description: "",
         quantity: "",
-        categoryid: "1",
+        categoryid: "",
         sku: "",
       });
       setImageFile(null);
       setPreviewUrl(null);
       setVariations([]);
+      setSelectedCategory("");
+      setSelectedSubcategory("");
     } catch (err) {
       setMessage({ type: "error", text: err.message });
     } finally {
@@ -321,61 +415,55 @@ const ProductForm = () => {
             ))}
             <button type="button" className="bg-blue-500 text-white px-3 py-1 rounded mt-2" onClick={addVariation}>Add Variation</button>
           </div>
-          {/* Category Dropdown */}
-          <div>
-            <label className="block text-sm font-semibold text-blue-700 mb-1">
-              Category
-            </label>
-            <select
-              name="categoryid"
-              value={formData.categoryid}
-              onChange={handleChange}
-              required
-              className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
-            >
-              <option value="1">Electronics</option>
-              <option value="2">Breakfast</option>
-              <option value="101">Vegetables</option>
-              <option value="102">Tea, Coffee & more</option>
-              <option value="103">Fruits</option>
-              <option value="104">Munchies</option>
-              <option value="105">Cold Drinks & Juices</option>
-              <option value="106">Bakery & Biscuits</option>
-              <option value="107">Chicken & Fish</option>
-              <option value="108">Dry Fruits</option>
-              <option value="201">Makeup & Beauty</option>
-              <option value="202">Skin Care</option>
-              <option value="203">Baby Care</option>
-              <option value="204">Hair Care</option>
-              <option value="205">Pharma & Wellness</option>
-              <option value="206">Protein Powders</option>
-              <option value="301">Home Needs</option>
-              <option value="302">Kitchen & Dining</option>
-              <option value="303">Cleaning Essentials</option>
-              <option value="304">Pet Care</option>
-              <option value="305">Atta, Rice & Dal</option>
-              <option value="306">Bed & Mattresses</option>
-              <option value="401">Protein Supplements</option>
-              <option value="402">Workout Equipment</option>
-              <option value="403">Fitness Accessories</option>
-              <option value="404">Sports Nutrition</option>
-              <option value="501">Men&apos;s Clothing</option>
-              <option value="502">Women&apos;s Clothing</option>
-              <option value="503">Kids&apos; Clothing</option>
-              <option value="504">Sportswear</option>
-              <option value="601">Living Room</option>
-              <option value="602">Bedroom</option>
-              <option value="603">Office</option>
-              <option value="604">Outdoor</option>
-              <option value="701">Mobile Phones</option>
-              <option value="702">Laptops</option>
-              <option value="704">Audio</option>
-              <option value="801">Fiction</option>
-              <option value="802">Non-Fiction</option>
-              <option value="803">Movies</option>
-              <option value="804">Music</option>
-            </select>
+          
+          {/* Category Dropdowns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-blue-700 mb-1">
+                Main Category
+              </label>
+              <select
+                value={selectedCategory}
+                onChange={handleCategoryChange}
+                required
+                className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
+              >
+                <option value="">Select Main Category</option>
+                {mainCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-semibold text-blue-700 mb-1">
+                Subcategory
+              </label>
+              <select
+                value={selectedSubcategory}
+                onChange={handleSubcategoryChange}
+                required
+                disabled={!selectedCategory || subcategories.length === 0}
+                className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700 disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                <option value="">
+                  {!selectedCategory 
+                    ? "Select Main Category First" 
+                    : subcategories.length === 0 
+                      ? "No subcategories available" 
+                      : "Select Subcategory"}
+                </option>
+                {subcategories.map((subcategory) => (
+                  <option key={subcategory.id} value={subcategory.id}>
+                    {subcategory.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+          
           {/* Image Upload */}
           <div>
             <label className="block text-sm font-semibold text-blue-700 mb-1">
