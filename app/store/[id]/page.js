@@ -294,25 +294,43 @@ export default function StoreDetailPage({ params }) {
             if (subcatsWithProducts.length === 0) return null;
             return (
               <div key={mainCat.id} className="mb-12">
-                <h3 className="text-2xl font-bold text-gray-800 mb-6">{mainCat.name}</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                  {subcatsWithProducts.map(subcat => (
-                    <Link key={subcat.id} href={`/new/${subcat.id}`} className="group">
-                      <div className="bg-white rounded-2xl shadow p-5 flex flex-col justify-between min-h-[150px] border border-gray-100 relative overflow-hidden transition-all duration-200 group-hover:shadow-lg group-hover:-translate-y-1 cursor-pointer">
-                        <div className="mb-2">
-                          <div className="font-semibold text-gray-900 text-base mb-1">{subcat.name}</div>
-                          <div className="text-xs text-gray-400">{subcat.description}</div>
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">{mainCat.name}</h3>
+            
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                {subcatsWithProducts.map((subcat) => (
+                  <Link
+                    key={subcat.id}
+                    href={`/new/${subcat.id}`}
+                    className="group"
+                  >
+                    <div className="bg-white rounded-2xl shadow-md hover:shadow-lg p-5 flex items-center justify-between border border-gray-100 transition-transform duration-200 group-hover:-translate-y-1 h-36">
+                      
+                      {/* Text Section */}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-gray-900 text-base mb-1 truncate">
+                          {subcat.name}
                         </div>
-                        {subcat.image && (
-                          <div className="absolute bottom-2 right-2 w-16 h-16 flex items-end justify-end pointer-events-none select-none">
-                            <img src={normalizeImageUrl(subcat.image)} alt={subcat.name} className="object-contain w-full h-full" />
-                          </div>
-                        )}
+                        <div className="text-sm text-gray-500 truncate">
+                          {subcat.description}
+                        </div>
                       </div>
-                    </Link>
-                  ))}
-                </div>
+            
+                      {/* Image Section */}
+                      {subcat.image && (
+                        <div className="ml-4 flex-shrink-0">
+                          <img
+                            src={normalizeImageUrl(subcat.image)}
+                            alt={subcat.name}
+                            className="w-26 h-26 object-contain"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                ))}
               </div>
+            </div>
+            
             );
           })}
         </div>
