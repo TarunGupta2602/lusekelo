@@ -1,8 +1,7 @@
-"use client";
+// app/layout.js (server component)
 import { Geist, Geist_Mono } from "next/font/google";
-import { usePathname } from "next/navigation"; // Import usePathname to get the current route
 import "./globals.css";
-import Navbar from "./navbar/page";
+import NavbarWrapper from "./NavbarWrapper"; // Client component
 import Footer from "./footer/page";
 
 const geistSans = Geist({
@@ -15,28 +14,20 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const metadata = {
+  title: "A quick commerce Web application",
+  description: "We deliver the best products to your doorstep",
+  icons: {
+    icon: "/logo.jpg", // Path in /public
+  },
+};
 
 export default function RootLayout({ children }) {
-  const pathname = usePathname(); // Get the current pathname
-  const isVendorRoute =
-    pathname === "/vendor" ||
-    pathname === "/vendor/dashboard" ||
-    pathname === "/vendor/edit-inventory" ||
-    pathname === "/vendor/add-inventory" ||
-    pathname === "/vendor/create-store" ||
-    pathname === "/admin" ||
-    pathname === "/admin/dashboard"; // Check if the route is vendor login or dashboard
-
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {/* Render Navbar only if not on vendor login or dashboard */}
-        {!isVendorRoute && <Navbar />}
-
         {children}
-
-        {/* Render Footer only if not on vendor login or dashboard */}
-        {!isVendorRoute && <Footer />}
+        <NavbarWrapper />
       </body>
     </html>
   );

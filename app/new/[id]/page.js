@@ -37,11 +37,11 @@ export default async function CategoryProducts({ params }) {
   const categoryName = category?.name || "Products";
 
   return (
-    <div className="p-6 bg-gray-50">
+    <div className="p-6 mt-20 mb-20 bg-gray-50">
       <h1 className="text-2xl font-bold mb-6">{categoryName}</h1>
       
       {products.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-10">
           {products.map((product) => (
             <div key={product.id} className="bg-white rounded-md shadow-sm overflow-hidden">
               <Link href={`/products/${product.id}`}>
