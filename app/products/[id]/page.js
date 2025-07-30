@@ -166,16 +166,16 @@ export default function ProductDetailPage({ params }) {
   const imagePath = normalizeImagePath(product.image);
 
   return (
-    <div className="p-6">
+    <div className="p-6 mt-20">
       <h1 className="text-3xl font-bold mb-6">{product.name}</h1>
-      <div className="flex flex-col md:flex-row gap-8">
+      <div className="flex flex-col ml-16 md:flex-row gap-28">
         <div className="md:w-1/2">
           {imagePath ? (
             <Image
               src={imagePath}
               alt={product.name}
-              width={400}
-              height={400}
+              width={550}
+              height={450}
               className="object-contain w-full h-64 md:h-96 rounded-lg p-4 bg-white"
               priority
             />
@@ -351,4 +351,4 @@ export default function ProductDetailPage({ params }) {
       <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
     </div>
   );
-}
+} 
