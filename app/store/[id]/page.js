@@ -300,7 +300,7 @@ export default function StoreDetailPage({ params }) {
                 {subcatsWithProducts.map((subcat) => (
                   <Link
                     key={subcat.id}
-                    href={`/new/${subcat.id}`}
+                    href={`/new/${subcat.id}?store=${id}`}
                     className="group"
                   >
                     <div className="bg-white rounded-2xl shadow-md hover:shadow-lg p-5 flex items-center justify-between border border-gray-100 transition-transform duration-200 group-hover:-translate-y-1 h-36">
