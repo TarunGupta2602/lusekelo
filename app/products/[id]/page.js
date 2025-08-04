@@ -11,10 +11,18 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// Normalize image path
+// Normalize image path to handle both single strings and arrays
 const normalizeImagePath = (path) => {
-  if (!path) return '';
-  return path.replace(/^(\.\.\/)+assets\//, '/');
+  if (!path) return ['/placeholder-product.jpg'];
+  if (Array.isArray(path)) {
+    // Map over array and normalize each path, filter out invalid paths
+    const normalized = path
+      .map((p) => (p ? p.replace(/^(\.\.\/)+assets\//, '/') : null))
+      .filter((p) => p);
+    return normalized.length > 0 ? normalized : ['/placeholder-product.jpg'];
+  }
+  // Handle single string
+  return [path.replace(/^(\.\.\/)+assets\//, '/')];
 };
 
 export default function ProductDetailPage({ params }) {
@@ -28,6 +36,7 @@ export default function ProductDetailPage({ params }) {
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const scrollContainerRef = useRef(null);
+  const mainImageContainerRef = useRef(null);
 
   useEffect(() => {
     const resolveParams = async () => {
@@ -133,7 +142,7 @@ export default function ProductDetailPage({ params }) {
         quantity: qty,
         name: productToAdd.name,
         price: variation ? variation.price : productToAdd.price,
-        image: productToAdd.image,
+        image: Array.isArray(productToAdd.image) ? productToAdd.image[0] : productToAdd.image, // Store first image
         variation: variation || null,
       });
     }
@@ -160,29 +169,68 @@ export default function ProductDetailPage({ params }) {
     }
   };
 
+  const scrollMainImageLeft = () => {
+    if (mainImageContainerRef.current) {
+      mainImageContainerRef.current.scrollBy({ left: -550, behavior: 'smooth' });
+    }
+  };
+
+  const scrollMainImageRight = () => {
+    if (mainImageContainerRef.current) {
+      mainImageContainerRef.current.scrollBy({ left: 550, behavior: 'smooth' });
+    }
+  };
+
   if (loading) return <p>Loading...</p>;
   if (!product) return <p>Product not found.</p>;
 
-  const imagePath = normalizeImagePath(product.image);
+  const imagePaths = normalizeImagePath(product.image);
 
   return (
     <div className="p-6 mt-20">
       <h1 className="text-3xl font-bold mb-6">{product.name}</h1>
       <div className="flex flex-col ml-16 md:flex-row gap-28">
-        <div className="md:w-1/2">
-          {imagePath ? (
-            <Image
-              src={imagePath}
-              alt={product.name}
-              width={550}
-              height={450}
-              className="object-contain w-full h-64 md:h-96 rounded-lg p-4 bg-white"
-              priority
-            />
-          ) : (
-            <div className="h-64 md:h-96 bg-gray-200 rounded-lg flex items-center justify-center text-gray-600">
-              No Image Available
-            </div>
+        <div className="md:w-1/2 relative">
+          <div
+            ref={mainImageContainerRef}
+            className="flex overflow-x-auto gap-4 py-2 scroll-smooth no-scrollbar snap-x snap-mandatory"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {imagePaths.length > 0 ? (
+              imagePaths.map((imagePath, index) => (
+                <div key={index} className="flex-shrink-0 snap-center">
+                  <Image
+                    src={imagePath}
+                    alt={`${product.name} image ${index + 1}`}
+                    width={550}
+                    height={450}
+                    className="object-contain w-full h-64 md:h-96 rounded-lg p-4 bg-white"
+                    priority={index === 0} // Priority for first image
+                    loading={index > 0 ? 'lazy' : undefined}
+                  />
+                </div>
+              ))
+            ) : (
+              <div className="h-64 md:h-96 bg-gray-200 rounded-lg flex items-center justify-center text-gray-600 snap-center">
+                No Image Available
+              </div>
+            )}
+          </div>
+          {imagePaths.length > 1 && (
+            <>
+              <button
+                onClick={scrollMainImageLeft}
+                className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
+              >
+                <ChevronLeft size={24} className="text-gray-700" />
+              </button>
+              <button
+                onClick={scrollMainImageRight}
+                className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
+              >
+                <ChevronRight size={24} className="text-gray-700" />
+              </button>
+            </>
           )}
         </div>
 
@@ -281,22 +329,23 @@ export default function ProductDetailPage({ params }) {
 
           <div
             ref={scrollContainerRef}
-            className="flex overflow-x-auto gap-4 py-2 scroll-smooth no-scrollbar"
+            className="flex overflow-x-auto gap-4 py-2 scroll-smooth no-scrollbar snap-x snap-mandatory"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {relatedProducts.length > 0 ? (
               relatedProducts.map((relatedProduct) => {
-                const relatedImagePath = normalizeImagePath(relatedProduct.image);
+                const relatedImagePaths = normalizeImagePath(relatedProduct.image);
+                const firstImagePath = relatedImagePaths[0]; // Use first image for related products
                 return (
                   <div
                     key={relatedProduct.id}
-                    className="flex-shrink-0 w-44 bg-white rounded-lg overflow-hidden shadow-sm"
+                    className="flex-shrink-0 w-44 bg-white rounded-lg overflow-hidden shadow-sm snap-center"
                   >
                     <a href={`/products/${relatedProduct.id}`} className="block">
                       <div className="relative h-36 bg-gray-50">
-                        {relatedImagePath ? (
+                        {firstImagePath ? (
                           <Image
-                            src={relatedImagePath}
+                            src={firstImagePath}
                             alt={relatedProduct.name}
                             width={160}
                             height={160}
@@ -346,9 +395,15 @@ export default function ProductDetailPage({ params }) {
           .no-scrollbar::-webkit-scrollbar {
             display: none;
           }
+          .snap-x {
+            scroll-snap-type: x mandatory;
+          }
+          .snap-center {
+            scroll-snap-align: center;
+          }
         `}</style>
       </div>
       <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
     </div>
   );
-} 
+}

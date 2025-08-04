@@ -1,18 +1,68 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Image from 'next/image'
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-// Helper to normalize image path if needed
+// Helper to normalize image path for both strings and arrays, with URL validation
 function normalizeImagePath(path) {
-  if (!path) return '';
-  return path.replace(/^(\.\.\/)+assets\//, '/');
+  const defaultImage = '/placeholder-product.jpg';
+  
+  // Return default image if path is null or undefined
+  if (!path) {
+    console.warn('normalizeImagePath: Received null or undefined path');
+    return [defaultImage];
+  }
+
+  // Common image extensions for validation
+  const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+
+  // Handle array input (text[])
+  if (Array.isArray(path)) {
+    const normalized = path
+      .map((p, index) => {
+        if (!p || typeof p !== 'string') {
+          console.warn(`normalizeImagePath: Invalid path at index ${index}:`, p);
+          return null;
+        }
+        const trimmedPath = p.trim();
+        // Check if path has a valid image extension
+        if (!validImageExtensions.some(ext => trimmedPath.toLowerCase().endsWith(ext))) {
+          console.warn(`normalizeImagePath: Invalid image extension for path at index ${index}:`, trimmedPath);
+          return null;
+        }
+        // Normalize path by removing ../assets/ prefix
+        return trimmedPath.replace(/^(\.\.\/)+assets\//, '/');
+      })
+      .filter(p => p); // Remove null or invalid paths
+
+    return normalized.length > 0 ? normalized : [defaultImage];
+  }
+
+  // Handle single string input
+  if (typeof path !== 'string') {
+    console.warn('normalizeImagePath: Invalid path type:', path);
+    return [defaultImage];
+  }
+
+  const trimmedPath = path.trim();
+  if (!trimmedPath) {
+    console.warn('normalizeImagePath: Empty string path');
+    return [defaultImage];
+  }
+
+  if (!validImageExtensions.some(ext => trimmedPath.toLowerCase().endsWith(ext))) {
+    console.warn('normalizeImagePath: Invalid image extension for path:', trimmedPath);
+    return [defaultImage];
+  }
+
+  return [trimmedPath.replace(/^(\.\.\/)+assets\//, '/')];
 }
 
 export default function ProductsPage() {
@@ -22,6 +72,7 @@ export default function ProductsPage() {
   const [sortOrder] = useState('desc') // or 'asc' if you want oldest first
   const [categories, setCategories] = useState([])
   const [selectedCategory, setSelectedCategory] = useState(null)
+  const scrollRefs = useRef({}); // Store refs for each product's image gallery
 
   useEffect(() => {
     // Fetch categories
@@ -66,7 +117,7 @@ export default function ProductsPage() {
         // Normalize image paths
         const normalizedProducts = productsData.map(product => ({
           ...product,
-          image: normalizeImagePath(product.image)
+          images: normalizeImagePath(product.image) // Store as array
         }))
 
         setProducts(normalizedProducts)
@@ -89,6 +140,19 @@ export default function ProductsPage() {
   const selectedCategoryName = selectedCategory
     ? (categories.find(c => c.id === selectedCategory)?.name || 'Category')
     : 'All Products'
+
+  // Scroll handlers for individual product image galleries
+  const scrollLeft = (productId) => {
+    if (scrollRefs.current[productId]) {
+      scrollRefs.current[productId].scrollBy({ left: -260, behavior: 'smooth' });
+    }
+  };
+
+  const scrollRight = (productId) => {
+    if (scrollRefs.current[productId]) {
+      scrollRefs.current[productId].scrollBy({ left: 260, behavior: 'smooth' });
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-10">
@@ -126,19 +190,46 @@ export default function ProductsPage() {
               href={`/products/${product.id}`}
               className="bg-white rounded-xl shadow-lg p-6 flex flex-col hover:shadow-2xl transition"
             >
-              <div className="mb-4 flex justify-center">
-                {product.image ? (
-                  <Image
-                    src={product.image}
-                    alt={product.name}
-                    width={260}
-                    height={180}
-                    className="object-contain rounded-lg w-full h-44"
-                  />
-                ) : (
-                  <div className="w-full h-44 flex items-center justify-center bg-gray-100 rounded-lg">
-                    <span className="text-gray-400">No image</span>
-                  </div>
+              <div className="mb-4 relative">
+                <div
+                  ref={(el) => (scrollRefs.current[product.id] = el)}
+                  className="flex overflow-x-auto gap-4 scroll-smooth no-scrollbar snap-x snap-mandatory"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                >
+                  {product.images.length > 0 ? (
+                    product.images.map((image, index) => (
+                      <div key={index} className="flex-shrink-0 snap-center">
+                        <Image
+                          src={image}
+                          alt={`${product.name} image ${index + 1}`}
+                          width={260}
+                          height={180}
+                          className="object-contain rounded-lg w-full h-44"
+                          loading={index > 0 ? 'lazy' : undefined}
+                        />
+                      </div>
+                    ))
+                  ) : (
+                    <div className="w-full h-44 flex items-center justify-center bg-gray-100 rounded-lg snap-center">
+                      <span className="text-gray-400">No image</span>
+                    </div>
+                  )}
+                </div>
+                {product.images.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => scrollLeft(product.id)}
+                      className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
+                    >
+                      <ChevronLeft size={20} className="text-gray-700" />
+                    </button>
+                    <button
+                      onClick={() => scrollRight(product.id)}
+                      className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
+                    >
+                      <ChevronRight size={20} className="text-gray-700" />
+                    </button>
+                  </>
                 )}
               </div>
               <h2 className="text-xl font-semibold text-gray-800 mb-2">{product.name}</h2>
@@ -159,6 +250,17 @@ export default function ProductsPage() {
           <span className="text-gray-400 text-lg">No products found.</span>
         </div>
       )}
+      <style jsx>{`
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .snap-x {
+          scroll-snap-type: x mandatory;
+        }
+        .snap-center {
+          scroll-snap-align: center;
+        }
+      `}</style>
     </div>
   )
 }

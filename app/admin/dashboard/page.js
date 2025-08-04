@@ -1,12 +1,13 @@
-"use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-import Image from "next/image";
-import React from "react";
-import { FaSearch, FaUser, FaChevronDown, FaClipboardList, FaUserFriends, FaBell } from "react-icons/fa";
-import Papa from "papaparse";
-import Sidebar from "./Sidebar";
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
+import Image from 'next/image';
+import React from 'react';
+import { FaSearch, FaUser, FaChevronDown, FaClipboardList, FaUserFriends, FaBell } from 'react-icons/fa';
+import Papa from 'papaparse';
+import Sidebar from './Sidebar';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -14,42 +15,50 @@ const supabase = createClient(
 );
 
 const TABS = [
-  { key: "orders", label: "Orders" },
-  { key: "vendors", label: "Vendors" },
-  { key: "invoices", label: "Invoices" },
-  { key: "agents", label: "Delivery Agents" },
+  { key: 'orders', label: 'Orders' },
+  { key: 'vendors', label: 'Vendors' },
+  { key: 'invoices', label: 'Invoices' },
+  { key: 'agents', label: 'Delivery Agents' },
 ];
+
+// Utility function to normalize image path
+const normalizeImagePath = (image) => {
+  if (Array.isArray(image) && image.length > 0) {
+    return image[0] || '/file.svg'; // Use the first image in the array
+  }
+  return typeof image === 'string' && image ? image : '/file.svg'; // Fallback for single string or invalid
+};
 
 export default function AdminDashboard() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("orders");
+  const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('orders');
   const [vendors, setVendors] = useState([]);
   const [agents, setAgents] = useState([]);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [newVendorPassword, setNewVendorPassword] = useState("");
+  const [newVendorPassword, setNewVendorPassword] = useState('');
   const [pendingVendorRedirect, setPendingVendorRedirect] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [editProfile, setEditProfile] = useState({ full_name: "", email: "" });
+  const [editProfile, setEditProfile] = useState({ full_name: '', email: '' });
   const [showDisableVendorModal, setShowDisableVendorModal] = useState(false);
   const [vendorToDisable, setVendorToDisable] = useState(null);
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [showEditAgentModal, setShowEditAgentModal] = useState(false);
   const [agentForm, setAgentForm] = useState({
     id: null,
-    name: "",
-    tracking_id: "",
-    phone: "",
-    address: "",
-    email: "",
-    bike_rc: "",
+    name: '',
+    tracking_id: '',
+    phone: '',
+    address: '',
+    email: '',
+    bike_rc: '',
     gps_installed: false,
-    gov_id: "",
-    license: "",
+    gov_id: '',
+    license: '',
   });
-  const [searchAgent, setSearchAgent] = useState("");
+  const [searchAgent, setSearchAgent] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const agentsPerPage = 10;
   const [orders, setOrders] = useState([]);
@@ -57,7 +66,7 @@ export default function AdminDashboard() {
   const [ordersPage, setOrdersPage] = useState(1);
   const ordersPerPage = 10;
   const [ordersTotalPages, setOrdersTotalPages] = useState(1);
-  const [searchOrders, setSearchOrders] = useState("");
+  const [searchOrders, setSearchOrders] = useState('');
   const router = useRouter();
   const [showEditVendorModal, setShowEditVendorModal] = useState(false);
   const [editVendorForm, setEditVendorForm] = useState({ id: '', full_name: '', email: '', newPassword: '' });
@@ -65,22 +74,20 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        router.push("/admin");
+        router.push('/admin');
         return;
       }
       setUser(user);
       const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role, email, full_name")
-        .eq("id", user.id)
+        .from('profiles')
+        .select('role, email, full_name')
+        .eq('id', user.id)
         .single();
-      if (profileError || !profile || profile.role !== "admin") {
-        setError("You are not authorized to view this page.");
-        setTimeout(() => router.push("/admin"), 2000);
+      if (profileError || !profile || profile.role !== 'admin') {
+        setError('You are not authorized to view this page.');
+        setTimeout(() => router.push('/admin'), 2000);
         return;
       }
       setProfile(profile);
@@ -91,15 +98,15 @@ export default function AdminDashboard() {
   }, [router]);
 
   useEffect(() => {
-    if (activeTab === "vendors") {
+    if (activeTab === 'vendors') {
       supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url, email, role")
-        .eq("role", "vendor")
+        .from('profiles')
+        .select('id, full_name, avatar_url, email, role')
+        .eq('role', 'vendor')
         .then(({ data }) => setVendors(data || []));
-    } else if (activeTab === "agents") {
+    } else if (activeTab === 'agents') {
       fetchAgents();
-    } else if (activeTab === "orders") {
+    } else if (activeTab === 'orders') {
       fetchOrders(ordersPage);
     }
   }, [activeTab, ordersPage]);
@@ -111,144 +118,151 @@ export default function AdminDashboard() {
 
   const fetchAgents = async () => {
     const { data } = await supabase
-      .from("agents")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .from('agents')
+      .select('*')
+      .order('created_at', { ascending: false });
     setAgents(data || []);
   };
 
   const fetchOrders = async (page = 1) => {
     setOrdersLoading(true);
-    const from = (page - 1) * ordersPerPage;
-    const to = from + ordersPerPage - 1;
-    const { data, error, count } = await supabase
-      .from("orders")
-      .select(`
-        id,
-        quantity,
-        total_amount,
-        status,
-        created_at,
-        vendor_decision,
-        agent_id,
-        products:product_id (
+    try {
+      const from = (page - 1) * ordersPerPage;
+      const to = from + ordersPerPage - 1;
+      const { data, error, count } = await supabase
+        .from('orders')
+        .select(
+          `
           id,
-          name,
-          image,
-          supermarket:supermarket_id (
+          quantity,
+          total_amount,
+          status,
+          created_at,
+          vendor_decision,
+          agent_id,
+          products:product_id (
             id,
-            name
+            name,
+            image,
+            supermarket:supermarket_id (
+              id,
+              name
+            )
           )
+        `,
+          { count: 'exact' }
         )
-      `, { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(from, to);
-    if (!error) {
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      if (error) throw new Error(`Error fetching orders: ${error.message}`);
       setOrders(data || []);
       setOrdersTotalPages(Math.ceil((count || 0) / ordersPerPage));
+    } catch (err) {
+      setError(`Unexpected error fetching orders: ${err.message}`);
+    } finally {
+      setOrdersLoading(false);
     }
-    setOrdersLoading(false);
   };
 
   const handleProfileUpdate = async () => {
     const { error } = await supabase
-      .from("profiles")
+      .from('profiles')
       .update({ full_name: editProfile.full_name, email: editProfile.email })
-      .eq("id", user.id);
+      .eq('id', user.id);
     if (!error) {
       setProfile({ ...profile, ...editProfile });
       setShowAdminModal(false);
-      alert("Profile updated successfully!");
+      alert('Profile updated successfully!');
     } else {
-      alert("Error updating profile: " + error.message);
+      alert('Error updating profile: ' + error.message);
     }
   };
 
   const handleDisableVendor = async () => {
     if (!vendorToDisable) return;
     const { error } = await supabase
-      .from("profiles")
-      .update({ role: "disabled_vendor" })
-      .eq("id", vendorToDisable.id);
+      .from('profiles')
+      .update({ role: 'disabled_vendor' })
+      .eq('id', vendorToDisable.id);
     if (!error) {
       setVendors((prev) => prev.filter((v) => v.id !== vendorToDisable.id));
       setShowDisableVendorModal(false);
       setVendorToDisable(null);
     } else {
-      alert("Error disabling vendor: " + error.message);
+      alert('Error disabling vendor: ' + error.message);
     }
   };
 
   const handleAgentFormChange = (e) => {
     const { name, value, type, checked } = e.target;
-    const processedValue = name === "gov_id" ? value.replace(/[^0-9]/g, "") : value;
-    const maskedBikeRc = name === "bike_rc" ? value.replace(/\d(?=\d{3})/g, "*") : value;
+    const processedValue = name === 'gov_id' ? value.replace(/[^0-9]/g, '') : value;
+    const maskedBikeRc = name === 'bike_rc' ? value.replace(/\d(?=\d{3})/g, '*') : value;
     setAgentForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : (name === "bike_rc" ? maskedBikeRc : processedValue),
+      [name]: type === 'checkbox' ? checked : name === 'bike_rc' ? maskedBikeRc : processedValue,
     }));
   };
 
   const handleAddAgent = async () => {
     const { id, ...newAgent } = agentForm;
-    const { error } = await supabase.from("agents").insert([newAgent]);
+    const { error } = await supabase.from('agents').insert([newAgent]);
     if (!error) {
       setShowAddAgentModal(false);
       setAgentForm({
         id: null,
-        name: "",
-        tracking_id: "",
-        phone: "",
-        address: "",
-        email: "",
-        bike_rc: "",
+        name: '',
+        tracking_id: '',
+        phone: '',
+        address: '',
+        email: '',
+        bike_rc: '',
         gps_installed: false,
-        gov_id: "",
-        license: "",
+        gov_id: '',
+        license: '',
       });
       fetchAgents();
     } else {
-      alert("Error adding agent: " + error.message);
+      alert('Error adding agent: ' + error.message);
     }
   };
 
   const handleEditAgent = (agent) => {
     setAgentForm({
       ...agent,
-      bike_rc: agent.bike_rc.replace(/\d(?=\d{3})/g, "*"),
-      gov_id: agent.gov_id.replace(/[^0-9]/g, ""),
+      bike_rc: agent.bike_rc.replace(/\d(?=\d{3})/g, '*'),
+      gov_id: agent.gov_id.replace(/[^0-9]/g, ''),
     });
     setShowEditAgentModal(true);
   };
 
   const handleUpdateAgent = async () => {
     const { id, ...updateData } = agentForm;
-    const { error } = await supabase.from("agents").update(updateData).eq("id", id);
+    const { error } = await supabase.from('agents').update(updateData).eq('id', id);
     if (!error) {
       setShowEditAgentModal(false);
       setAgentForm({
         id: null,
-        name: "",
-        tracking_id: "",
-        phone: "",
-        address: "",
-        email: "",
-        bike_rc: "",
+        name: '',
+        tracking_id: '',
+        phone: '',
+        address: '',
+        email: '',
+        bike_rc: '',
         gps_installed: false,
-        gov_id: "",
-        license: "",
+        gov_id: '',
+        license: '',
       });
       fetchAgents();
     } else {
-      alert("Error updating agent: " + error.message);
+      alert('Error updating agent: ' + error.message);
     }
   };
 
   const handleDeleteAgent = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this agent?")) return;
-    const { error } = await supabase.from("agents").delete().eq("id", id);
+    if (!window.confirm('Are you sure you want to delete this agent?')) return;
+    const { error } = await supabase.from('agents').delete().eq('id', id);
     if (!error) fetchAgents();
-    else alert("Error deleting agent: " + error.message);
+    else alert('Error deleting agent: ' + error.message);
   };
 
   const handleExportAgents = () => {
@@ -260,29 +274,29 @@ export default function AdminDashboard() {
       address: agent.address,
       email: agent.email,
       bike_rc: agent.bike_rc,
-      gps_installed: agent.gps_installed ? "Yes" : "No",
+      gps_installed: agent.gps_installed ? 'Yes' : 'No',
       gov_id: agent.gov_id,
       license: agent.license,
     }));
 
     const csv = Papa.unparse(exportData);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `agents_export_${new Date().toISOString()}.csv`);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `agents_export_${new Date().toISOString()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    alert("Agents exported successfully!");
+    alert('Agents exported successfully!');
   };
 
   const handleImportAgents = async (e) => {
     const file = e.target.files[0];
     if (!file) {
-      alert("Please select a CSV file to import.");
+      alert('Please select a CSV file to import.');
       return;
     }
 
@@ -293,52 +307,52 @@ export default function AdminDashboard() {
         const parsedAgents = result.data;
 
         const requiredFields = [
-          "name",
-          "tracking_id",
-          "phone",
-          "address",
-          "email",
-          "bike_rc",
-          "gps_installed",
-          "gov_id",
-          "license",
+          'name',
+          'tracking_id',
+          'phone',
+          'address',
+          'email',
+          'bike_rc',
+          'gps_installed',
+          'gov_id',
+          'license',
         ];
 
         const validAgents = parsedAgents
           .map((agent) => ({
-            name: agent.name?.trim() || "",
-            tracking_id: agent.tracking_id?.trim() || "",
-            phone: agent.phone?.trim() || "",
-            address: agent.address?.trim() || "",
-            email: agent.email?.trim() || "",
-            bike_rc: agent.bike_rc?.trim() || "",
-            gps_installed: agent.gps_installed?.toLowerCase() === "yes" || agent.gps_installed === true,
-            gov_id: agent.gov_id?.trim() || "",
-            license: agent.license?.trim() || "",
+            name: agent.name?.trim() || '',
+            tracking_id: agent.tracking_id?.trim() || '',
+            phone: agent.phone?.trim() || '',
+            address: agent.address?.trim() || '',
+            email: agent.email?.trim() || '',
+            bike_rc: agent.bike_rc?.trim() || '',
+            gps_installed: agent.gps_installed?.toLowerCase() === 'yes' || agent.gps_installed === true,
+            gov_id: agent.gov_id?.trim() || '',
+            license: agent.license?.trim() || '',
           }))
           .filter((agent) =>
-            requiredFields.every((field) => agent[field] !== "" && agent[field] !== undefined)
+            requiredFields.every((field) => agent[field] !== '' && agent[field] !== undefined)
           );
 
         if (validAgents.length === 0) {
-          alert("No valid agents found in the CSV file.");
+          alert('No valid agents found in the CSV file.');
           return;
         }
 
         try {
-          const { error } = await supabase.from("agents").insert(validAgents);
+          const { error } = await supabase.from('agents').insert(validAgents);
           if (error) {
-            alert("Error importing agents: " + error.message);
+            alert('Error importing agents: ' + error.message);
           } else {
             alert(`Successfully imported ${validAgents.length} agents!`);
             fetchAgents();
           }
         } catch (e) {
-          alert("Network or server error: " + e.message);
+          alert('Network or server error: ' + e.message);
         }
       },
       error: (error) => {
-        alert("Error parsing CSV file: " + error.message);
+        alert('Error parsing CSV file: ' + error.message);
       },
     });
   };
@@ -366,7 +380,7 @@ export default function AdminDashboard() {
   const currentAgents = agents
     .filter((a) =>
       Object.values(a)
-        .join(" ")
+        .join(' ')
         .toLowerCase()
         .includes(searchAgent.toLowerCase())
     )
@@ -410,7 +424,7 @@ export default function AdminDashboard() {
                 setShowPasswordModal(false);
                 if (pendingVendorRedirect) {
                   setPendingVendorRedirect(false);
-                  router.push("/admin/dashboard"); // or wherever you want to redirect
+                  router.push('/admin/dashboard');
                 }
               }}
             >
@@ -501,7 +515,7 @@ export default function AdminDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-2xl md:max-w-2xl lg:max-w-3xl h-[80vh] flex flex-col justify-center overflow-y-auto transition-all duration-300">
             <h2 className="text-2xl font-bold mb-6 text-gray-800 text-center">Add Delivery Agent</h2>
-            <form className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 overflow-y-auto px-2" onSubmit={e => { e.preventDefault(); handleAddAgent(); }}>
+            <form className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 overflow-y-auto px-2" onSubmit={(e) => { e.preventDefault(); handleAddAgent(); }}>
               <div>
                 <label className="block text-gray-700 font-semibold mb-1">Name</label>
                 <input type="text" name="name" value={agentForm.name} onChange={handleAgentFormChange} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600" />
@@ -690,7 +704,7 @@ export default function AdminDashboard() {
               <input
                 type="text"
                 value={editVendorForm.full_name}
-                onChange={e => setEditVendorForm(f => ({ ...f, full_name: e.target.value }))}
+                onChange={(e) => setEditVendorForm((f) => ({ ...f, full_name: e.target.value }))}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
@@ -699,7 +713,7 @@ export default function AdminDashboard() {
               <input
                 type="email"
                 value={editVendorForm.email}
-                onChange={e => setEditVendorForm(f => ({ ...f, email: e.target.value }))}
+                onChange={(e) => setEditVendorForm((f) => ({ ...f, email: e.target.value }))}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
@@ -713,7 +727,6 @@ export default function AdminDashboard() {
               <button
                 className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded shadow"
                 onClick={async () => {
-                  // Update vendor info
                   const { error } = await supabase
                     .from('profiles')
                     .update({ full_name: editVendorForm.full_name, email: editVendorForm.email })
@@ -724,7 +737,6 @@ export default function AdminDashboard() {
                   }
                   setShowEditVendorModal(false);
                   alert('Vendor updated successfully!');
-                  // Refresh vendor list
                   supabase
                     .from('profiles')
                     .select('id, full_name, email, role')
@@ -738,7 +750,6 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
-      {/* Responsive header */}
       <header className="w-full flex flex-col sm:flex-row items-center justify-between px-4 sm:px-10 py-4 bg-white border-b shadow-sm gap-4 sm:gap-0">
         <div className="flex items-center gap-2">
           <Image src="/logo.svg" alt="Logo" width={90} height={40} />
@@ -756,13 +767,13 @@ export default function AdminDashboard() {
                 />
               </svg>
             </div>
-            <div className="text-gray-800 font-semibold truncate max-w-[120px]">{profile?.full_name || "Admin"}</div>
+            <div className="text-gray-800 font-semibold truncate max-w-[120px]">{profile?.full_name || 'Admin'}</div>
           </button>
           <button
             className="bg-lime-400 hover:bg-lime-500 text-gray-900 font-bold px-5 py-2 rounded-lg shadow transition w-full sm:w-auto"
             onClick={async () => {
               await supabase.auth.signOut();
-              router.push("/admin");
+              router.push('/admin');
             }}
           >
             Sign Out
@@ -780,8 +791,7 @@ export default function AdminDashboard() {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 sm:mb-8">
             {TABS.find((t) => t.key === activeTab)?.label}
           </h1>
-          {/* Responsive table wrapper for orders, vendors, agents */}
-          {activeTab === "orders" && (
+          {activeTab === 'orders' && (
             <div className="bg-white rounded-xl shadow p-2 sm:p-8 overflow-x-auto">
               <h2 className="text-lg sm:text-xl font-bold mb-4">Orders</h2>
               {ordersLoading ? (
@@ -809,40 +819,45 @@ export default function AdminDashboard() {
                             <td className="px-2 sm:px-4 py-2 flex items-center gap-2 sm:gap-3">
                               {order.products?.image ? (
                                 <Image
-                                  src={order.products.image}
+                                  src={normalizeImagePath(order.products.image)}
                                   alt={order.products.name || 'Product'}
                                   width={32}
                                   height={32}
                                   className="rounded object-cover border w-8 h-8 sm:w-10 sm:h-10"
+                                  unoptimized
                                 />
                               ) : (
                                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded bg-gray-200 flex items-center justify-center text-gray-400">🛒</div>
                               )}
-                              <span className="font-semibold text-gray-900 truncate max-w-[80px] sm:max-w-[160px]">{order.products?.name || "N/A"}</span>
+                              <span className="font-semibold text-gray-900 truncate max-w-[80px] sm:max-w-[160px]">{order.products?.name || 'N/A'}</span>
                             </td>
-                            <td className="px-2 sm:px-4 py-2 truncate max-w-[80px] sm:max-w-[160px]">{order.products?.supermarket?.name || "N/A"}</td>
+                            <td className="px-2 sm:px-4 py-2 truncate max-w-[80px] sm:max-w-[160px]">{order.products?.supermarket?.name || 'N/A'}</td>
                             <td className="px-2 sm:px-4 py-2">{order.quantity}</td>
                             <td className="px-2 sm:px-4 py-2">{order.total_amount}</td>
                             <td className="px-2 sm:px-4 py-2">
-                              <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
-                                order.status === 'completed'
-                                  ? 'bg-green-100 text-green-600'
-                                  : order.status === 'pending'
-                                  ? 'bg-yellow-100 text-yellow-600'
-                                  : 'bg-red-100 text-red-600'
-                              }`}>
+                              <span
+                                className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
+                                  order.status === 'completed'
+                                    ? 'bg-green-100 text-green-600'
+                                    : order.status === 'pending'
+                                    ? 'bg-yellow-100 text-yellow-600'
+                                    : 'bg-red-100 text-red-600'
+                                }`}
+                              >
                                 {order.status}
                               </span>
                             </td>
                             <td className="px-2 sm:px-4 py-2 whitespace-nowrap">{new Date(order.created_at).toLocaleString()}</td>
                             <td className="px-2 sm:px-4 py-2">
-                              <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
-                                order.vendor_decision === 'accepted'
-                                  ? 'bg-green-100 text-green-600'
-                                  : order.vendor_decision === 'rejected'
-                                  ? 'bg-red-100 text-red-600'
-                                  : 'bg-yellow-100 text-yellow-600'
-                              }`}>
+                              <span
+                                className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
+                                  order.vendor_decision === 'accepted'
+                                    ? 'bg-green-100 text-green-600'
+                                    : order.vendor_decision === 'rejected'
+                                    ? 'bg-red-100 text-red-600'
+                                    : 'bg-yellow-100 text-yellow-600'
+                                }`}
+                              >
                                 {order.vendor_decision?.charAt(0).toUpperCase() + order.vendor_decision?.slice(1) || 'Pending'}
                               </span>
                             </td>
@@ -874,18 +889,18 @@ export default function AdminDashboard() {
               )}
             </div>
           )}
-          {activeTab === "invoices" && (
+          {activeTab === 'invoices' && (
             <div className="bg-white rounded-xl shadow p-8 text-center text-gray-500 text-lg">
               We do not have invoices yet.
             </div>
           )}
-          {activeTab === "vendors" && (
+          {activeTab === 'vendors' && (
             <div className="bg-white rounded-xl shadow p-6">
               <div className="flex justify-between items-center mb-6">
                 <span className="text-xl font-bold text-gray-800">Vendors</span>
                 <button
                   className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded shadow transition"
-                  onClick={() => router.push("/admin/add-vendor")}
+                  onClick={() => router.push('/admin/add-vendor')}
                 >
                   + Add Vendor
                 </button>
@@ -922,7 +937,7 @@ export default function AdminDashboard() {
                       <tr key={vendor.id} className="hover:bg-blue-50">
                         <td className="px-4 py-2">
                           <div className="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-bold">
-                            {vendor.full_name ? vendor.full_name[0] : "V"}
+                            {vendor.full_name ? vendor.full_name[0] : 'V'}
                           </div>
                         </td>
                         <td className="px-4 py-2 font-semibold text-gray-800">
@@ -962,7 +977,7 @@ export default function AdminDashboard() {
               </table>
             </div>
           )}
-          {activeTab === "agents" && (
+          {activeTab === 'agents' && (
             <div className="bg-white rounded-xl shadow p-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2">
                 <div className="flex gap-2">
@@ -1015,7 +1030,7 @@ export default function AdminDashboard() {
                         <td className="px-4 py-2">{agent.phone}</td>
                         <td className="px-4 py-2">{agent.address}</td>
                         <td className="px-4 py-2">{agent.email}</td>
-                        <td className="px-4 py-2">{agent.bike_rc.replace(/\d(?=\d{3})/g, "*") || "123*****678"}</td>
+                        <td className="px-4 py-2">{agent.bike_rc.replace(/\d(?=\d{3})/g, '*') || '123*****678'}</td>
                         <td className="px-4 py-2">
                           {agent.gps_installed ? (
                             <span className="text-green-700 bg-green-100 px-2 py-1 rounded text-xs">
@@ -1081,67 +1096,75 @@ export default function AdminDashboard() {
               </div>
             </div>
           )}
-          {activeTab === "assignOrder" && (
+          {activeTab === 'assignOrder' && (
             <div className="bg-white rounded-xl shadow p-6 mt-6">
               <h2 className="text-xl font-bold mb-4">Assign Order</h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead>
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Product</th>
+                      <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Product Image</th>
                       <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Product</th>
                       <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Supermarket</th>
                       <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Assign Agent</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-100">
-                    {filteredOrders.filter(o => o.vendor_decision === 'accepted' && !o.agent_id).length === 0 ? (
+                    {filteredOrders.filter((o) => o.vendor_decision === 'accepted' && !o.agent_id).length === 0 ? (
                       <tr>
                         <td colSpan={4} className="text-center text-gray-400 py-8">No accepted orders to assign.</td>
                       </tr>
                     ) : (
-                      filteredOrders.filter(o => o.vendor_decision === 'accepted' && !o.agent_id).map(order => (
-                        <tr key={order.id}>
-                          <td className="px-4 py-2">
-                            {order.products?.image ? (
-                              <Image
-                                src={order.products.image}
-                                alt={order.products.name || 'Product'}
-                                width={40}
-                                height={40}
-                                className="rounded object-cover border"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center text-gray-400">🛒</div>
-                            )}
-                          </td>
-                          <td className="px-4 py-2">{order.products?.name || 'N/A'}</td>
-                          <td className="px-4 py-2">{order.products?.supermarket?.name || 'N/A'}</td>
-                          <td className="px-4 py-2">
-                            <select
-                              className="border px-2 py-1 rounded"
-                              defaultValue=""
-                              onChange={async (e) => {
-                                const agentId = e.target.value;
-                                if (!agentId) return;
-                                const { error } = await supabase
-                                  .from('orders')
-                                  .update({ agent_id: agentId })
-                                  .eq('id', order.id);
-                                if (!error) {
-                                  // Update UI
-                                  setOrders(prev => prev.map(o => o.id === order.id ? { ...o, agent_id: agentId } : o));
-                                }
-                              }}
-                            >
-                              <option value="" disabled>Select agent</option>
-                              {agents.map(agent => (
-                                <option key={agent.id} value={agent.id}>{agent.name} ({agent.email})</option>
-                              ))}
-                            </select>
-                          </td>
-                        </tr>
-                      ))
+                      filteredOrders
+                        .filter((o) => o.vendor_decision === 'accepted' && !o.agent_id)
+                        .map((order) => (
+                          <tr key={order.id}>
+                            <td className="px-4 py-2">
+                              {order.products?.image ? (
+                                <Image
+                                  src={normalizeImagePath(order.products.image)}
+                                  alt={order.products.name || 'Product'}
+                                  width={40}
+                                  height={40}
+                                  className="rounded object-cover border"
+                                  unoptimized
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center text-gray-400">🛒</div>
+                              )}
+                            </td>
+                            <td className="px-4 py-2">{order.products?.name || 'N/A'}</td>
+                            <td className="px-4 py-2">{order.products?.supermarket?.name || 'N/A'}</td>
+                            <td className="px-4 py-2">
+                              <select
+                                className="border px-2 py-1 rounded"
+                                defaultValue=""
+                                onChange={async (e) => {
+                                  const agentId = e.target.value;
+                                  if (!agentId) return;
+                                  const { error } = await supabase
+                                    .from('orders')
+                                    .update({ agent_id: agentId })
+                                    .eq('id', order.id);
+                                  if (!error) {
+                                    setOrders((prev) =>
+                                      prev.map((o) => (o.id === order.id ? { ...o, agent_id: agentId } : o))
+                                    );
+                                  }
+                                }}
+                              >
+                                <option value="" disabled>
+                                  Select agent
+                                </option>
+                                {agents.map((agent) => (
+                                  <option key={agent.id} value={agent.id}>
+                                    {agent.name} ({agent.email})
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        ))
                     )}
                   </tbody>
                 </table>

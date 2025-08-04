@@ -5,7 +5,8 @@ import Image from 'next/image';
 // Normalize the image path to ensure the image URL is correct
 const normalizeImagePath = (path) => {
   if (!path) return '/placeholder-product.jpg';
-  return path.replace(/^(\.\.\/)+assets\//, '/');
+  const imagePath = Array.isArray(path) ? (path[0] || '/placeholder-product.jpg') : path;
+  return imagePath.replace(/^(\.\.\/)+assets\//, '/');
 };
 
 const supabase = createClient(

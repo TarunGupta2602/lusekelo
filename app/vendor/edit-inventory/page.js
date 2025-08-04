@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { FaRegEdit, FaRegTrashAlt } from "react-icons/fa"; // Add this at the top with your imports
-import Papa from "papaparse";
+import { FaRegEdit, FaRegTrashAlt } from 'react-icons/fa';
 
 export default function EditInventoryPage() {
   const router = useRouter();
@@ -17,21 +16,21 @@ export default function EditInventoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState('desc');
-  const [editId, setEditId] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', price: '', quantity: '' });
-  const [editImageFile, setEditImageFile] = useState(null);
-  const [editImagePreview, setEditImagePreview] = useState(null);
-  const productsPerPage = 10;
   const [sortField, setSortField] = useState('date_added');
+  const [editId, setEditId] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', price: '', quantity: '', image: [] });
+  const [editImageFiles, setEditImageFiles] = useState([]);
+  const [editImagePreviews, setEditImagePreviews] = useState([]);
+  const productsPerPage = 10;
 
-  // Normalize image path if you use images
+  // Normalize image path
   const normalizeImagePath = (path) => {
+    if (Array.isArray(path)) {
+      return path.length > 0 ? normalizeImagePath(path[0]) : null;
+    }
     if (!path || typeof path !== 'string' || path.trim() === '') return null;
-    // If already an absolute URL
     if (/^https?:\/\//.test(path)) return path;
-    // If starts with /, return as is
     if (path.startsWith('/')) return path;
-    // Remove leading ../assets/ or similar, ensure leading slash
     return '/' + path.replace(/^([.]{2}\/+)*(assets\/)?/, '');
   };
 
@@ -42,7 +41,7 @@ export default function EditInventoryPage() {
         setLoading(true);
         setError('');
 
-        // 1. Get current user
+        // Get current user
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
           setError('User not found. Please log in again.');
@@ -50,7 +49,7 @@ export default function EditInventoryPage() {
           return;
         }
 
-        // 2. Get supermarket for this vendor
+        // Get supermarket for this vendor
         const { data: stores, error: storeError } = await supabase
           .from('supermarkets')
           .select('id, vendor_id, created_at, location, price')
@@ -67,13 +66,13 @@ export default function EditInventoryPage() {
           setLoading(false);
           return;
         }
-        const supermarket_Id = stores[0].id;
+        const supermarketId = stores[0].id;
 
-        // 3. Fetch products for this supermarket only
+        // Fetch products for this supermarket
         const { data: productsData, error: productsError } = await supabase
           .from('products')
           .select('id, name, price, image, quantity, date_added, supermarket_id')
-          .eq('supermarket_id', supermarket_Id)
+          .eq('supermarket_id', supermarketId)
           .order(sortField, { ascending: sortOrder === 'asc' });
 
         if (productsError) {
@@ -90,10 +89,10 @@ export default function EditInventoryPage() {
           return;
         }
 
-        // Normalize image paths
+        // Normalize products to ensure image is an array
         const normalizedProducts = productsData.map((product) => ({
           ...product,
-          image: normalizeImagePath(product.image),
+          image: Array.isArray(product.image) ? product.image : [product.image || ''],
         }));
 
         setProducts(normalizedProducts);
@@ -134,7 +133,7 @@ export default function EditInventoryPage() {
     });
 
     setFilteredProducts(filtered);
-    setCurrentPage(1); // Reset to first page on search or filter change
+    setCurrentPage(1);
   }, [searchQuery, filter, products]);
 
   // Pagination logic
@@ -158,79 +157,107 @@ export default function EditInventoryPage() {
       name: product.name,
       price: product.price,
       quantity: product.quantity,
+      image: product.image || [],
     });
-    setEditImageFile(null);
-    setEditImagePreview(product.image || null); // Show current image as preview
+    setEditImageFiles([]);
+    setEditImagePreviews(product.image || []);
   };
 
   // Cancel edit
   const handleCancelEdit = () => {
     setEditId(null);
-    setEditForm({ name: '', price: '', quantity: '' });
-    setEditImageFile(null);
-    setEditImagePreview(null);
+    setEditForm({ name: '', price: '', quantity: '', image: [] });
+    setEditImageFiles([]);
+    setEditImagePreviews([]);
   };
 
   // Upload image to Supabase Storage
   const uploadImage = async (file) => {
-    const ext = file.name.split('.').pop().toLowerCase();
-    const fileName = `${Date.now()}.${ext}`;
-    const filePath = `public/${fileName}`;
+    const filePath = `public/${Date.now()}_${file.name}`;
     const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file);
-    if (uploadError) throw uploadError;
-    const { data: urlData } = supabase.storage.from('images').getPublicUrl(filePath);
-    return urlData.publicUrl;
+    if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`);
+    const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(filePath);
+    return publicUrl;
   };
 
   // Handle image file change
   const handleEditImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setEditImageFile(file);
-      setEditImagePreview(URL.createObjectURL(file));
+    const files = Array.from(e.target.files);
+    if (editImagePreviews.length + files.length > 3) {
+      setError('Maximum 3 images allowed.');
+      return;
     }
+    const newPreviews = files.map(file => URL.createObjectURL(file));
+    setEditImageFiles(prev => [...prev, ...files]);
+    setEditImagePreviews(prev => [...prev, ...newPreviews]);
+    setError('');
+  };
+
+  // Remove image
+  const handleRemoveImage = async (index) => {
+    const imageUrl = editImagePreviews[index];
+    if (!imageUrl.startsWith('blob:')) {
+      const filePath = imageUrl.split('/').slice(-2).join('/');
+      await supabase.storage.from('images').remove([filePath]);
+    }
+    setEditImagePreviews(prev => prev.filter((_, i) => i !== index));
+    setEditImageFiles(prev => prev.filter((_, i) => i !== index));
+    setEditForm(prev => ({
+      ...prev,
+      image: prev.image.filter((_, i) => i !== index),
+    }));
   };
 
   // Save edit (with image upload if needed)
   const handleSaveEdit = async (id) => {
-    const { name, price, quantity } = editForm;
-    let imageUrl = null;
+    const { name, price, quantity, image } = editForm;
     try {
-      if (editImageFile) {
-        imageUrl = await uploadImage(editImageFile);
+      const imageUrls = [...image];
+      for (const file of editImageFiles) {
+        const url = await uploadImage(file);
+        imageUrls.push(url);
       }
-      const updateData = { name, price, quantity };
-      if (imageUrl) updateData.image = imageUrl;
+      const updateData = {
+        name,
+        price: parseFloat(price),
+        quantity: parseInt(quantity),
+        image: imageUrls.filter(Boolean),
+      };
       const { error } = await supabase.from('products').update(updateData).eq('id', id);
       if (error) {
-        alert('Failed to update product: ' + error.message);
+        setError('Failed to update product: ' + error.message);
         return;
       }
       setProducts((prev) =>
         prev.map((p) =>
-          p.id === id ? { ...p, name, price, quantity, image: imageUrl || p.image } : p
+          p.id === id ? { ...p, name, price: parseFloat(price), quantity: parseInt(quantity), image: imageUrls } : p
+        )
+      );
+      setFilteredProducts((prev) =>
+        prev.map((p) =>
+          p.id === id ? { ...p, name, price: parseFloat(price), quantity: parseInt(quantity), image: imageUrls } : p
         )
       );
       setEditId(null);
-      setEditForm({ name: '', price: '', quantity: '' });
-      setEditImageFile(null);
-      setEditImagePreview(null);
+      setEditForm({ name: '', price: '', quantity: '', image: [] });
+      setEditImageFiles([]);
+      setEditImagePreviews([]);
+      setError('');
     } catch (err) {
-      alert('Failed to upload image: ' + err.message);
+      setError('Failed to update product: ' + err.message);
     }
   };
 
   // Delete handler
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
-      // Delete from DB
       const { error } = await supabase.from('products').delete().eq('id', id);
       if (error) {
-        alert('Failed to delete product: ' + error.message);
+        setError('Failed to delete product: ' + error.message);
         return;
       }
-      // Remove from UI
       setProducts((prev) => prev.filter((p) => p.id !== id));
+      setFilteredProducts((prev) => prev.filter((p) => p.id !== id));
     }
   };
 
@@ -239,51 +266,6 @@ export default function EditInventoryPage() {
     if (quantity === 0) return { text: 'Out of Stock', color: 'bg-red-100 text-red-600' };
     if (quantity <= 5) return { text: 'Low Stock', color: 'bg-yellow-100 text-yellow-600' };
     return { text: 'In Stock', color: 'bg-green-100 text-green-600' };
-  };
-
-  // Add state for image file and preview
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
-
-  // Handle image file change
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
-    }
-  };
-
-  // Save new product
-  const handleSaveNewProduct = async () => {
-    const { name, price, quantity } = editForm;
-    try {
-      let imageUrl = null;
-      if (imageFile) {
-        imageUrl = await uploadImage(imageFile);
-      }
-      const { error } = await supabase
-        .from('products')
-        .insert([{ name, price, quantity, image: imageUrl }]);
-      if (error) {
-        alert('Failed to add product: ' + error.message);
-        return;
-      }
-      // Refresh product list
-      const { data: productsData, error: productsError } = await supabase
-        .from('products')
-        .select('id, name, price, image, quantity, date_added, supermarket_id')
-        .eq('supermarket_id', supermarket_Id)
-        .order('date_added', { ascending: sortOrder === 'asc' });
-      if (productsError) throw productsError;
-      setProducts(productsData);
-      setFilteredProducts(productsData);
-      setEditForm({ name: '', price: '', quantity: '' });
-      setImageFile(null);
-      setImagePreview(null);
-    } catch (err) {
-      setError('Error: ' + err.message);
-    }
   };
 
   return (
@@ -313,7 +295,7 @@ export default function EditInventoryPage() {
             <label className="font-semibold text-gray-700">Sort By:</label>
             <select
               value={sortField}
-              onChange={e => setSortField(e.target.value)}
+              onChange={(e) => setSortField(e.target.value)}
               className="border rounded px-2 py-1 bg-gray-50"
             >
               <option value="id">Product ID</option>
@@ -338,7 +320,7 @@ export default function EditInventoryPage() {
             <table className="min-w-full text-left text-sm">
               <thead>
                 <tr className="border-b-2 border-blue-300 bg-blue-50">
-                  <th className="p-4 font-bold border-r border-blue-200">Product Image</th>
+                  <th className="p-4 font-bold border-r border-blue-200">Images</th>
                   <th className="p-4 font-bold border-r border-blue-200">Product Name</th>
                   <th className="p-4 font-bold border-r border-blue-200">Date Added</th>
                   <th className="p-4 font-bold border-r border-blue-200">Amount</th>
@@ -354,34 +336,50 @@ export default function EditInventoryPage() {
                       <td className="p-3 border-r border-blue-100 text-center">
                         {isEditing ? (
                           <div className="flex flex-col items-center gap-2">
-                            {editImagePreview ? (
+                            <div className="flex flex-wrap gap-2 justify-center">
+                              {editImagePreviews.map((preview, index) => (
+                                <div key={index} className="relative">
+                                  <Image
+                                    src={preview.startsWith('blob:') ? preview : normalizeImagePath(preview) || '/file.svg'}
+                                    alt={`Image ${index + 1}`}
+                                    width={40}
+                                    height={40}
+                                    className="rounded object-cover"
+                                    unoptimized
+                                  />
+                                  <button
+                                    onClick={() => handleRemoveImage(index)}
+                                    className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 text-xs"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            {editImagePreviews.length < 3 && (
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleEditImageChange}
+                                className="text-xs"
+                              />
+                            )}
+                          </div>
+                        ) : product.image && product.image.length > 0 ? (
+                          <div className="flex flex-wrap gap-2 justify-center">
+                            {product.image.map((img, index) => (
                               <Image
-                                src={normalizeImagePath(editImagePreview) || '/file.svg'}
-                                alt={editForm.name}
+                                key={index}
+                                src={normalizeImagePath(img) || '/file.svg'}
+                                alt={`${product.name} image ${index + 1}`}
                                 width={40}
                                 height={40}
                                 className="rounded object-cover"
+                                unoptimized
                               />
-                            ) : (
-                              <div className="w-10 h-10 bg-gray-200 flex items-center justify-center rounded text-gray-400">
-                                <span className="text-xs">No Image</span>
-                              </div>
-                            )}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleEditImageChange}
-                              className="text-xs"
-                            />
+                            ))}
                           </div>
-                        ) : product.image && normalizeImagePath(product.image) ? (
-                          <Image
-                            src={normalizeImagePath(product.image)}
-                            alt={product.name}
-                            width={40}
-                            height={40}
-                            className="rounded object-cover mx-auto"
-                          />
                         ) : (
                           <div className="w-10 h-10 bg-gray-200 flex items-center justify-center rounded text-gray-400 mx-auto">
                             <span className="text-xs">No Image</span>
@@ -401,7 +399,7 @@ export default function EditInventoryPage() {
                         )}
                       </td>
                       <td className="p-3 border-r border-blue-100 text-gray-600">
-                        {product.date_added}
+                        {new Date(product.date_added).toLocaleDateString()}
                       </td>
                       <td className="p-3 border-r border-blue-100">
                         {isEditing ? (
@@ -424,7 +422,9 @@ export default function EditInventoryPage() {
                             className="border px-2 py-1 rounded w-full"
                           />
                         ) : (
-                          product.quantity
+                          <span className={getStockStatus(product.quantity).color}>
+                            {getStockStatus(product.quantity).text} ({product.quantity})
+                          </span>
                         )}
                       </td>
                       <td className="p-3 flex gap-2 justify-center">

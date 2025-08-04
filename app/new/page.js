@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image' // Add this import
+import Image from 'next/image'
 import { createClient } from '@supabase/supabase-js';
 import CustomAuthModal from '../../components/CustomAuthModal';
 
@@ -50,9 +50,10 @@ export default function NewPage() {
 
   // Normalize image paths
   const normalizeImagePath = (path) => {
-    if (!path) return ''
-    return path.replace(/^(\.\.\/)+assets\//, '/')
-  }
+    if (!path) return '/default-image.jpg';
+    const imagePath = Array.isArray(path) ? (path[0] || '/default-image.jpg') : path;
+    return imagePath.replace(/^(\.\.\/)+assets\//, '/');
+  };
 
   // Fetch categories with optimized loading
   useEffect(() => {
@@ -84,7 +85,7 @@ export default function NewPage() {
       }
     }
     fetchCategories()
-  }, []) // Removed defaultCategoryNames from dependency array
+  }, [])
 
   // Fetch products with optimized loading
   useEffect(() => {
@@ -106,6 +107,7 @@ export default function NewPage() {
     }
     fetchProducts()
   }, [])
+
   // Fetch user for cart key
   useEffect(() => {
     const fetchUser = async () => {
@@ -127,6 +129,7 @@ export default function NewPage() {
       });
     };
   }, [scrollTimeouts]);
+
   // Toggle section expansion with auto-hide functionality
   const toggleSection = (categoryId) => {
     setExpandedSections(prev => ({
@@ -405,7 +408,9 @@ export default function NewPage() {
         setCartMessage("Product added to cart!");
     }
     setTimeout(() => setCartMessage(""), 2000);
-  };  // Enhanced Category Card with title and desc on left, image on right
+  };
+
+  // Enhanced Category Card with title and desc on left, image on right
   const CategoryCard = ({ childCategory }) => (
     <Link
       key={childCategory.id}
@@ -467,7 +472,7 @@ export default function NewPage() {
       return () => {
         window.removeEventListener('cartUpdated', updateQuantityDisplay);
       };
-    }, [product.id]); // removed 'user'
+    }, [product.id]);
 
     const handleIncrement = (e) => {
       e.preventDefault();
@@ -536,7 +541,6 @@ export default function NewPage() {
                   }`}
                   onClick={handleIncrement}
                   title="Add to cart"
-                  // Ensure button is not focusable when hidden for accessibility
                   tabIndex={quantityInCart === 0 ? 0 : -1}
                 >
                   <svg 
@@ -561,23 +565,22 @@ export default function NewPage() {
                   className={`absolute inset-0 flex items-center justify-around rounded-lg transition-all duration-300 ease-in-out ${
                     quantityInCart > 0 ? 'opacity-100 transform scale-100 pointer-events-auto' : 'opacity-0 transform scale-90 pointer-events-none'
                   }`}
-                  // Prevent tabbing to hidden controls
                   aria-hidden={quantityInCart === 0}
                 >
                   <button 
                     onClick={handleDecrement}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-8 sm:w-9 h-full flex items-center justify-center transition-colors" // Responsive width
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-8 sm:w-9 h-full flex items-center justify-center transition-colors"
                     title="Decrease quantity"
                     tabIndex={quantityInCart > 0 ? 0 : -1}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                   </button>
-                  <span className="text-sm sm:text-base font-medium text-gray-800 w-7 sm:w-8 h-full flex items-center justify-center select-none"> {/* Responsive width and text size */}
+                  <span className="text-sm sm:text-base font-medium text-gray-800 w-7 sm:w-8 h-full flex items-center justify-center select-none">
                     {quantityInCart}
                   </span>
                   <button 
                     onClick={handleIncrement}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-8 sm:w-9 h-full flex items-center justify-center transition-colors" // Responsive width
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-8 sm:w-9 h-full flex items-center justify-center transition-colors"
                     title="Increase quantity"
                     tabIndex={quantityInCart > 0 ? 0 : -1}
                   >
@@ -593,7 +596,7 @@ export default function NewPage() {
   };
 
   return (
-    <div className="ml-5 mr-5 ">
+    <div className="ml-5 mr-5">
       <style dangerouslySetInnerHTML={{ __html: style }} />
       
       {/* Categories Section */}
@@ -621,8 +624,6 @@ export default function NewPage() {
                         className="category-expanded"
                         onScroll={(e) => {
                           handleScrollStart(parentCategory.id);
-                          
-                          // Clear timeout and set new one on scroll end
                           clearTimeout(e.target.scrollTimeout);
                           e.target.scrollTimeout = setTimeout(() => {
                             handleScrollEnd(parentCategory.id);
@@ -777,7 +778,6 @@ export default function NewPage() {
         <section className="mb-12">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800">Electronics Essentials</h2>
-           
           </div>
           <div className="relative">
             {productsLoading ? (
@@ -803,7 +803,6 @@ export default function NewPage() {
                 </div>
               </div>
             )}
-     
           </div>
         </section>
 
@@ -811,7 +810,6 @@ export default function NewPage() {
         <section>
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800">Breakfast Essentials</h2>
-            
           </div>
           <div className="relative">
             {productsLoading ? (
@@ -837,7 +835,6 @@ export default function NewPage() {
                 </div>
               </div>
             )}
-
           </div>
         </section>
       </div>

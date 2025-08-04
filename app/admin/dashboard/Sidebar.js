@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { FaSearch, FaClipboardList, FaChevronDown, FaUserFriends, FaBars, FaTimes } from "react-icons/fa";
 
 export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSearchOrders }) {
@@ -19,17 +19,17 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
     setDragging(true);
   };
 
-  const handleMouseMove = (e) => {
+  const handleMouseMove = useCallback((e) => {
     if (!dragging) return;
     let newWidth = e.clientX - document.body.getBoundingClientRect().left;
     if (newWidth < 180) newWidth = 180;
     if (newWidth > 400) newWidth = 400;
     setSidebarWidth(newWidth);
-  };
+  }, [dragging]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setDragging(false);
-  };
+  }, []);
 
   React.useEffect(() => {
     if (dragging) {
@@ -43,7 +43,7 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [dragging]);
+  }, [dragging, handleMouseMove, handleMouseUp]);
 
   // Hamburger for mobile
   React.useEffect(() => {
@@ -198,4 +198,4 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
       <div className={`${mobileOpen ? "block" : "hidden"} md:block`}>{sidebarContent}</div>
     </>
   );
-} 
+}

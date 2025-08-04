@@ -1,535 +1,552 @@
-'use client';
+   "use client";
+import React, { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
-import Image from 'next/image';
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
-export default function CreateStore() {
+// Function to generate a unique SKU
+const generateSKU = (name, categoryId) => {
+  const timestamp = Date.now().toString().slice(-6);
+  const namePart = (name || "PROD").slice(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const categoryPart = categoryId.toString().padStart(3, '0');
+  return `SKU-${namePart}-${categoryPart}-${timestamp}`;
+};
+
+const ProductForm = () => {
   const router = useRouter();
-  const [form, setForm] = useState({
-    name: '',
-    address: '',
-    price: '',
-    location: '',
+  const [formData, setFormData] = useState({
+    name: "",
+    price: "",
+    description: "",
+    quantity: "",
+    categoryid: "",
+    sku: "",
   });
-  const [mainImage, setMainImage] = useState(null);
-  const [galleryImages, setGalleryImages] = useState([]);
+  const [imageFile, setImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [mainImagePreview, setMainImagePreview] = useState(null);
-  const [galleryImagePreviews, setGalleryImagePreviews] = useState([]);
+  const [message, setMessage] = useState(null);
+  const [supermarket_Id, setSupermarket_Id] = useState(null);
+  const [variations, setVariations] = useState([]); // [{ size: '', color: '', price: '', stock: '' }]
+  
+  // Categories state
+  const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("");
 
+  // Main categories mapping
+  const mainCategories = [
+    { id: 100, name: "Food & Drinks" },
+    { id: 200, name: "Beauty & Personal Care" },
+    { id: 300, name: "Household Essentials" },
+    { id: 400, name: "Gym & Fitness" },
+    { id: 500, name: "Clothing" },
+    { id: 600, name: "Furniture" },
+    { id: 700, name: "Electronics" },
+    { id: 800, name: "Books & Media" }
+  ];
+
+  // Fetch the current user's supermarket id
   useEffect(() => {
-    const checkStore = async () => {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        setError('You must be logged in to create a store.');
-        console.error('Auth error:', userError?.message);
-        return;
-      }
-      console.log('Authenticated user:', user.id);
-      const { data: stores, error: storeError } = await supabase
-        .from('supermarkets')
-        .select('id')
-        .eq('vendor_id', user.id)
-        .limit(1);
-      if (storeError) {
-        setError('Error checking existing stores: ' + storeError.message);
-        console.error('Store check error:', storeError.message);
-        return;
-      }
-      if (stores && stores.length > 0) {
-        router.push('/vendor/dashboard');
+    const fetchSupermarket = async () => {
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError || !user) {
+          setMessage({
+            type: "error",
+            text: "User not found. Please log in again.",
+          });
+          return;
+        }
+        const { data: stores, error: storeError } = await supabase
+          .from("supermarkets")
+          .select("id")
+          .eq("vendor_id", user.id)
+          .limit(1);
+        if (storeError || !stores || stores.length === 0) {
+          setMessage({ type: "error", text: "No store found for this vendor." });
+          return;
+        }
+        setSupermarket_Id(stores[0].id);
+      } catch (err) {
+        setMessage({ type: "error", text: "Error fetching supermarket data." });
       }
     };
-    checkStore();
+    fetchSupermarket();
+  }, []);
 
-    // Cleanup image previews to prevent memory leaks
-    return () => {
-      if (mainImagePreview) URL.revokeObjectURL(mainImagePreview);
-      galleryImagePreviews.forEach(preview => URL.revokeObjectURL(preview));
+  // Fetch categories and subcategories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('*')
+          .order('id');
+
+        if (error) {
+          console.error('Error fetching categories:', error);
+          return;
+        }
+
+        setCategories(data);
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+      }
     };
-  }, [router, mainImagePreview, galleryImagePreviews]);
+
+    fetchCategories();
+  }, []);
+
+  // Fetch subcategories when main category is selected
+  useEffect(() => {
+    const fetchSubcategories = async () => {
+      if (!selectedCategory) {
+        setSubcategories([]);
+        setSelectedSubcategory("");
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('parent_id', selectedCategory)
+          .order('name');
+
+        if (error) {
+          console.error('Error fetching subcategories:', error);
+          return;
+        }
+
+        setSubcategories(data);
+        setSelectedSubcategory(""); // Reset subcategory selection
+      } catch (err) {
+        console.error('Error fetching subcategories:', err);
+      }
+    };
+
+    fetchSubcategories();
+  }, [selectedCategory]);
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-    setError(''); // Clear error when user types
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === 'name' || name === 'categoryid' ? { sku: generateSKU(name === 'name' ? value : prev.name, name === 'categoryid' ? value : prev.categoryid) } : {})
+    }));
   };
 
-  const validateImage = (file) => {
-    const validExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
-    const extension = file.name.split('.').pop().toLowerCase();
-    
-    if (!validExtensions.includes(extension)) {
-      return 'Image must be a JPG, JPEG, PNG, WEBP, or GIF file.';
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      return 'Image must be less than 5MB.';
-    }
-    return null;
+  const handleCategoryChange = (e) => {
+    const categoryId = e.target.value;
+    setSelectedCategory(categoryId);
+    setFormData(prev => ({
+      ...prev,
+      categoryid: categoryId,
+      sku: generateSKU(prev.name, categoryId)
+    }));
   };
 
-  const handleMainImageUpload = (e) => {
+  const handleSubcategoryChange = (e) => {
+    const subcategoryId = e.target.value;
+    setSelectedSubcategory(subcategoryId);
+    setFormData(prev => ({
+      ...prev,
+      categoryid: subcategoryId,
+      sku: generateSKU(prev.name, subcategoryId)
+    }));
+  };
+
+  const handleImageChange = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
-
-    const validationError = validateImage(file);
-    if (validationError) {
-      setError(validationError);
-      return;
+    if (file) {
+      setImageFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
     }
-
-    // Clean up previous preview
-    if (mainImagePreview) {
-      URL.revokeObjectURL(mainImagePreview);
-    }
-
-    setMainImage(file);
-    setMainImagePreview(URL.createObjectURL(file));
-    setError('');
   };
 
-  const handleGalleryImagesUpload = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length + galleryImages.length > 3) {
-      setError('Maximum 3 gallery images allowed.');
-      return;
-    }
+  const uploadImage = async (file) => {
+    try {
+      const ext = file.name.split(".").pop().toLowerCase();
+      const fileName = `${Date.now()}.${ext}`;
+      const filePath = `public/${fileName}`;
 
-    const validFiles = [];
-    for (const file of files) {
-      const validationError = validateImage(file);
-      if (validationError) {
-        setError(`Gallery image "${file.name}": ${validationError}`);
-        return;
-      }
-      validFiles.push(file);
-    }
+      const { error: uploadError } = await supabase.storage
+        .from("images")
+        .upload(filePath, file);
 
-    setGalleryImages([...galleryImages, ...validFiles]);
-    setGalleryImagePreviews([...galleryImagePreviews, ...validFiles.map(file => URL.createObjectURL(file))]);
-    setError('');
+      if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`);
+
+      const { data: urlData } = supabase.storage
+        .from("images")
+        .getPublicUrl(filePath);
+
+      if (!urlData?.publicUrl) throw new Error("Failed to get image URL");
+
+      return urlData.publicUrl;
+    } catch (err) {
+      throw new Error(`Image upload error: ${err.message}`);
+    }
   };
 
-  const removeGalleryImage = (index) => {
-    // Clean up preview URL
-    URL.revokeObjectURL(galleryImagePreviews[index]);
-    
-    setGalleryImages(galleryImages.filter((_, i) => i !== index));
-    setGalleryImagePreviews(galleryImagePreviews.filter((_, i) => i !== index));
+  // Quantity input improvement
+  const handleQuantityChange = (e) => {
+    const value = e.target.value.replace(/[^0-9]/g, '');
+    setFormData((prev) => ({ ...prev, quantity: value }));
+  };
+  const incrementQuantity = (amount) => {
+    setFormData((prev) => ({
+      ...prev,
+      quantity: String(Number(prev.quantity || 0) + amount),
+    }));
+  };
+  const setQuantity = (amount) => {
+    setFormData((prev) => ({ ...prev, quantity: String(amount) }));
   };
 
-  const removeMainImage = () => {
-    if (mainImagePreview) {
-      URL.revokeObjectURL(mainImagePreview);
-    }
-    setMainImage(null);
-    setMainImagePreview(null);
+  // Variation handlers
+  const addVariation = () => {
+    setVariations([...variations, { size: '', color: '', price: '', stock: '' }]);
   };
-
-  // Generate a unique file path that ensures proper folder structure
-  const generateFilePath = (folder, originalName) => {
-    const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substring(2, 8);
-    const extension = originalName.split('.').pop().toLowerCase();
-    const sanitizedName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    
-    // Ensure the path starts with the folder name (required by RLS policy)
-    return `${folder}/${timestamp}_${randomString}_${sanitizedName}`;
+  const removeVariation = (idx) => {
+    setVariations(variations.filter((_, i) => i !== idx));
   };
-
-  const uploadImage = async (file, folder) => {
-    const filePath = generateFilePath(folder, file.name);
-    console.log(`Uploading ${folder} image to:`, filePath);
-
-    const { data, error } = await supabase.storage
-      .from('supermarket-images')
-      .upload(filePath, file, { 
-        cacheControl: '3600',
-        upsert: false // Don't overwrite existing files
-      });
-
-    if (error) {
-      console.error(`${folder} image upload error:`, error);
-      throw new Error(`${folder} image upload failed: ${error.message}`);
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('supermarket-images')
-      .getPublicUrl(filePath);
-
-    console.log(`${folder} image uploaded successfully:`, publicUrl);
-    return publicUrl;
+  const handleVariationChange = (idx, field, value) => {
+    setVariations(variations.map((v, i) => i === idx ? { ...v, [field]: value } : v));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-    setSuccess('');
+    setMessage(null);
 
     try {
       // Validate required fields
-      if (!form.name.trim()) {
-        setError('Store name is required.');
+      if (!formData.name || !formData.price || !formData.quantity || !formData.categoryid) {
+        setMessage({ type: "error", text: "Please fill in all required fields (Name, Price, Quantity, Category)." });
         setLoading(false);
         return;
       }
 
-      if (!form.address.trim()) {
-        setError('Address is required.');
+      if (!supermarket_Id) {
+        setMessage({ type: "error", text: "Supermarket not found. Please refresh the page." });
         setLoading(false);
         return;
       }
 
-      if (!mainImage) {
-        setError('Main image is required.');
-        setLoading(false);
-        return;
+      let imageUrl = null;
+      if (imageFile) {
+        imageUrl = await uploadImage(imageFile);
       }
 
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        setError('User not authenticated. Please log in again.');
-        console.error('Auth error:', userError?.message);
-        setLoading(false);
-        return;
-      }
+      // Format variations for JSONB column
+      const formattedVariations = variations
+        .filter(v => v.size || v.color || v.price || v.stock) // Only include non-empty variations
+        .map(v => ({
+          size: v.size || null,
+          color: v.color || null,
+          price: v.price ? parseFloat(v.price) : null,
+          stock: v.stock ? parseInt(v.stock) : null,
+        }));
 
-      console.log('Submitting as user:', user.id);
+      // Generate SKU if not already set
+      const sku = formData.sku || generateSKU(formData.name, formData.categoryid);
 
-      // Upload main image
-      const mainImageUrl = await uploadImage(mainImage, 'main');
-
-      // Upload gallery images
-      const galleryImageUrls = [];
-      for (const file of galleryImages) {
-        const url = await uploadImage(file, 'gallery');
-        galleryImageUrls.push(url);
-      }
-
-      // Prepare store data
-      const storeData = {
-        name: form.name.trim(),
-        address: form.address.trim(),
-        price: form.price ? parseFloat(form.price) : null,
-        main_image: mainImageUrl,
-        gallery_images: galleryImageUrls,
-        vendor_id: user.id,
-        created_at: new Date().toISOString(),
-        location: form.location.trim() || null,
+      const productData = {
+        name: formData.name,
+        price: parseFloat(formData.price),
+        description: formData.description || null,
+        quantity: parseInt(formData.quantity),
+        image: imageUrl || null,
+        categoryid: parseInt(formData.categoryid),
+        supermarket_id: supermarket_Id,
+        date_added: new Date().toISOString(),
+        variations: formattedVariations.length > 0 ? formattedVariations : null,
+        sku: sku,
       };
 
-      console.log('Inserting store with data:', storeData);
+      const { error } = await supabase.from("products").insert([productData]);
 
-      // Insert into supermarkets table
-      const { error: insertError } = await supabase
-        .from('supermarkets')
-        .insert([storeData]);
+      if (error) throw new Error(`Database error: ${error.message}`);
 
-      if (insertError) {
-        setError(`Error creating store: ${insertError.message}`);
-        console.error('Store insert error:', insertError);
-        setLoading(false);
-        return;
-      }
-
-      setSuccess('Store created successfully! Redirecting...');
-      
-      // Clean up previews
-      if (mainImagePreview) URL.revokeObjectURL(mainImagePreview);
-      galleryImagePreviews.forEach(preview => URL.revokeObjectURL(preview));
-      
-      setTimeout(() => {
-        router.push('/vendor/dashboard');
-      }, 2000);
-
+      setMessage({ type: "success", text: "Product added successfully!" });
+      setFormData({
+        name: "",
+        price: "",
+        description: "",
+        quantity: "",
+        categoryid: "",
+        sku: "",
+      });
+      setImageFile(null);
+      setPreviewUrl(null);
+      setVariations([]);
+      setSelectedCategory("");
+      setSelectedSubcategory("");
     } catch (err) {
-      setError(`Unexpected error: ${err.message}`);
-      console.error('Unexpected error:', err);
+      setMessage({ type: "error", text: err.message });
+    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-full mb-6">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-pink-50 flex items-center justify-center py-10">
+      <div className="w-full max-w-2xl bg-white/90 border border-blue-100 rounded-3xl shadow-2xl p-8 md:p-12 relative">
+        <h2 className="text-3xl font-extrabold text-center text-blue-700 mb-2 tracking-tight drop-shadow-sm">
+          Add New Product
+        </h2>
+        <p className="text-center text-gray-500 mb-8">
+          Fill in the details below to add a new product to your inventory.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-7">
+          {/* Product Info */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <input
+              type="text"
+              name="name"
+              placeholder="Product Name"
+              value={formData.name}
+              onChange={handleChange}
+              required
+              className="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
+            />
+            <input
+              type="number"
+              name="price"
+              placeholder="Price"
+              value={formData.price}
+              onChange={handleChange}
+              required
+              step="0.01"
+              min="0"
+              className="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
+            />
           </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Create Your Store</h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">Set up your supermarket with all the essential details to start selling</p>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-white shadow-2xl rounded-3xl overflow-hidden">
-          <div className="px-8 py-10 sm:px-12">
-            {/* Status Messages */}
-            {error && (
-              <div className="mb-8 p-4 bg-red-50 border-l-4 border-red-400 rounded-lg">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-red-700 font-medium">{error}</p>
-                  </div>
-                </div>
-              </div>
+          {/* SKU Display */}
+          <div>
+            <label className="block text-sm font-semibold text-blue-700 mb-1">
+              SKU
+            </label>
+            <input
+              type="text"
+              name="sku"
+              placeholder="SKU (auto-generated)"
+              value={formData.sku}
+              readOnly
+              className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 text-gray-500"
+            />
+          </div>
+          <textarea
+            name="description"
+            placeholder="Description"
+            value={formData.description}
+            onChange={handleChange}
+            rows={3}
+            className="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
+          />
+          {/* Quantity Input with Quick Buttons */}
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              type="text"
+              name="quantity"
+              placeholder="Quantity"
+              value={formData.quantity}
+              onChange={handleQuantityChange}
+              required
+              className="w-32 p-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 placeholder-gray-400"
+            />
+            <button type="button" className="px-2 py-1 bg-blue-200 rounded" onClick={() => incrementQuantity(1)}>+1</button>
+            <button type="button" className="px-2 py-1 bg-blue-200 rounded" onClick={() => incrementQuantity(10)}>+10</button>
+            <button type="button" className="px-2 py-1 bg-blue-200 rounded" onClick={() => incrementQuantity(50)}>+50</button>
+            <button type="button" className="px-2 py-1 bg-blue-200 rounded" onClick={() => setQuantity(100)}>Set 100</button>
+          </div>
+          {/* Variations Section */}
+          <div className="mb-4">
+            <label className="block text-sm font-semibold text-blue-700 mb-1">Product Variations</label>
+            {variations.length === 0 && (
+              <div className="text-xs text-gray-400 mb-2">No variations added. Add size/color/price/stock options below.</div>
             )}
-
-            {success && (
-              <div className="mb-8 p-4 bg-green-50 border-l-4 border-green-400 rounded-lg">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-green-700 font-medium">{success}</p>
-                  </div>
-                </div>
+            {variations.map((variation, idx) => (
+              <div key={idx} className="flex gap-2 mb-2 items-center">
+                <input
+                  type="text"
+                  placeholder="Size (e.g. M, L, XL)"
+                  value={variation.size}
+                  onChange={e => handleVariationChange(idx, 'size', e.target.value)}
+                  className="w-20 p-2 border border-blue-200 rounded"
+                />
+                <input
+                  type="text"
+                  placeholder="Color"
+                  value={variation.color}
+                  onChange={e => handleVariationChange(idx, 'color', e.target.value)}
+                  className="w-20 p-2 border border-blue-200 rounded"
+                />
+                <input
+                  type="number"
+                  placeholder="Price"
+                  value={variation.price}
+                  onChange={e => handleVariationChange(idx, 'price', e.target.value)}
+                  step="0.01"
+                  min="0"
+                  className="w-24 p-2 border border-blue-200 rounded"
+                />
+                <input
+                  type="number"
+                  placeholder="Stock"
+                  value={variation.stock}
+                  onChange={e => handleVariationChange(idx, 'stock', e.target.value)}
+                  min="0"
+                  className="w-20 p-2 border border-blue-200 rounded"
+                />
+                <button type="button" className="text-red-500 px-2" onClick={() => removeVariation(idx)}>✕</button>
               </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Left Column - Basic Info */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Store Information</h3>
-                
-                {/* Store Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Store Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={form.name}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                    placeholder="e.g., Fresh Mart Supermarket"
-                  />
-                </div>
-
-                {/* Address */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Address <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    name="address"
-                    value={form.address}
-                    onChange={handleChange}
-                    required
-                    rows={3}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors resize-none"
-                    placeholder="Enter complete store address"
-                  />
-                </div>
-
-                {/* Price */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Average Price Range
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-3 text-gray-500">₹</span>
-                    <input
-                      type="number"
-                      name="price"
-                      value={form.price}
-                      onChange={handleChange}
-                      className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                      placeholder="100"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                  <p className="text-sm text-gray-500 mt-1">Optional: Average price range for products</p>
-                </div>
-
-                {/* Location */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Location Coordinates
-                  </label>
-                  <input
-                    type="text"
-                    name="location"
-                    value={form.location}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                    placeholder="e.g., POINT(77.5946 12.9716)"
-                  />
-                  <p className="text-sm text-gray-500 mt-1">Optional: GPS coordinates for precise location</p>
-                </div>
-              </div>
-
-              {/* Right Column - Images */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Store Images</h3>
-                
-                {/* Main Image */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Main Store Image <span className="text-red-500">*</span>
-                  </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors">
-                    {mainImagePreview ? (
-                      <div className="relative">
-                        <div className="relative w-full h-48 mb-4">
-                          <Image
-                            src={mainImagePreview}
-                            alt="Main store image preview"
-                            fill
-                            className="object-cover rounded-lg"
-                          />
-                        </div>
-                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                          <span className="text-sm text-gray-600 truncate">{mainImage?.name}</span>
-                          <button
-                            type="button"
-                            onClick={removeMainImage}
-                            className="ml-2 text-red-500 hover:text-red-700 transition-colors"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                          <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <div className="mt-4">
-                          <label htmlFor="main-image" className="cursor-pointer">
-                            <span className="mt-2 block text-sm font-medium text-gray-900">
-                              Upload main store image
-                            </span>
-                            <span className="mt-1 block text-sm text-gray-500">
-                              PNG, JPG, WEBP up to 5MB
-                            </span>
-                          </label>
-                          <input
-                            id="main-image"
-                            type="file"
-                            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
-                            onChange={handleMainImageUpload}
-                            className="hidden"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Gallery Images */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Gallery Images (up to 3)
-                  </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 hover:border-indigo-400 transition-colors">
-                    {galleryImagePreviews.length > 0 && (
-                      <div className="grid grid-cols-3 gap-3 mb-4">
-                        {galleryImagePreviews.map((preview, index) => (
-                          <div key={index} className="relative group">
-                            <div className="relative w-full h-20">
-                              <Image
-                                src={preview}
-                                alt={`Gallery image ${index + 1}`}
-                                fill
-                                className="object-cover rounded-lg"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeGalleryImage(index)}
-                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {galleryImages.length < 3 && (
-                      <div className="text-center">
-                        <svg className="mx-auto h-8 w-8 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                          <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <div className="mt-2">
-                          <label htmlFor="gallery-images" className="cursor-pointer">
-                            <span className="block text-sm font-medium text-gray-900">
-                              Add gallery images
-                            </span>
-                            <span className="block text-xs text-gray-500">
-                              {3 - galleryImages.length} remaining
-                            </span>
-                          </label>
-                          <input
-                            id="gallery-images"
-                            type="file"
-                            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
-                            multiple
-                            onChange={handleGalleryImagesUpload}
-                            className="hidden"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+            ))}
+            <button type="button" className="bg-blue-500 text-white px-3 py-1 rounded mt-2" onClick={addVariation}>Add Variation</button>
+          </div>
+          
+          {/* Category Dropdowns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-blue-700 mb-1">
+                Main Category
+              </label>
+              <select
+                value={selectedCategory}
+                onChange={handleCategoryChange}
+                required
+                className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
+              >
+                <option value="">Select Main Category</option>
+                {mainCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-semibold text-blue-700 mb-1">
+                Subcategory
+              </label>
+              <select
+                value={selectedSubcategory}
+                onChange={handleSubcategoryChange}
+                required
+                disabled={!selectedCategory || subcategories.length === 0}
+                className="w-full p-3 border border-blue-200 rounded-xl bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700 disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                <option value="">
+                  {!selectedCategory 
+                    ? "Select Main Category First" 
+                    : subcategories.length === 0 
+                      ? "No subcategories available" 
+                      : "Select Subcategory"}
+                </option>
+                {subcategories.map((subcategory) => (
+                  <option key={subcategory.id} value={subcategory.id}>
+                    {subcategory.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-
-          {/* Submit Button */}
-          <div className="px-8 py-6 bg-gray-50 sm:px-12">
+          
+          {/* Image Upload */}
+          <div>
+            <label className="block text-sm font-semibold text-blue-700 mb-1">
+              Upload Image
+            </label>
+            <div className="relative border-2 border-dashed rounded-xl p-4 bg-blue-50 flex flex-col items-center justify-center transition-all duration-200 hover:border-blue-400">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                style={{ height: '100%' }}
+              />
+              {previewUrl ? (
+                <Image
+                  src={previewUrl}
+                  alt="Preview"
+                  width={180}
+                  height={180}
+                  className="rounded-xl shadow-lg max-h-48 object-contain border border-blue-100 mx-auto"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-40">
+                  <svg className="w-12 h-12 text-blue-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4a1 1 0 011-1h8a1 1 0 011 1v12m-4 4h-4a1 1 0 01-1-1v-1h10v1a1 1 0 01-1 1h-4z" />
+                  </svg>
+                  <span className="text-blue-400 font-medium">No image selected</span>
+                  <span className="text-xs text-gray-400">Product will use a default image</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Submit Button & Message */}
+          <div className="flex flex-col items-center mt-2">
             <button
               type="submit"
               disabled={loading}
-              className={`w-full flex justify-center items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl text-white transition-all duration-200 ${
-                loading 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl'
-              }`}
+              className="bg-gradient-to-r from-blue-600 to-pink-500 hover:from-blue-700 hover:to-pink-600 text-white font-bold px-8 py-3 rounded-xl shadow-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="animate-spin h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8z"
+                    ></path>
                   </svg>
-                  Creating Store...
-                </>
+                  Submitting...
+                </span>
               ) : (
-                <>
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  Create Store
-                </>
+                "Add Product"
               )}
             </button>
+            {message && (
+              <p
+                className={`mt-4 text-center text-lg ${
+                  message.type === "error"
+                    ? "text-red-600"
+                    : "text-green-600"
+                }`}
+              >
+                {message.text}
+              </p>
+            )}
           </div>
         </form>
       </div>
     </div>
   );
-}
+};
+
+export default ProductForm;   

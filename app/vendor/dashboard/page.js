@@ -186,10 +186,19 @@ export default function VendorDashboard() {
           return;
         }
 
-        const normalizedProducts = (productsData || []).map((product) => ({
-          ...product,
-          image: normalizeImagePath(product.image),
-        }));
+        const normalizedProducts = (productsData || []).map((product) => {
+          // If image is an array, use the first image or empty string
+          let imageUrl = '';
+          if (Array.isArray(product.image)) {
+            imageUrl = product.image.length > 0 ? product.image[0] : '';
+          } else if (typeof product.image === 'string') {
+            imageUrl = product.image;
+          }
+          return {
+            ...product,
+            image: normalizeImagePath(imageUrl),
+          };
+        });
 
         setProducts(normalizedProducts);
         setFilteredProducts(normalizedProducts);
@@ -264,13 +273,21 @@ export default function VendorDashboard() {
           return;
         }
 
-        const normalizedOrders = (ordersData || []).map((order) => ({
-          ...order,
-          products: {
-            ...order.products,
-            image: normalizeImagePath(order.products.image),
-          },
-        }));
+        const normalizedOrders = (ordersData || []).map((order) => {
+          let imageUrl = '';
+          if (order.products && Array.isArray(order.products.image)) {
+            imageUrl = order.products.image.length > 0 ? order.products.image[0] : '';
+          } else if (order.products && typeof order.products.image === 'string') {
+            imageUrl = order.products.image;
+          }
+          return {
+            ...order,
+            products: {
+              ...order.products,
+              image: normalizeImagePath(imageUrl),
+            },
+          };
+        });
 
         setOrders(normalizedOrders);
         setFilteredOrders(normalizedOrders); // Initialize filteredOrders
@@ -626,7 +643,8 @@ export default function VendorDashboard() {
       category: getCategoryNameById(product.categoryid),
       supermarket_id: product.supermarket_id,
       date_added: product.date_added,
-      image: product.image,
+      // Export only the first image (or empty string)
+      image: Array.isArray(product.image) ? (product.image[0] || '') : (product.image || ''),
     }));
     const csv = Papa.unparse(exportData);
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -648,17 +666,13 @@ export default function VendorDashboard() {
       skipEmptyLines: true,
       complete: async (results) => {
         try {
-          console.log('Uploaded Image Map:', uploadedImageMap); // Debug log
-          
           const productsToInsert = results.data.map((row) => {
             // If image name matches uploaded image, use the generated URL
             let imageUrl = row.image || null;
             if (imageUrl && uploadedImageMap[imageUrl]) {
               imageUrl = uploadedImageMap[imageUrl];
-              console.log(`Found mapping for ${row.image}: ${imageUrl}`); // Debug log
-            } else if (imageUrl) {
-              console.log(`No mapping found for ${row.image}`); // Debug log
             }
+            // Always wrap image as array for DB
             return {
               name: row.name,
               price: parseFloat(row.price),
@@ -667,7 +681,7 @@ export default function VendorDashboard() {
               categoryid: getCategoryIdByName(row.category),
               supermarket_id: store.id,
               date_added: row.date_added || new Date().toISOString(),
-              image: imageUrl,
+              image: imageUrl ? [imageUrl] : [],
             };
           });
           const { error } = await supabase.from('products').insert(productsToInsert);
