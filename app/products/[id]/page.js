@@ -1,7 +1,7 @@
 "use client";
 import { createClient } from '@supabase/supabase-js';
 import { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Star, ShoppingCart, Plus, Minus } from 'lucide-react';
 import Image from 'next/image';
 import CustomAuthModal from '../../../components/CustomAuthModal';
 
@@ -15,13 +15,11 @@ const supabase = createClient(
 const normalizeImagePath = (path) => {
   if (!path) return ['/placeholder-product.jpg'];
   if (Array.isArray(path)) {
-    // Map over array and normalize each path, filter out invalid paths
     const normalized = path
       .map((p) => (p ? p.replace(/^(\.\.\/)+assets\//, '/') : null))
       .filter((p) => p);
     return normalized.length > 0 ? normalized : ['/placeholder-product.jpg'];
   }
-  // Handle single string
   return [path.replace(/^(\.\.\/)+assets\//, '/')];
 };
 
@@ -35,8 +33,8 @@ export default function ProductDetailPage({ params }) {
   const [cartMessage, setCartMessage] = useState("");
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const scrollContainerRef = useRef(null);
-  const mainImageContainerRef = useRef(null);
 
   useEffect(() => {
     const resolveParams = async () => {
@@ -66,7 +64,6 @@ export default function ProductDetailPage({ params }) {
       if (!id) return;
 
       try {
-        // Fetch main product with categoryid, sku, and variations
         const { data, error } = await supabase
           .from('products')
           .select('id, name, price, image, description, quantity, categoryid, sku, variations')
@@ -78,12 +75,10 @@ export default function ProductDetailPage({ params }) {
           setProduct(null);
         } else {
           setProduct(data);
-          // Set default variation if available
           if (data.variations && data.variations.length > 0) {
             setSelectedVariation(data.variations[0]);
           }
 
-          // Fetch related products from same category
           try {
             const { data: relatedData, error: relatedError } = await supabase
               .from('products')
@@ -142,7 +137,7 @@ export default function ProductDetailPage({ params }) {
         quantity: qty,
         name: productToAdd.name,
         price: variation ? variation.price : productToAdd.price,
-        image: Array.isArray(productToAdd.image) ? productToAdd.image[0] : productToAdd.image, // Store first image
+        image: Array.isArray(productToAdd.image) ? productToAdd.image[0] : productToAdd.image,
         variation: variation || null,
       });
     }
@@ -159,251 +154,326 @@ export default function ProductDetailPage({ params }) {
 
   const scrollLeft = () => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ left: -220, behavior: 'smooth' });
+      scrollContainerRef.current.scrollBy({ left: -280, behavior: 'smooth' });
     }
   };
 
   const scrollRight = () => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ left: 220, behavior: 'smooth' });
+      scrollContainerRef.current.scrollBy({ left: 280, behavior: 'smooth' });
     }
   };
 
-  const scrollMainImageLeft = () => {
-    if (mainImageContainerRef.current) {
-      mainImageContainerRef.current.scrollBy({ left: -550, behavior: 'smooth' });
-    }
+  const nextImage = () => {
+    const imagePaths = normalizeImagePath(product.image);
+    setCurrentImageIndex((prev) => (prev + 1) % imagePaths.length);
   };
 
-  const scrollMainImageRight = () => {
-    if (mainImageContainerRef.current) {
-      mainImageContainerRef.current.scrollBy({ left: 550, behavior: 'smooth' });
-    }
+  const prevImage = () => {
+    const imagePaths = normalizeImagePath(product.image);
+    setCurrentImageIndex((prev) => (prev - 1 + imagePaths.length) % imagePaths.length);
   };
 
-  if (loading) return <p>Loading...</p>;
-  if (!product) return <p>Product not found.</p>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-xl text-gray-500">Product not found.</p>
+      </div>
+    );
+  }
 
   const imagePaths = normalizeImagePath(product.image);
+  const currentImage = imagePaths[currentImageIndex];
 
   return (
-    <div className="p-6 mt-20">
-      <h1 className="text-3xl font-bold mb-6">{product.name}</h1>
-      <div className="flex flex-col ml-16 md:flex-row gap-28">
-        <div className="md:w-1/2 relative">
-          <div
-            ref={mainImageContainerRef}
-            className="flex overflow-x-auto gap-4 py-2 scroll-smooth no-scrollbar snap-x snap-mandatory"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            {imagePaths.length > 0 ? (
-              imagePaths.map((imagePath, index) => (
-                <div key={index} className="flex-shrink-0 snap-center">
-                  <Image
-                    src={imagePath}
-                    alt={`${product.name} image ${index + 1}`}
-                    width={550}
-                    height={450}
-                    className="object-contain w-full h-64 md:h-96 rounded-lg p-4 bg-white"
-                    priority={index === 0} // Priority for first image
-                    loading={index > 0 ? 'lazy' : undefined}
-                  />
-                </div>
-              ))
-            ) : (
-              <div className="h-64 md:h-96 bg-gray-200 rounded-lg flex items-center justify-center text-gray-600 snap-center">
-                No Image Available
-              </div>
-            )}
+    <div className="min-h-screen mt-20 bg-gray-50">
+      {/* Breadcrumb */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center text-sm text-gray-500">
+            <ChevronLeft className="w-4 h-4 mr-2" />
+            <span>Popular Items</span>
           </div>
-          {imagePaths.length > 1 && (
-            <>
-              <button
-                onClick={scrollMainImageLeft}
-                className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
-              >
-                <ChevronLeft size={24} className="text-gray-700" />
-              </button>
-              <button
-                onClick={scrollMainImageRight}
-                className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
-              >
-                <ChevronRight size={24} className="text-gray-700" />
-              </button>
-            </>
-          )}
         </div>
+      </div>
 
-        <div className="md:w-1/2">
-          <p className="text-sm text-gray-500 mb-1">SKU: {product.sku || 'N/A'}</p>
-          <h2 className="text-2xl font-semibold mb-2">{product.name}</h2>
-          <p className="text-green-600 font-semibold text-lg mb-4">
-            ${selectedVariation ? selectedVariation.price : product.price}
-          </p>
-
-          {/* Variations Selection */}
-          {product.variations && product.variations.length > 0 && (
-            <div className="mb-4">
-              <h3 className="text-sm font-semibold mb-2">Select Variation</h3>
-              <div className="flex flex-wrap gap-2">
-                {product.variations.map((variation, idx) => (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
+          {/* Product Image */}
+          <div className="relative">
+            <div className="aspect-square bg-white rounded-2xl shadow-sm overflow-hidden relative">
+              {imagePaths.length > 1 && (
+                <>
                   <button
-                    key={idx}
-                    onClick={() => setSelectedVariation(variation)}
-                    className={`px-4 py-2 rounded border ${
-                      selectedVariation === variation
-                        ? 'bg-teal-900 text-white border-teal-900'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
-                    }`}
+                    onClick={prevImage}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white/80 backdrop-blur-sm rounded-full p-2 shadow-md hover:bg-white transition-colors"
                   >
-                    {variation.size && variation.color
-                      ? `${variation.size} / ${variation.color}`
-                      : variation.size || variation.color || `Variation ${idx + 1}`}
-                    <span className="ml-2 text-sm">(${variation.price})</span>
-                    <span className="ml-2 text-sm text-gray-500">Stock: {variation.stock}</span>
+                    <ChevronLeft className="w-5 h-5 text-gray-700" />
                   </button>
-                ))}
+                  <button
+                    onClick={nextImage}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-white/80 backdrop-blur-sm rounded-full p-2 shadow-md hover:bg-white transition-colors"
+                  >
+                    <ChevronRight className="w-5 h-5 text-gray-700" />
+                  </button>
+                </>
+              )}
+              
+              {currentImage ? (
+                <Image
+                  src={currentImage}
+                  alt={product.name}
+                  fill
+                  className="object-contain p-8"
+                  priority
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-400">
+                  No Image Available
+                </div>
+              )}
+              
+              {/* Image indicators */}
+              {imagePaths.length > 1 && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
+                  {imagePaths.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentImageIndex(index)}
+                      className={`w-2 h-2 rounded-full transition-colors ${
+                        index === currentImageIndex ? 'bg-green-500' : 'bg-gray-300'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Product Details */}
+          <div className="space-y-6">
+            {/* Weight/Size indicator */}
+            <div className="inline-block bg-gray-100 px-3 py-1 rounded-full text-sm text-gray-600">
+              500g
+            </div>
+
+            {/* Product Name */}
+            <h1 className="text-3xl lg:text-4xl font-bold text-gray-900">
+              {product.name}
+            </h1>
+
+            {/* Price */}
+            <div className="text-3xl font-bold text-green-500">
+              ${selectedVariation ? selectedVariation.price : product.price}
+            </div>
+
+            {/* Quantity Selector */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Quantity</label>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center border border-gray-300 rounded-lg">
+                  <button
+                    onClick={decrementQuantity}
+                    disabled={quantity <= 1}
+                    className="p-2 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="px-4 py-2 font-medium">{quantity}</span>
+                  <button
+                    onClick={incrementQuantity}
+                    className="p-2 hover:bg-gray-50"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                {/* Stock Warning */}
+                <div className="flex items-center text-orange-500 text-sm">
+                  <span className="mr-1">⚠️</span>
+                  <span>Limited Quantity Available</span>
+                </div>
               </div>
             </div>
-          )}
 
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm">Quantity</span>
-            <div className="flex items-center gap-2">
+            {/* Variations */}
+            {product.variations && product.variations.length > 0 && (
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Select Variation</label>
+                <div className="flex flex-wrap gap-2">
+                  {product.variations.map((variation, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedVariation(variation)}
+                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                        selectedVariation === variation
+                          ? 'bg-green-500 text-white border-green-500'
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-green-300'
+                      }`}
+                    >
+                      {variation.size && variation.color
+                        ? `${variation.size} / ${variation.color}`
+                        : variation.size || variation.color || `Variation ${idx + 1}`}
+                      <span className="ml-2">(${variation.price})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Rating */}
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center">
+                <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                <span className="ml-1 text-sm font-medium">4.4/5</span>
+              </div>
+            </div>
+
+            {/* Description */}
+            <p className="text-gray-600 leading-relaxed">
+              {product.description || "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt."}
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4">
               <button
-                onClick={decrementQuantity}
-                className="w-6 h-6 bg-gray-200 rounded flex items-center justify-center text-gray-600 hover:bg-gray-300 text-sm"
-                disabled={quantity <= 1}
+                onClick={() => handleAddToCart()}
+                className="flex-1 bg-teal-900 hover:bg-teal-800 text-white px-8 py-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
               >
-                -
+                <ShoppingCart className="w-5 h-5" />
+                <span>Add to cart</span>
               </button>
-              <span>{quantity}</span>
-              <button
-                onClick={incrementQuantity}
-                className="w-6 h-6 bg-gray-200 rounded flex items-center justify-center text-gray-600 hover:bg-gray-300 text-sm"
-              >
-                +
+              <button className="flex-1 bg-lime-400 hover:bg-lime-500 text-black px-8 py-4 rounded-lg font-medium transition-colors">
+                Shop Now
               </button>
             </div>
-            <span className="text-sm text-red-500 ml-2">
-              ⚠️ {selectedVariation ? `Stock: ${selectedVariation.stock}` : `Total Stock: ${product.quantity}`}
-            </span>
-          </div>
 
-          <div className="flex items-center gap-1 mb-4">
-            <span className="text-yellow-500">★</span>
-            <span className="text-sm text-gray-600">4.4/5</span>
-          </div>
-
-          <p className="text-sm text-gray-600 mb-4">
-            {product.description || "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt."}
-          </p>
-
-          <div className="flex gap-4">
-            <button
-              onClick={() => handleAddToCart()}
-              className="bg-teal-900 text-white px-6 py-2 rounded hover:bg-teal-800"
-            >
-              Add to cart
-            </button>
-            <button className="bg-lime-400 text-black px-6 py-2 rounded hover:bg-lime-500">
-              Shop Now
-            </button>
-          </div>
-
-          {cartMessage && <p className="text-green-500 mt-2">{cartMessage}</p>}
-        </div>
-      </div>
-
-      {/* Related Products Section */}
-      <div className="mt-12">
-        <h2 className="text-xl font-semibold mb-6">Related Items</h2>
-
-        <div className="relative">
-          <button
-            onClick={scrollLeft}
-            className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
-          >
-            <ChevronLeft size={24} className="text-gray-700" />
-          </button>
-
-          <div
-            ref={scrollContainerRef}
-            className="flex overflow-x-auto gap-4 py-2 scroll-smooth no-scrollbar snap-x snap-mandatory"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            {relatedProducts.length > 0 ? (
-              relatedProducts.map((relatedProduct) => {
-                const relatedImagePaths = normalizeImagePath(relatedProduct.image);
-                const firstImagePath = relatedImagePaths[0]; // Use first image for related products
-                return (
-                  <div
-                    key={relatedProduct.id}
-                    className="flex-shrink-0 w-44 bg-white rounded-lg overflow-hidden shadow-sm snap-center"
-                  >
-                    <a href={`/products/${relatedProduct.id}`} className="block">
-                      <div className="relative h-36 bg-gray-50">
-                        {firstImagePath ? (
-                          <Image
-                            src={firstImagePath}
-                            alt={relatedProduct.name}
-                            width={160}
-                            height={160}
-                            className="w-full h-full object-contain p-2"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
-                            No Image
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-3">
-                        <h3 className="text-sm font-medium truncate">{relatedProduct.name}</h3>
-                        <p className="text-xs text-gray-500 mb-2">100g Standard Portion</p>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold">${relatedProduct.price}</span>
-                          <button
-                            className="bg-gray-200 rounded-md p-1 hover:bg-gray-300"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              handleAddToCart(relatedProduct, 1);
-                            }}
-                          >
-                            <span className="text-lg">+</span>
-                          </button>
-                        </div>
-                      </div>
-                    </a>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="text-gray-500">No related products available.</p>
+            {/* Success Message */}
+            {cartMessage && (
+              <div className="bg-green-100 border border-green-300 text-green-700 px-4 py-3 rounded-lg">
+                {cartMessage}
+              </div>
             )}
           </div>
-
-          <button
-            onClick={scrollRight}
-            className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
-          >
-            <ChevronRight size={24} className="text-gray-700" />
-          </button>
         </div>
 
-        <style jsx>{`
-          .no-scrollbar::-webkit-scrollbar {
-            display: none;
-          }
-          .snap-x {
-            scroll-snap-type: x mandatory;
-          }
-          .snap-center {
-            scroll-snap-align: center;
-          }
-        `}</style>
+        {/* Related Items */}
+        <div className="mt-16">
+          <h2 className="text-2xl font-bold text-gray-900 mb-8">Related Items</h2>
+          
+          <div className="relative">
+            {relatedProducts.length > 4 && (
+              <>
+                <button
+                  onClick={scrollLeft}
+                  className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg hover:shadow-xl transition-shadow"
+                >
+                  <ChevronLeft className="w-5 h-5 text-gray-700" />
+                </button>
+                <button
+                  onClick={scrollRight}
+                  className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg hover:shadow-xl transition-shadow"
+                >
+                  <ChevronRight className="w-5 h-5 text-gray-700" />
+                </button>
+              </>
+            )}
+
+            <div
+              ref={scrollContainerRef}
+              className="flex overflow-x-auto gap-6 pb-4 scroll-smooth scrollbar-hide"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {relatedProducts.length > 0 ? (
+                relatedProducts.map((relatedProduct) => {
+                  const relatedImagePaths = normalizeImagePath(relatedProduct.image);
+                  const firstImagePath = relatedImagePaths[0];
+                  return (
+                    <div
+                      key={relatedProduct.id}
+                      className="flex-shrink-0 w-64 bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden group"
+                    >
+                      <a href={`/products/${relatedProduct.id}`} className="block">
+                        <div className="relative aspect-square bg-gray-50 p-4">
+                          {firstImagePath ? (
+                            <Image
+                              src={firstImagePath}
+                              alt={relatedProduct.name}
+                              fill
+                              className="object-contain p-2"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                              No Image
+                            </div>
+                          )}
+                          
+                          {/* Highlighted border for one product */}
+                          <div className="absolute inset-0 border-2 border-blue-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                        
+                        <div className="p-4 space-y-2">
+                          <h3 className="font-medium text-gray-900 truncate">
+                            {relatedProduct.name}
+                          </h3>
+                          <p className="text-sm text-gray-500">100g Standard Portion</p>
+                          
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <div className="text-lg font-bold text-gray-900">
+                                $ {relatedProduct.price}
+                              </div>
+                              <div className="flex items-center">
+                                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                                <span className="ml-1 text-sm text-gray-600">4.25</span>
+                              </div>
+                            </div>
+                            
+                            <button
+                              className="bg-gray-100 hover:bg-gray-200 rounded-lg p-2 transition-colors"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handleAddToCart(relatedProduct, 1);
+                              }}
+                            >
+                              <Plus className="w-5 h-5 text-gray-700" />
+                            </button>
+                          </div>
+                        </div>
+                      </a>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="w-full text-center py-12">
+                  <p className="text-gray-500">No related products available.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
+
       <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
+
+      <style jsx>{`
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
     </div>
   );
 }
