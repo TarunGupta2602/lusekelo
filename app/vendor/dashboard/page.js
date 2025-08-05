@@ -176,7 +176,7 @@ export default function VendorDashboard() {
 
         const { data: productsData, error: productsError } = await supabase
           .from('products')
-          .select('id, name, price, image, quantity, date_added, supermarket_id, description, categoryid')
+          .select('id, name, price, image, quantity, date_added, supermarket_id, description, categoryid, expiry_date')
           .eq('supermarket_id', supermarket.id)
           .order('date_added', { ascending: sortOrder === 'asc' });
 
@@ -914,6 +914,64 @@ export default function VendorDashboard() {
     }
   };
 
+  // 1. Add a function to get near-expiry products (within 7 days)
+  const getNearExpiryProducts = (days = 7) => {
+    const today = new Date();
+    return products.filter(product => {
+      if (!product.expiry_date) return false;
+      const expiry = new Date(product.expiry_date);
+      const diffTime = expiry - today;
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      return diffDays >= 0 && diffDays <= days;
+    });
+  };
+
+  // Add state for dismissed alerts
+  const [dismissedNearExpiry, setDismissedNearExpiry] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dismissedNearExpiry');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
+  const [dismissedExpired, setDismissedExpired] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dismissedExpired');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
+
+  // Helper: get expired products
+  const getExpiredProducts = () => {
+    const today = new Date();
+    return products.filter(product => {
+      if (!product.expiry_date) return false;
+      const expiry = new Date(product.expiry_date);
+      return expiry < today;
+    });
+  };
+
+  // Helper: handle dismiss
+  const handleDismissNearExpiry = (ids) => {
+    setDismissedNearExpiry(prev => {
+      const updated = [...prev, ...ids];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dismissedNearExpiry', JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
+  const handleDismissExpired = (ids) => {
+    setDismissedExpired(prev => {
+      const updated = [...prev, ...ids];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dismissedExpired', JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       {/* Sidebar: collapses to a top bar or drawer on mobile */}
@@ -1485,6 +1543,7 @@ export default function VendorDashboard() {
                     <tr className="border-b">
                       <th className="p-4">Product</th>
                       <th className="p-4">Date Added</th>
+                      <th className="p-4">Expiry Date</th>
                       <th className="p-4">Amount</th>
                       <th className="p-4">Status</th>
                     </tr>
@@ -1518,6 +1577,7 @@ export default function VendorDashboard() {
                             <span>{product.name}</span>
                           </td>
                           <td className="p-4">{new Date(product.date_added).toLocaleDateString()}</td>
+                          <td className="p-4">{product.expiry_date ? new Date(product.expiry_date).toLocaleDateString() : 'N/A'}</td>
                           <td className="p-4">${product.price?.toFixed(2) || '0.00'}</td>
                           <td className="p-4">
                             <span className={`px-3 py-1 rounded-full text-sm ${stockStatus.color}`}>
@@ -1556,6 +1616,52 @@ export default function VendorDashboard() {
                 Next
               </button>
             </div>
+            {sidebarSection === 'Inventory' && (() => {
+              const nearExpiry = getNearExpiryProducts().filter(p => !dismissedNearExpiry.includes(p.id));
+              const expired = getExpiredProducts().filter(p => !dismissedExpired.includes(p.id));
+              return <>
+                {expired.length > 0 && (
+                  <div className="mb-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded flex items-start justify-between">
+                    <div>
+                      <strong>Alert:</strong> The following products have expired:
+                      <ul className="list-disc ml-6">
+                        {expired.map(product => (
+                          <li key={product.id}>
+                            <span className="font-semibold">{product.name}</span> (expired on {new Date(product.expiry_date).toLocaleDateString()})
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <button
+                      className="ml-4 bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+                      onClick={() => handleDismissExpired(expired.map(p => p.id))}
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
+                {nearExpiry.length > 0 && (
+                  <div className="mb-4 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded flex items-start justify-between">
+                    <div>
+                      <strong>Alert:</strong> The following products are expiring soon:
+                      <ul className="list-disc ml-6">
+                        {nearExpiry.map(product => (
+                          <li key={product.id}>
+                            <span className="font-semibold">{product.name}</span> (expires on {new Date(product.expiry_date).toLocaleDateString()})
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <button
+                      className="ml-4 bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600"
+                      onClick={() => handleDismissNearExpiry(nearExpiry.map(p => p.id))}
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
+              </>;
+            })()}
           </>
         )}
 
