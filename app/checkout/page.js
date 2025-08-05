@@ -138,28 +138,41 @@ export default function CheckoutPage() {
       description: 'Test Transaction',
       order_id: order.id,
       handler: async function (response) {
-        // Update order status to 'completed' in Supabase
-        const updatePromises = orderIds.map((orderId) =>
-          supabase
-            .from('orders')
-            .update({
-              payment_id: response.razorpay_payment_id,
-              status: 'completed',
-            })
-            .eq('id', orderId)
-        );
-
         try {
-          await Promise.all(updatePromises);
-        } catch (error) {
-          console.error('Error updating order status:', error);
-        }
+          // Update order status to 'completed' in Supabase
+          const updatePromises = orderIds.map((orderId) =>
+            supabase
+              .from('orders')
+              .update({
+                payment_id: response.razorpay_payment_id,
+                status: 'completed',
+              })
+              .eq('id', orderId)
+          );
 
-        // Clear cart
-        const cartKey = getCartKey();
-        localStorage.removeItem(cartKey);
-        window.dispatchEvent(new Event('cartUpdated'));
-        router.push('/checkout/success?payment_id=' + response.razorpay_payment_id);
+          await Promise.all(updatePromises);
+          
+          // Clear cart aggressively
+          const cartKey = getCartKey();
+          localStorage.removeItem(cartKey);
+          localStorage.removeItem('cart_guest'); // Also clear guest cart
+
+          // Dispatch multiple events to ensure all components update
+          for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+              window.dispatchEvent(new Event('cartUpdated'));
+            }, i * 50);
+          }
+
+          // Add delay before redirect
+          setTimeout(() => {
+            router.push('/checkout/success?payment_id=' + response.razorpay_payment_id);
+          }, 300);
+          
+        } catch (error) {
+          console.error('Error in payment handler:', error);
+          alert('Payment successful but there was an error updating your order. Please contact support.');
+        }
       },
       prefill: {
         name: user?.user_metadata?.name || 'Customer',
