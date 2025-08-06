@@ -7,6 +7,7 @@ import Image from "next/image";
 import debounce from "lodash.debounce";
 import { createClient } from "@supabase/supabase-js";
 import { ProfileSidebar } from "@/app/profile/page";
+import AuthModal from "./AuthModal";
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -29,9 +30,10 @@ export default function Navbar() {
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [userDropdownVisible, setUserDropdownVisible] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false); // Fixed: Initialized with boolean
   const [user, setUser] = useState(null);
   const [profileSidebarOpen, setProfileSidebarOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const searchInputRef = useRef();
 
@@ -86,7 +88,7 @@ export default function Navbar() {
     loadCategories();
   }, []);
 
-  // Fetch products for search directly from Supabase (not from /api/products)
+  // Fetch products for search directly from Supabase
   useEffect(() => {
     const fetchProducts = async () => {
       try {
@@ -169,7 +171,7 @@ export default function Navbar() {
     []
   );
 
-  // Only search/filter products by name (case-insensitive, trimmed)
+  // Search/filter products by name
   useEffect(() => {
     const filtered = products.filter((product) =>
       product.name &&
@@ -205,17 +207,12 @@ export default function Navbar() {
   // Helper function to get user avatar URL
   const getUserAvatar = () => {
     if (!user) return null;
-    
-    // Check for Google avatar
     if (user.app_metadata?.provider === 'google') {
       return user.user_metadata?.avatar_url || user.user_metadata?.picture;
     }
-    
-    // Check for custom avatar in Supabase user metadata
     if (user.user_metadata?.avatar_url) {
       return user.user_metadata.avatar_url;
     }
-    
     return null;
   };
 
@@ -238,6 +235,8 @@ export default function Navbar() {
       {profileSidebarOpen && (
         <ProfileSidebar onClose={() => setProfileSidebarOpen(false)} />
       )}
+      {/* Auth Modal */}
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <header className="fixed top-0 left-0 w-full z-50 flex flex-wrap justify-between items-center py-3 px-4 sm:px-6 bg-white text-gray-700 shadow">
         {/* Mobile Menu Button */}
         <button 
@@ -364,23 +363,21 @@ export default function Navbar() {
                         window.location.href = `/products/${item.id}`;
                       }}
                     >
-                      <>
-                        {item.image && (
-                          <Image
-                            src={typeof item.image === 'string' && (item.image.startsWith('http') || item.image.startsWith('/')) ? item.image : '/store.png'}
-                            alt={item.name}
-                            width={36}
-                            height={36}
-                            className="rounded mr-3 object-cover"
-                          />
+                      {item.image && (
+                        <Image
+                          src={typeof item.image === 'string' && (item.image.startsWith('http') || item.image.startsWith('/')) ? item.image : '/store.png'}
+                          alt={item.name}
+                          width={36}
+                          height={36}
+                          className="rounded mr-3 object-cover"
+                        />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium">{item.name}</p>
+                        {item.price && (
+                          <p className="text-xs text-green-600">${item.price}</p>
                         )}
-                        <div>
-                          <p className="text-sm font-medium">{item.name}</p>
-                          {item.price && (
-                            <p className="text-xs text-green-600">${item.price}</p>
-                          )}
-                        </div>
-                      </>
+                      </div>
                     </Link>
                   ) : (
                     <Link
@@ -440,10 +437,10 @@ export default function Navbar() {
                   </div>
                 </button>
               ) : (
-                <Link
-                  href="/auth"
-                  className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition duration-150"
-                  onClick={() => setMobileMenuOpen(false)}
+                <button
+                  type="button"
+                  className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition duration-150 w-full"
+                  onClick={() => { setIsAuthModalOpen(true); setMobileMenuOpen(false); }}
                 >
                   <div className="w-8 h-8 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center mr-3 font-medium text-sm">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -453,7 +450,7 @@ export default function Navbar() {
                   <div className="flex-1">
                     <span className="font-medium text-gray-800">Sign In</span>
                   </div>
-                </Link>
+                </button>
               )}
 
               {/* Store Dropdown in Mobile Menu */}
@@ -559,7 +556,9 @@ export default function Navbar() {
               </Link>
             </div>
           </div>
-        )}        {/* Desktop Store Dropdown */}
+        )}
+
+        {/* Desktop Store Dropdown */}
         <div className="hidden lg:block relative store-dropdown">
           <button
             onClick={() => setDropdownVisible(!dropdownVisible)}
@@ -577,51 +576,52 @@ export default function Navbar() {
                 strokeLinejoin="round" 
                 strokeWidth={2} 
                 d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" 
-            />
-          </svg>
-          <span>Select Store</span>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className={`h-4 w-4 transition-transform ${dropdownVisible ? "rotate-180" : ""}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        {dropdownVisible && (
-          <ul className="absolute mt-2 w-64 bg-white border rounded-xl shadow-xl z-10 py-1">
-            {stores.length > 0 ? (
-              stores.map((store) => (
-                <li
-                  key={store.id}
-                  className="hover:bg-gray-50 transition flex items-center gap-3 px-4 py-3 cursor-pointer border-b last:border-b-0"
-                >
-                  <Link 
-                    href={`/store/${store.id}`} 
-                    onClick={() => setDropdownVisible(false)}
-                    className="flex items-center gap-3 w-full text-gray-700"
+              />
+            </svg>
+            <span>Select Store</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-4 w-4 transition-transform ${dropdownVisible ? "rotate-180" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {dropdownVisible && (
+            <ul className="absolute mt-2 w-64 bg-white border rounded-xl shadow-xl z-10 py-1">
+              {stores.length > 0 ? (
+                stores.map((store) => (
+                  <li
+                    key={store.id}
+                    className="hover:bg-gray-50 transition flex items-center gap-3 px-4 py-3 cursor-pointer border-b last:border-b-0"
                   >
-                    <Image
-                      src={store.main_image || '/store.png'}
-                      alt={store.name}
-                      width={36}
-                      height={36}
-                      className="rounded-lg object-cover border border-gray-200 bg-white"
-                    />
-                    <span className="font-medium text-base">{store.name}</span>
-                  </Link>
-                </li>
-              ))
-            ) : (
-              <li className="px-4 py-2 text-gray-500">No stores available</li>
-            )}
-          </ul>
-        )}
-      </div>
-      {/* Desktop Search Bar */}
-      <div className="hidden lg:block w-[500px] relative">
+                    <Link 
+                      href={`/store/${store.id}`} 
+                      onClick={() => setDropdownVisible(false)}
+                      className="flex items-center gap-3 w-full text-gray-700"
+                    >
+                      <Image
+                        src={store.main_image || '/store.png'}
+                        alt={store.name}
+                        width={36}
+                        height={36}
+                        className="rounded-lg object-cover border border-gray-200 bg-white"
+                      />
+                      <span className="font-medium text-base">{store.name}</span>
+                    </Link>
+                  </li>
+                ))
+              ) : (
+                <li className="px-4 py-2 text-gray-500">No stores available</li>
+              )}
+            </ul>
+          )}
+        </div>
+
+        {/* Desktop Search Bar */}
+        <div className="hidden lg:block w-[500px] relative">
           <form className="relative" onSubmit={(e) => e.preventDefault()}>
             <input
               type="text"
@@ -672,23 +672,21 @@ export default function Navbar() {
                       window.location.href = `/products/${item.id}`;
                     }}
                   >
-                    <>
-                      {item.image && (
-                        <Image
-                          src={typeof item.image === 'string' && (item.image.startsWith('http') || item.image.startsWith('/')) ? item.image : '/store.png'}
-                          alt={item.name}
-                          width={36}
-                          height={36}
-                          className="rounded mr-3 object-cover"
-                        />
+                    {item.image && (
+                      <Image
+                        src={typeof item.image === 'string' && (item.image.startsWith('http') || item.image.startsWith('/')) ? item.image : '/store.png'}
+                        alt={item.name}
+                        width={36}
+                        height={36}
+                        className="rounded mr-3 object-cover"
+                      />
+                    )}
+                    <div>
+                      <p className="text-sm font-medium">{item.name}</p>
+                      {item.price && (
+                        <p className="text-xs text-green-600 font-medium">${item.price}</p>
                       )}
-                      <div>
-                        <p className="text-sm font-medium">{item.name}</p>
-                        {item.price && (
-                          <p className="text-xs text-green-600 font-medium">${item.price}</p>
-                        )}
-                      </div>
-                    </>
+                    </div>
                   </Link>
                 ) : (
                   <Link
@@ -719,10 +717,10 @@ export default function Navbar() {
 
         {/* Desktop User and Cart Icons */}
         <div className="hidden lg:flex items-center space-x-4">
-          {/* User Profile Button (opens sidebar, not a link) */}
+          {/* User Profile Button */}
           <button
             type="button"
-            onClick={() => user ? setProfileSidebarOpen(true) : window.location.assign('/auth')}
+            onClick={() => user ? setProfileSidebarOpen(true) : setIsAuthModalOpen(true)}
             className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition duration-150"
           >
             <div className="w-8 h-8 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center font-medium text-sm">
