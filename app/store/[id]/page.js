@@ -212,14 +212,14 @@ export default function StoreDetailPage({ params }) {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#fafbfa] via-white to-blue-50 py-14 px-2 md:px-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#fafbfa] via-white to-blue-50 py-8 md:py-14 px-4 md:px-6">
       <div>
         {/* HERO SECTION */}
-        <div className="flex flex-col lg:flex-row mt-16 gap-15 mb-12 max-w-7xl mx-auto">
+        <div className="flex flex-col lg:flex-row mt-8 md:mt-16 gap-8 lg:gap-15 mb-8 md:mb-12 max-w-7xl mx-auto">
           {/* Left: Main Image and Gallery */}
           <div className="flex flex-col w-full lg:w-auto">
             {/* Main Image */}
-            <div className="w-full lg:w-[800px] h-[400px] lg:h-[450px] rounded-2xl overflow-hidden shadow-lg bg-white mb-4 relative">
+            <div className="w-full lg:w-[800px] h-[250px] sm:h-[300px] md:h-[400px] lg:h-[450px] rounded-xl md:rounded-2xl overflow-hidden shadow-lg bg-white mb-3 md:mb-4 relative">
               <Image
                 src={allImages[currentImageIndex]}
                 alt={store.name}
@@ -231,12 +231,12 @@ export default function StoreDetailPage({ params }) {
             
             {/* Gallery Thumbnails */}
             {allImages.length > 1 && (
-              <div className="flex gap-2 justify-start overflow-x-auto pb-2">
+              <div className="flex gap-2 justify-start overflow-x-auto pb-2 scrollbar-hide">
                 {allImages.slice(0, 4).map((img, idx) => (
                   <button
                     key={idx}
                     onClick={() => setCurrentImageIndex(idx)}
-                    className={`flex-shrink-0 w-16 h-12 lg:w-20 lg:h-16 rounded-lg overflow-hidden shadow border-2 transition-all duration-200 ${
+                    className={`flex-shrink-0 w-14 h-10 sm:w-16 sm:h-12 lg:w-20 lg:h-16 rounded-lg overflow-hidden shadow border-2 transition-all duration-200 ${
                       currentImageIndex === idx
                         ? 'border-lime-400 ring-2 ring-lime-300'
                         : 'border-gray-200 hover:border-gray-300'
@@ -253,7 +253,7 @@ export default function StoreDetailPage({ params }) {
                   </button>
                 ))}
                 {allImages.length > 4 && (
-                  <div className="flex-shrink-0 w-16 h-12 lg:w-20 lg:h-16 rounded-lg bg-gray-100 border-2 border-gray-200 flex items-center justify-center text-gray-500 text-xs font-medium">
+                  <div className="flex-shrink-0 w-14 h-10 sm:w-16 sm:h-12 lg:w-20 lg:h-16 rounded-lg bg-gray-100 border-2 border-gray-200 flex items-center justify-center text-gray-500 text-xs font-medium">
                     +{allImages.length - 4}
                   </div>
                 )}
@@ -263,29 +263,31 @@ export default function StoreDetailPage({ params }) {
 
           {/* Right: Store Info */}
           <div className="flex flex-col justify-start mt-4 w-full lg:w-auto lg:max-w-md lg:ml-8 lg:mt-0">
-            <div className="text-gray-600 text-2xl mt-25 mb-8 font-medium">
+            <div className="text-gray-600 text-lg sm:text-xl md:text-2xl mt-4 md:mt-25 mb-4 md:mb-8 font-medium text-center lg:text-left">
               Your Order is Brought to you by
             </div>
-            <h1 className="text-3xl lg:text-4xl font-bold text-lime-500 mb-8 leading-tight">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-lime-500 mb-6 md:mb-8 leading-tight text-center lg:text-left">
               {store.name}
             </h1>
-            <div className="flex items-start gap-2 mb-8">
+            <div className="flex items-start gap-2 mb-6 md:mb-8 justify-center lg:justify-start">
               <svg className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
               </svg>
-              <span className="text-gray-700 text-base leading-relaxed">
+              <span className="text-gray-700 text-sm sm:text-base leading-relaxed text-center lg:text-left">
                 {store.address}
               </span>
             </div>
-            <button className="bg-lime-400 hover:bg-lime-500 text-white font-semibold px-2 py-1 rounded-lg shadow-md transition-all duration-200 text-lg w-fit hover:shadow-lg transform hover:-translate-y-0.5">
-              Shop Now
-            </button>
+            <div className="flex justify-center lg:justify-start">
+              <button className="bg-lime-400 hover:bg-lime-500 text-white font-semibold px-6 sm:px-8 py-3 sm:py-4 rounded-lg shadow-md transition-all duration-200 text-base sm:text-lg w-fit hover:shadow-lg transform hover:-translate-y-0.5">
+                Shop Now
+              </button>
+            </div>
           </div>
         </div>
         {/* END HERO SECTION */}
 
         {/* Main & Subcategories Section (filtered by products) */}
-        <div className="mt-12">
+        <div className="mt-8 md:mt-12 max-w-7xl mx-auto">
           {mainCategories.map(mainCat => {
             // Find subcategories of this main category
             const subcats = categories.filter(cat => cat.parent_id === mainCat.id);
@@ -293,34 +295,34 @@ export default function StoreDetailPage({ params }) {
             const subcatsWithProducts = subcats.filter(subcat => products.some(p => p.categoryid === subcat.id));
             if (subcatsWithProducts.length === 0) return null;
             return (
-              <div key={mainCat.id} className="mb-12">
-                <h3 className="text-2xl font-bold text-gray-800 mb-6">{mainCat.name}</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+              <div key={mainCat.id} className="mb-8 md:mb-12">
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 md:mb-6 text-center sm:text-left">{mainCat.name}</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
                   {subcatsWithProducts.map((subcat) => (
                     <Link
                       key={subcat.id}
                       href={`/new/${subcat.id}?store=${id}`}
                       className="group"
                     >
-                      <div className="bg-white rounded-2xl shadow-md hover:shadow-lg p-5 flex items-center justify-between border border-gray-100 transition-transform duration-200 group-hover:-translate-y-1 h-36">
+                      <div className="bg-white rounded-xl md:rounded-2xl shadow-md hover:shadow-lg p-3 md:p-5 flex items-center justify-between border border-gray-100 transition-transform duration-200 group-hover:-translate-y-1 h-32 sm:h-36 md:h-40">
                         {/* Text Section */}
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-gray-900 text-base mb-1 truncate">
+                        <div className="flex-1 min-w-0 pr-2 md:pr-4">
+                          <div className="font-semibold text-gray-900 text-xs sm:text-sm md:text-base mb-1 line-clamp-2 leading-tight">
                             {subcat.name}
                           </div>
-                          <div className="text-sm text-gray-500 truncate">
+                          <div className="text-xs md:text-sm text-gray-500 line-clamp-2 leading-tight">
                             {subcat.description}
                           </div>
                         </div>
                         {/* Image Section */}
                         {subcat.image && (
-                          <div className="ml-4 flex-shrink-0">
+                          <div className="ml-1 md:ml-4 flex-shrink-0">
                             <Image
                               src={normalizeImageUrl(subcat.image)}
                               alt={subcat.name}
                               width={96}
                               height={96}
-                              className="object-contain"
+                              className="object-contain w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20"
                             />
                           </div>
                         )}
