@@ -16,10 +16,24 @@ export function getCartKeyFromUser(user) {
   return 'cart_guest';
 }
 
-// Helper function to normalize image paths
+// Normalize image path to handle both single strings and arrays
 const normalizeImagePath = (path) => {
-  if (!path) return '';
-  return path.replace(/^(\.\.\/)+assets\//, '/');
+  if (!path) return ['/placeholder-product.jpg'];
+  if (Array.isArray(path)) {
+    const normalized = path
+      .map((p) => (p ? p.replace(/^(\.\.\/)+assets\//, '/') : null))
+      .filter((p) => p);
+    return normalized.length > 0 ? normalized : ['/placeholder-product.jpg'];
+  }
+  return [path.replace(/^(\.\.\/)+assets\//, '/')];
+};
+
+// Normalize image URL to ensure proper format
+const normalizeImageUrl = (url) => {
+  if (!url) return '/placeholder-product.jpg';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/')) return url;
+  return url;
 };
 
 const supabase = createClient(
@@ -55,11 +69,12 @@ export default function CartPage() {
     const fetchCartItems = () => {
       try {
         const cart = JSON.parse(localStorage.getItem(getCartKey()) || "[]");
+        console.log('Cart items:', cart); // Debug log to inspect cart data
         setCartItems(cart);
 
-        // Calculate the total price
+        // Calculate the total price with validation
         const totalPrice = cart.reduce(
-          (acc, item) => acc + item.price * item.quantity,
+          (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
           0
         );
         setTotal(totalPrice);
@@ -71,24 +86,27 @@ export default function CartPage() {
     };
 
     fetchCartItems();
-    // Listen for cart updates (optional, for cross-tab sync)
+    // Listen for cart updates (for cross-tab sync)
     const handleCartUpdate = () => fetchCartItems();
     window.addEventListener('cartUpdated', handleCartUpdate);
     return () => window.removeEventListener('cartUpdated', handleCartUpdate);
   }, [user, getCartKey]);
 
-  // Protect cart page: show modal or redirect if not authenticated
+  // Protect cart page: show modal if not authenticated
   useEffect(() => {
     if (!loading && (!user || !user.id)) {
       setShowAuthModal(true);
-      // Optionally, redirect instead:
-      // router.push("/auth");
     } else {
       setShowAuthModal(false);
     }
   }, [user, loading]);
 
   const handleAddToCart = (product) => {
+    // Validate product data before adding
+    if (!product || !product.product_id || (!product.image && !Array.isArray(product.image))) {
+      console.error('Invalid product data:', product);
+      return;
+    }
     const cartKey = getCartKey();
     const existingCart = JSON.parse(localStorage.getItem(cartKey) || "[]");
     const existingItemIndex = existingCart.findIndex(
@@ -108,8 +126,6 @@ export default function CartPage() {
     }
 
     localStorage.setItem(cartKey, JSON.stringify(updatedCart));
-
-    // 🔔 This is the key line:
     window.dispatchEvent(new Event("cartUpdated"));
   };
 
@@ -120,12 +136,11 @@ export default function CartPage() {
     setCartItems(updatedCart);
 
     const newTotal = updatedCart.reduce(
-      (acc, item) => acc + item.price * item.quantity,
+      (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
       0
     );
     setTotal(newTotal);
 
-    // Notify others
     window.dispatchEvent(new Event("cartUpdated"));
   };
 
@@ -140,12 +155,11 @@ export default function CartPage() {
     setCartItems(updatedCart);
 
     const newTotal = updatedCart.reduce(
-      (acc, item) => acc + item.price * item.quantity,
+      (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
       0
     );
     setTotal(newTotal);
 
-    // Notify others
     window.dispatchEvent(new Event("cartUpdated"));
   };
 
@@ -160,12 +174,11 @@ export default function CartPage() {
     setCartItems(updatedCart);
 
     const newTotal = updatedCart.reduce(
-      (acc, item) => acc + item.price * item.quantity,
+      (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
       0
     );
     setTotal(newTotal);
 
-    // Notify others
     window.dispatchEvent(new Event("cartUpdated"));
   };
 
@@ -174,8 +187,6 @@ export default function CartPage() {
     localStorage.removeItem(cartKey);
     setCartItems([]);
     setTotal(0);
-
-    // Notify others
     window.dispatchEvent(new Event("cartUpdated"));
   };
 
@@ -184,7 +195,6 @@ export default function CartPage() {
       e.preventDefault();
       setShowAuthModal(true);
     }
-    // else, let the Link work as normal
   };
 
   if (loading) {
@@ -196,7 +206,6 @@ export default function CartPage() {
     );
   }
 
-  // If not authenticated, show only the modal
   if (!user || !user.id) {
     return <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />;
   }
@@ -224,66 +233,72 @@ export default function CartPage() {
 
       <div className="bg-white p-6 sm:p-8 rounded-2xl shadow border border-gray-200">
         <div className="divide-y divide-gray-100">
-          {cartItems.map((item, index) => (
-            <div
-              key={item.product_id || index}
-              className="flex flex-col md:flex-row md:items-center justify-between py-6"
-            >
-              <div className="flex items-center gap-6 w-full md:w-2/3">
-                <Link href={`/products/${item.product_id}`} className="block">
-                  <Image
-                    src={normalizeImagePath(item.image)}
-                    alt={item.name}
-                    width={90}
-                    height={90}
-                    className="w-20 h-20 object-contain rounded-lg border border-gray-200 bg-white"
-                  />
-                </Link>
-                <div className="flex flex-col gap-1 w-full">
-                  <Link href={`/products/${item.product_id}`} className="hover:underline">
-                    <h3 className="text-base font-semibold text-gray-900">{item.name}</h3>
+          {cartItems.map((item, index) => {
+            // Normalize image paths and select the first valid one
+            const normalizedImages = normalizeImagePath(item.image);
+            const imageUrl = normalizeImageUrl(normalizedImages[0] || '/placeholder-product.jpg');
+
+            return (
+              <div
+                key={item.product_id || index}
+                className="flex flex-col md:flex-row md:items-center justify-between py-6"
+              >
+                <div className="flex items-center gap-6 w-full md:w-2/3">
+                  <Link href={`/products/${item.product_id}`} className="block">
+                    <Image
+                      src={imageUrl}
+                      alt={item.name || 'Product image'}
+                      width={90}
+                      height={90}
+                      className="w-20 h-20 object-contain rounded-lg border border-gray-200 bg-white"
+                    />
                   </Link>
-                  {item.category && (
-                    <span className="text-xs text-gray-500">{item.category}</span>
-                  )}
-                  <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                    <span>Unit Price:</span>
-                    <span className="font-semibold text-gray-800">${item.price}</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={() => handleDecreaseQuantity(item.product_id)}
-                      className="border border-gray-300 rounded px-2 py-1 text-base font-bold text-gray-700 hover:bg-gray-100"
-                      aria-label="Decrease quantity"
-                    >
-                      -
-                    </button>
-                    <span className="text-base font-semibold px-2">{item.quantity}</span>
-                    <button
-                      onClick={() => handleIncreaseQuantity(item.product_id)}
-                      className="border border-gray-300 rounded px-2 py-1 text-base font-bold text-gray-700 hover:bg-gray-100"
-                      aria-label="Increase quantity"
-                    >
-                      +
-                    </button>
+                  <div className="flex flex-col gap-1 w-full">
+                    <Link href={`/products/${item.product_id}`} className="hover:underline">
+                      <h3 className="text-base font-semibold text-gray-900">{item.name || 'Unnamed Product'}</h3>
+                    </Link>
+                    {item.category && (
+                      <span className="text-xs text-gray-500">{item.category}</span>
+                    )}
+                    <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                      <span>Unit Price:</span>
+                      <span className="font-semibold text-gray-800">${Number(item.price || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={() => handleDecreaseQuantity(item.product_id)}
+                        className="border border-gray-300 rounded px-2 py-1 text-base font-bold text-gray-700 hover:bg-gray-100"
+                        aria-label="Decrease quantity"
+                      >
+                        -
+                      </button>
+                      <span className="text-base font-semibold px-2">{item.quantity || 1}</span>
+                      <button
+                        onClick={() => handleIncreaseQuantity(item.product_id)}
+                        className="border border-gray-300 rounded px-2 py-1 text-base font-bold text-gray-700 hover:bg-gray-100"
+                        aria-label="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex flex-col items-end mt-4 md:mt-0 w-full md:w-1/3">
-                <div className="text-base font-semibold text-gray-800 mb-2">
-                  Subtotal: ${(item.price * item.quantity).toFixed(2)}
+                <div className="flex flex-col items-end mt-4 md:mt-0 w-full md:w-1/3">
+                  <div className="text-base font-semibold text-gray-800 mb-2">
+                    Subtotal: ${(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}
+                  </div>
+                  <button
+                    onClick={() => handleRemoveItem(item.product_id)}
+                    className="flex items-center gap-2 text-red-600 hover:text-white hover:bg-red-500 border border-red-200 px-3 py-1 rounded font-semibold transition-colors"
+                    aria-label="Remove item"
+                  >
+                    <FaTrashAlt />
+                    Remove
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleRemoveItem(item.product_id)}
-                  className="flex items-center gap-2 text-red-600 hover:text-white hover:bg-red-500 border border-red-200 px-3 py-1 rounded font-semibold transition-colors"
-                  aria-label="Remove item"
-                >
-                  <FaTrashAlt />
-                  Remove
-                </button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Cart Total */}
