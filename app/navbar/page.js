@@ -30,12 +30,13 @@ export default function Navbar() {
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [userDropdownVisible, setUserDropdownVisible] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false); // Fixed: Initialized with boolean
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [profileSidebarOpen, setProfileSidebarOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const searchInputRef = useRef();
+  const searchResultsRef = useRef(); // Added ref for search results container
 
   // Fetch user from Supabase auth
   useEffect(() => {
@@ -141,7 +142,11 @@ export default function Navbar() {
     };
   }, [loadCartCount]);
 
-  const handleSearchBlur = () => {
+  const handleSearchBlur = (event) => {
+    // Check if the related target (where focus is moving) is within search results
+    if (searchResultsRef.current && event.relatedTarget && searchResultsRef.current.contains(event.relatedTarget)) {
+      return; // Do not clear results if clicking within the search results
+    }
     setTimeout(() => setSearchResults([]), 200);
   };
 
@@ -349,19 +354,14 @@ export default function Navbar() {
               )}
             </form>
             {searchQuery && searchResults.length > 0 && (
-              <div className="absolute left-0 right-0 mt-2 mx-4 bg-white border rounded shadow-lg z-20 max-h-80 overflow-y-auto">
+              <div ref={searchResultsRef} className="absolute left-0 right-0 mt-2 mx-4 bg-white border rounded shadow-lg z-20 max-h-80 overflow-y-auto">
                 {searchResults.map((item) =>
                   item._type === "product" ? (
                     <Link
                       href={`/products/${item.id}`}
                       key={`product-${item.id}`}
                       className="flex items-center px-4 py-2 hover:bg-gray-100"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setSearchQuery("");
-                        window.location.href = `/products/${item.id}`;
-                      }}
+                      onClick={() => setSearchQuery("")}
                     >
                       {item.image && (
                         <Image
@@ -384,12 +384,7 @@ export default function Navbar() {
                       href={`/categories/${item.id}`}
                       key={`category-${item.id}`}
                       className="flex items-center px-4 py-2 hover:bg-gray-100"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setSearchQuery("");
-                        window.location.href = `/categories/${item.id}`;
-                      }}
+                      onClick={() => setSearchQuery("")}
                     >
                       <div>
                         <p className="text-sm font-medium text-blue-700">Category: {item.name}</p>
@@ -658,19 +653,14 @@ export default function Navbar() {
             )}
           </form>
           {searchQuery && searchResults.length > 0 && (
-            <div className="absolute mt-2 w-full bg-white border rounded-lg shadow-lg z-10 max-h-80 overflow-y-auto">
+            <div ref={searchResultsRef} className="absolute mt-2 w-full bg-white border rounded-lg shadow-lg z-10 max-h-80 overflow-y-auto">
               {searchResults.map((item) =>
                 item._type === "product" ? (
                   <Link
                     href={`/products/${item.id}`}
                     key={`product-${item.id}`}
                     className="flex items-center px-4 py-2 hover:bg-gray-50"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setSearchQuery("");
-                      window.location.href = `/products/${item.id}`;
-                    }}
+                    onClick={() => setSearchQuery("")}
                   >
                     {item.image && (
                       <Image
@@ -693,12 +683,7 @@ export default function Navbar() {
                     href={`/categories/${item.id}`}
                     key={`category-${item.id}`}
                     className="flex items-center px-4 py-2 hover:bg-gray-50"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setSearchQuery("");
-                      window.location.href = `/categories/${item.id}`;
-                    }}
+                    onClick={() => setSearchQuery("")}
                   >
                     <div>
                       <p className="text-sm font-medium text-blue-700">Category: {item.name}</p>
