@@ -15,8 +15,6 @@ export async function GET(request) {
       .select(`
         id,
         name,
-        address,
-        price,
         main_image,
         gallery_images,
         vendor_id,

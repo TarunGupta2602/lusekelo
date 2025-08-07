@@ -156,7 +156,7 @@ export default function VendorDashboard() {
 
         const { data: stores, error: storeError } = await supabase
           .from('supermarkets')
-          .select('id, name, main_image, vendor_id, created_at, location, gallery_images, address, price')
+          .select('id, name, main_image, vendor_id, created_at, location, gallery_images,')
           .eq('vendor_id', user.id)
           .limit(1);
 
@@ -705,8 +705,7 @@ export default function VendorDashboard() {
   const [editSupermarketOpen, setEditSupermarketOpen] = useState(false);
   const [supermarketForm, setSupermarketForm] = useState({
     name: '',
-    address: '',
-    price: '',
+   
     main_image: '',
     gallery_images: [],
   });
@@ -720,8 +719,8 @@ export default function VendorDashboard() {
     if (store) {
       setSupermarketForm({
         name: store.name || '',
-        address: store.address || '',
-        price: store.price || '',
+        
+        
         main_image: store.main_image || '',
         gallery_images: Array.isArray(store.gallery_images) ? store.gallery_images : [],
       });
@@ -842,8 +841,7 @@ export default function VendorDashboard() {
         .from('supermarkets')
         .update({
           name: supermarketForm.name,
-          address: supermarketForm.address,
-          price: supermarketForm.price,
+         
           main_image: mainImageUrl,
           gallery_images: galleryImageUrls,
         })
@@ -1269,26 +1267,8 @@ export default function VendorDashboard() {
                   className="w-full px-4 py-2 border rounded"
                 />
               </div>
-              <div className="mb-3">
-                <label className="block text-gray-700">Address</label>
-                <input
-                  type="text"
-                  name="address"
-                  value={supermarketForm.address}
-                  onChange={handleSupermarketFormChange}
-                  className="w-full px-4 py-2 border rounded"
-                />
-              </div>
-              <div className="mb-3">
-                <label className="block text-gray-700">Price</label>
-                <input
-                  type="number"
-                  name="price"
-                  value={supermarketForm.price}
-                  onChange={handleSupermarketFormChange}
-                  className="w-full px-4 py-2 border rounded"
-                />
-              </div>
+             
+              
               {/* Main Image Preview and Upload */}
               <div className="mb-3">
                 <label className="block text-gray-700">Main Image</label>

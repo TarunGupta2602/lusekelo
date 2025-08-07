@@ -272,7 +272,7 @@ export default function EditInventoryPage() {
     <div className="p-2 sm:p-4 md:p-8 bg-gradient-to-br from-blue-50 via-white to-pink-50 min-h-screen">
       <div className="max-w-6xl mx-auto">
         <h2 className="text-3xl md:text-4xl font-bold mb-8 text-center text-blue-800 drop-shadow">Edit Inventory</h2>
-        <div className="flex flex-wrap gap-2 mb-8 items-center bg-white p-4 rounded-lg shadow border border-blue-100 justify-center">
+        <div className="sticky top-0 z-10 flex flex-wrap gap-2 mb-8 items-center bg-white p-4 rounded-lg shadow border border-blue-100 justify-center">
           <div className="flex gap-2 flex-wrap items-center">
             {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'All'].map((f) => (
               <button
