@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@supabase/supabase-js';
-import CustomAuthModal from '../../components/CustomAuthModal';
+
 
 // Move this constant outside the component
 const defaultCategoryNames = ["Food & Drinks", "Household Essentials", "Beauty & Personal Care"]
@@ -46,7 +46,7 @@ export default function NewPage() {
   const [cartMessage, setCartMessage] = useState("");
   const [user, setUser] = useState(null);
   const [scrollTimeouts, setScrollTimeouts] = useState({});
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  
 
   // Normalize image paths
   const normalizeImagePath = (path) => {
@@ -367,10 +367,7 @@ export default function NewPage() {
   };
 
   const handleAddToCart = (productToAdd, quantityDelta = 1) => {
-    if (!user) {
-      setShowAuthModal(true);
-      return;
-    }
+   
     if (!productToAdd) return;
 
     const cartKey = getCartKey();
@@ -845,7 +842,7 @@ export default function NewPage() {
           {cartMessage}
         </div>
       )}
-      <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
+      
     </div>
   )
 }

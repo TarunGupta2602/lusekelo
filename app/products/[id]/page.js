@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Star, ShoppingCart, Plus, Minus } from 'lucide-react';
 import Image from 'next/image';
-import CustomAuthModal from '../../../components/CustomAuthModal';
+
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -32,7 +32,8 @@ export default function ProductDetailPage({ params }) {
   const [selectedVariation, setSelectedVariation] = useState(null);
   const [cartMessage, setCartMessage] = useState("");
   const [user, setUser] = useState(null);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  
+
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const scrollContainerRef = useRef(null);
 
@@ -117,10 +118,7 @@ export default function ProductDetailPage({ params }) {
   };
 
   const handleAddToCart = (productToAdd = product, qty = quantity, variation = selectedVariation) => {
-    if (!user) {
-      setShowAuthModal(true);
-      return;
-    }
+    
     if (!productToAdd) return;
 
     const cartKey = getCartKey();
@@ -351,9 +349,7 @@ export default function ProductDetailPage({ params }) {
                 <ShoppingCart className="w-5 h-5" />
                 <span>Add to cart</span>
               </button>
-              <button className="flex-1 bg-lime-400 hover:bg-lime-500 text-black px-8 py-4 rounded-lg font-medium transition-colors">
-                Shop Now
-              </button>
+             
             </div>
 
             {/* Success Message */}
@@ -463,7 +459,7 @@ export default function ProductDetailPage({ params }) {
         </div>
       </div>
 
-      <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
+      
 
       <style jsx>{`
         .scrollbar-hide::-webkit-scrollbar {

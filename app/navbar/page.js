@@ -14,6 +14,59 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Normalize image URL or path to handle both absolute URLs and relative paths
+const normalizeImageUrl = (input) => {
+  const fallbackImage = '/placeholder-product.jpg';
+
+  // Handle null, undefined, or empty input
+  if (!input) return fallbackImage;
+
+  // Handle array input (e.g., product.image might be an array)
+  if (Array.isArray(input)) {
+    const normalized = input
+      .map((p) => {
+        if (!p) return null;
+        const trimmed = String(p).trim();
+        if (!trimmed) return null;
+
+        // Handle absolute URLs
+        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+          try {
+            new URL(trimmed);
+            return trimmed;
+          } catch {
+            return null;
+          }
+        }
+
+        // Handle relative paths (e.g., ../../assets/HairSpray.webp)
+        const normalizedPath = trimmed.replace(/^(\.\.\/)+assets\//, '/');
+        return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+      })
+      .filter((p) => p);
+
+    return normalized.length > 0 ? normalized[0] : fallbackImage;
+  }
+
+  // Handle single string input
+  const urlString = String(input).trim();
+  if (!urlString) return fallbackImage;
+
+  // Handle absolute URLs
+  if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
+    try {
+      new URL(urlString);
+      return urlString;
+    } catch {
+      return fallbackImage;
+    }
+  }
+
+  // Handle relative paths
+  const normalizedPath = urlString.replace(/^(\.\.\/)+assets\//, '/');
+  return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+};
+
 async function fetchData(endpoint) {
   const res = await fetch(`/api/${endpoint}`);
   if (!res.ok) throw new Error(`Failed to fetch ${endpoint}`);
@@ -36,7 +89,7 @@ export default function Navbar() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const searchInputRef = useRef();
-  const searchResultsRef = useRef(); // Added ref for search results container
+  const searchResultsRef = useRef();
 
   // Fetch user from Supabase auth
   useEffect(() => {
@@ -101,9 +154,15 @@ export default function Navbar() {
           console.error('Error fetching products:', productsError.message);
           setProducts([]);
         } else {
-          setProducts(productsData || []);
+          // Normalize image field
+          const normalizedProducts = productsData.map(product => ({
+            ...product,
+            image: normalizeImageUrl(product.image)
+          }));
+          setProducts(normalizedProducts || []);
         }
       } catch (error) {
+        console.error('Error fetching products:', error);
         setProducts([]);
       }
     };
@@ -153,7 +212,7 @@ export default function Navbar() {
   // Debounced search function
   const debouncedSearch = useMemo(
     () =>
-      debounce(async (query) => {
+      debounce((query) => {
         const trimmedQuery = query.trim().toLowerCase();
         if (!trimmedQuery) {
           setSearchResults([]);
@@ -162,29 +221,33 @@ export default function Navbar() {
         }
         setLoading(true);
         try {
-          const productsData = await fetchData("products");
-          const filteredProducts = productsData.filter((product) =>
-            product.name.toLowerCase().includes(trimmedQuery)
+          const filteredProducts = products.filter((product) =>
+            product.name?.toLowerCase().includes(trimmedQuery)
           );
-          setSearchResults(filteredProducts);
+          setSearchResults(filteredProducts.map((p) => ({ ...p, _type: "product" })));
         } catch (error) {
+          console.error('Search error:', error);
           setSearchResults([]);
         } finally {
           setLoading(false);
         }
       }, 400),
-    []
+    [products]
   );
 
-  // Search/filter products by name
+  // Handle search input change
+  const handleSearchChange = useCallback((e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    debouncedSearch(query);
+  }, [debouncedSearch]);
+
+  // Cleanup debounced search on component unmount
   useEffect(() => {
-    const filtered = products.filter((product) =>
-      product.name &&
-      product.name.toLowerCase().trim().includes(searchQuery.toLowerCase().trim())
-    );
-    setSearchResults(filtered.map((p) => ({ ...p, _type: "product" })));
-    setLoading(false);
-  }, [searchQuery, products]);
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [debouncedSearch]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -324,7 +387,7 @@ export default function Navbar() {
                 placeholder="Search for grocery, meat and more..."
                 className="w-full px-4 py-2.5 pl-11 rounded-xl bg-gray-100 border border-transparent focus:border-gray-300 focus:ring-2 focus:ring-offset-2 focus:ring-gray-200 focus:outline-none transition-all duration-200"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={handleSearchChange}
                 ref={searchInputRef}
                 onBlur={handleSearchBlur}
                 aria-label="Search products"
@@ -365,15 +428,16 @@ export default function Navbar() {
                     >
                       {item.image && (
                         <Image
-                          src={typeof item.image === 'string' && (item.image.startsWith('http') || item.image.startsWith('/')) ? item.image : '/store.png'}
-                          alt={item.name}
+                          src={item.image}
+                          alt={item.name || 'Product Image'}
                           width={36}
                           height={36}
                           className="rounded mr-3 object-cover"
+                          onError={() => console.error(`Failed to load image for product: ${item.name}`)}
                         />
                       )}
                       <div>
-                        <p className="text-sm font-medium">{item.name}</p>
+                        <p className="text-sm font-medium">{item.name || 'Unnamed Product'}</p>
                         {item.price && (
                           <p className="text-xs text-green-600">${item.price}</p>
                         )}
@@ -623,7 +687,7 @@ export default function Navbar() {
               placeholder="Search for grocery, meat and more..."
               className="w-full px-4 py-2.5 pl-11 rounded-xl bg-gray-100 border border-transparent focus:border-gray-300 focus:ring-2 focus:ring-offset-2 focus:ring-gray-200 focus:outline-none transition-all duration-200"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleSearchChange}
               ref={searchInputRef}
               onBlur={handleSearchBlur}
               aria-label="Search products"
@@ -664,15 +728,16 @@ export default function Navbar() {
                   >
                     {item.image && (
                       <Image
-                        src={typeof item.image === 'string' && (item.image.startsWith('http') || item.image.startsWith('/')) ? item.image : '/store.png'}
-                        alt={item.name}
+                        src={item.image}
+                        alt={item.name || 'Product Image'}
                         width={36}
                         height={36}
                         className="rounded mr-3 object-cover"
+                        onError={() => console.error(`Failed to load image for product: ${item.name}`)}
                       />
                     )}
                     <div>
-                      <p className="text-sm font-medium">{item.name}</p>
+                      <p className="text-sm font-medium">{item.name || 'Unnamed Product'}</p>
                       {item.price && (
                         <p className="text-xs text-green-600 font-medium">${item.price}</p>
                       )}

@@ -9,6 +9,15 @@ const normalizeImagePath = (path) => {
   return imagePath.replace(/^(\.\.\/)+assets\//, '/');
 };
 
+// Normalize product name for comparison (trim, lowercase, remove extra spaces)
+const normalizeProductName = (name) => {
+  return name
+    ?.trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ') // Replace multiple spaces with a single space
+    || '';
+};
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -29,7 +38,7 @@ export default async function CategoryProducts({ params, searchParams }) {
     query = query.eq('supermarket_id', storeId);
   }
 
-  const { data: products, error } = await query;
+  const { data: allProducts, error } = await query;
 
   if (error) {
     return (
@@ -38,6 +47,27 @@ export default async function CategoryProducts({ params, searchParams }) {
       </div>
     );
   }
+
+  // Debug: Log raw products to check for duplicates
+  console.log('Raw products:', allProducts);
+
+  // Group products by normalized name and select the one with the lowest price
+  const products = Object.values(
+    allProducts.reduce((acc, product) => {
+      const normalizedName = normalizeProductName(product.name);
+      const existing = acc[normalizedName];
+      if (!existing || product.price < existing.price) {
+        acc[normalizedName] = product;
+      } else if (product.price === existing.price && product.id < existing.id) {
+        // In case of equal prices, prefer the product with the lower ID
+        acc[normalizedName] = product;
+      }
+      return acc;
+    }, {})
+  );
+
+  // Debug: Log deduplicated products
+  console.log('Deduplicated products:', products);
 
   // Get category name
   const { data: category } = await supabase
