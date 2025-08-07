@@ -155,10 +155,10 @@ export default function VendorDashboard() {
         setEditUserName(user.user_metadata?.name || user.email.split('@')[0]);
 
         const { data: stores, error: storeError } = await supabase
-          .from('supermarkets')
-          .select('id, name, main_image, vendor_id, created_at, location, gallery_images,')
-          .eq('vendor_id', user.id)
-          .limit(1);
+        .from('supermarkets')
+        .select('id, name, main_image, vendor_id, created_at, location, gallery_images') // Removed trailing comma
+        .eq('vendor_id', user.id)
+        .limit(1);
 
         if (storeError) {
           setError('Error fetching store: ' + storeError.message);
