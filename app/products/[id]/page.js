@@ -1,9 +1,10 @@
+
 "use client";
+
 import { createClient } from '@supabase/supabase-js';
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Star, ShoppingCart, Plus, Minus } from 'lucide-react';
 import Image from 'next/image';
-
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -32,11 +33,10 @@ export default function ProductDetailPage({ params }) {
   const [selectedVariation, setSelectedVariation] = useState(null);
   const [cartMessage, setCartMessage] = useState("");
   const [user, setUser] = useState(null);
-  
-
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const scrollContainerRef = useRef(null);
 
+  // ... (rest of the code remains unchanged, included for reference)
   useEffect(() => {
     const resolveParams = async () => {
       const resolved = await params;
@@ -118,7 +118,6 @@ export default function ProductDetailPage({ params }) {
   };
 
   const handleAddToCart = (productToAdd = product, qty = quantity, variation = selectedVariation) => {
-    
     if (!productToAdd) return;
 
     const cartKey = getCartKey();
@@ -192,7 +191,7 @@ export default function ProductDetailPage({ params }) {
   const currentImage = imagePaths[currentImageIndex];
 
   return (
-    <div className="min-h-screen mt-20 bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pt-20">
       {/* Breadcrumb */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -204,10 +203,10 @@ export default function ProductDetailPage({ params }) {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-12">
           {/* Product Image */}
           <div className="relative">
-            <div className="aspect-square bg-white rounded-2xl shadow-sm overflow-hidden relative">
+            <div className="aspect-square bg-white rounded-2xl shadow-sm overflow-hidden">
               {imagePaths.length > 1 && (
                 <>
                   <button
@@ -230,7 +229,7 @@ export default function ProductDetailPage({ params }) {
                   src={currentImage}
                   alt={product.name}
                   fill
-                  className="object-contain p-8"
+                  className="object-contain p-6 sm:p-8"
                   priority
                 />
               ) : (
@@ -239,7 +238,6 @@ export default function ProductDetailPage({ params }) {
                 </div>
               )}
               
-              {/* Image indicators */}
               {imagePaths.length > 1 && (
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
                   {imagePaths.map((_, index) => (
@@ -258,22 +256,18 @@ export default function ProductDetailPage({ params }) {
 
           {/* Product Details */}
           <div className="space-y-6">
-            {/* Weight/Size indicator */}
             <div className="inline-block bg-gray-100 px-3 py-1 rounded-full text-sm text-gray-600">
               500g
             </div>
 
-            {/* Product Name */}
-            <h1 className="text-3xl lg:text-4xl font-bold text-gray-900">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">
               {product.name}
             </h1>
 
-            {/* Price */}
-            <div className="text-3xl font-bold text-green-500">
+            <div className="text-2xl sm:text-3xl font-bold text-green-500">
               ${selectedVariation ? selectedVariation.price : product.price}
             </div>
 
-            {/* Quantity Selector */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">Quantity</label>
               <div className="flex items-center space-x-4">
@@ -294,7 +288,6 @@ export default function ProductDetailPage({ params }) {
                   </button>
                 </div>
                 
-                {/* Stock Warning */}
                 <div className="flex items-center text-orange-500 text-sm">
                   <span className="mr-1">⚠️</span>
                   <span>Limited Quantity Available</span>
@@ -302,7 +295,6 @@ export default function ProductDetailPage({ params }) {
               </div>
             </div>
 
-            {/* Variations */}
             {product.variations && product.variations.length > 0 && (
               <div className="space-y-3">
                 <label className="text-sm font-medium text-gray-700">Select Variation</label>
@@ -327,7 +319,6 @@ export default function ProductDetailPage({ params }) {
               </div>
             )}
 
-            {/* Rating */}
             <div className="flex items-center space-x-2">
               <div className="flex items-center">
                 <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
@@ -335,26 +326,22 @@ export default function ProductDetailPage({ params }) {
               </div>
             </div>
 
-            {/* Description */}
-            <p className="text-gray-600 leading-relaxed">
+            <p className="text-gray-600 leading-relaxed text-sm sm:text-base">
               {product.description || "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt."}
             </p>
 
-            {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={() => handleAddToCart()}
-                className="flex-1 bg-teal-900 hover:bg-teal-800 text-white px-8 py-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
+                className="flex-1 bg-teal-900 hover:bg-teal-800 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
               >
                 <ShoppingCart className="w-5 h-5" />
                 <span>Add to cart</span>
               </button>
-             
             </div>
 
-            {/* Success Message */}
             {cartMessage && (
-              <div className="bg-green-100 border border-green-300 text-green-700 px-4 py-3 rounded-lg">
+              <div className="bg-green-100 border border-green-300 text-green-700 px-4 py-3 rounded-lg text-sm">
                 {cartMessage}
               </div>
             )}
@@ -362,21 +349,21 @@ export default function ProductDetailPage({ params }) {
         </div>
 
         {/* Related Items */}
-        <div className="mt-16">
-          <h2 className="text-2xl font-bold text-gray-900 mb-8">Related Items</h2>
+        <div className="mt-12 sm:mt-16">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Related Items</h2>
           
           <div className="relative">
-            {relatedProducts.length > 4 && (
+            {relatedProducts.length > 0 && (
               <>
                 <button
                   onClick={scrollLeft}
-                  className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg hover:shadow-xl transition-shadow"
+                  className="hidden sm:block absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg hover:shadow-xl transition-shadow"
                 >
                   <ChevronLeft className="w-5 h-5 text-gray-700" />
                 </button>
                 <button
                   onClick={scrollRight}
-                  className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg hover:shadow-xl transition-shadow"
+                  className="hidden sm:block absolute -right-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg hover:shadow-xl transition-shadow"
                 >
                   <ChevronRight className="w-5 h-5 text-gray-700" />
                 </button>
@@ -385,7 +372,7 @@ export default function ProductDetailPage({ params }) {
 
             <div
               ref={scrollContainerRef}
-              className="flex overflow-x-auto gap-6 pb-4 scroll-smooth scrollbar-hide"
+              className="grid grid-cols-2 gap-4 sm:flex sm:overflow-x-auto sm:gap-6 sm:pb-4 scroll-smooth scrollbar-hide"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {relatedProducts.length > 0 ? (
@@ -395,10 +382,10 @@ export default function ProductDetailPage({ params }) {
                   return (
                     <div
                       key={relatedProduct.id}
-                      className="flex-shrink-0 w-64 bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden group"
+                      className="flex-shrink-0 w-full sm:w-60 bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group"
                     >
                       <a href={`/products/${relatedProduct.id}`} className="block">
-                        <div className="relative aspect-square bg-gray-50 p-4">
+                        <div className="relative aspect-square bg-gray-50 p-3 sm:p-4">
                           {firstImagePath ? (
                             <Image
                               src={firstImagePath}
@@ -413,24 +400,23 @@ export default function ProductDetailPage({ params }) {
                             </div>
                           )}
                           
-                          {/* Highlighted border for one product */}
-                          <div className="absolute inset-0 border-2 border-blue-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <div className="absolute inset-0 border-2 border-blue-400 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                         
-                        <div className="p-4 space-y-2">
-                          <h3 className="font-medium text-gray-900 truncate">
+                        <div className="p-3 sm:p-4 space-y-2">
+                          <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">
                             {relatedProduct.name}
                           </h3>
-                          <p className="text-sm text-gray-500">100g Standard Portion</p>
+                          <p className="text-xs sm:text-sm text-gray-500">100g Standard Portion</p>
                           
                           <div className="flex items-center justify-between">
                             <div className="space-y-1">
-                              <div className="text-lg font-bold text-gray-900">
-                                $ {relatedProduct.price}
+                              <div className="text-base sm:text-lg font-bold text-gray-900">
+                                ${relatedProduct.price}
                               </div>
                               <div className="flex items-center">
-                                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                <span className="ml-1 text-sm text-gray-600">4.25</span>
+                                <Star className="w-3 sm:w-4 h-3 sm:h-4 fill-yellow-400 text-yellow-400" />
+                                <span className="ml-1 text-xs sm:text-sm text-gray-600">4.25</span>
                               </div>
                             </div>
                             
@@ -441,7 +427,7 @@ export default function ProductDetailPage({ params }) {
                                 handleAddToCart(relatedProduct, 1);
                               }}
                             >
-                              <Plus className="w-5 h-5 text-gray-700" />
+                              <Plus className="w-4 sm:w-5 h-4 sm:h-5 text-gray-700" />
                             </button>
                           </div>
                         </div>
@@ -450,16 +436,14 @@ export default function ProductDetailPage({ params }) {
                   );
                 })
               ) : (
-                <div className="w-full text-center py-12">
-                  <p className="text-gray-500">No related products available.</p>
+                <div className="col-span-full text-center py-12">
+                  <p className="text-gray-500 text-sm sm:text-base">No related products available.</p>
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
-
-      
 
       <style jsx>{`
         .scrollbar-hide::-webkit-scrollbar {
@@ -468,6 +452,11 @@ export default function ProductDetailPage({ params }) {
         .scrollbar-hide {
           -ms-overflow-style: none;
           scrollbar-width: none;
+        }
+        @media (max-width: 640px) {
+          .grid-cols-2 {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+          }
         }
       `}</style>
     </div>

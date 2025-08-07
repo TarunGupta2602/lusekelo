@@ -5,7 +5,6 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@supabase/supabase-js';
 
-
 // Move this constant outside the component
 const defaultCategoryNames = ["Food & Drinks", "Household Essentials", "Beauty & Personal Care"]
 
@@ -29,6 +28,16 @@ const CategorySkeleton = () => (
   </div>
 )
 
+// Skeleton loader for subcategory modal
+const SubcategorySkeleton = () => (
+  <div className="bg-white rounded-xl border border-gray-100 p-4">
+    <div className="h-6 bg-gray-200 rounded w-3/4 mb-2 animate-pulse"></div>
+    <div className="h-4 bg-gray-200 rounded w-full mb-2 animate-pulse"></div>
+    <div className="h-4 bg-gray-200 rounded w-2/3 mb-4 animate-pulse"></div>
+    <div className="h-32 bg-gray-200 rounded-lg animate-pulse"></div>
+  </div>
+)
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -41,12 +50,10 @@ export default function NewPage() {
   const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [productsLoading, setProductsLoading] = useState(true);
   const [categories, setCategories] = useState([]);
-  const [expandedSections, setExpandedSections] = useState({});
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [cartMessage, setCartMessage] = useState("");
   const [user, setUser] = useState(null);
-  const [scrollTimeouts, setScrollTimeouts] = useState({});
-  
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
   // Normalize image paths
   const normalizeImagePath = (path) => {
@@ -121,54 +128,13 @@ export default function NewPage() {
     fetchUser();
   }, []);
 
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      Object.values(scrollTimeouts).forEach(timeout => {
-        if (timeout) clearTimeout(timeout);
-      });
-    };
-  }, [scrollTimeouts]);
-
-  // Toggle section expansion with auto-hide functionality
-  const toggleSection = (categoryId) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [categoryId]: !prev[categoryId]
-    }));
-    
-    // Clear existing timeout for this category
-    if (scrollTimeouts[categoryId]) {
-      clearTimeout(scrollTimeouts[categoryId]);
-    }
+  // Handle opening/closing subcategory modal
+  const openSubcategoryModal = (category) => {
+    setSelectedCategory(category);
   };
 
-  // Auto-hide functionality - restore the "See All" button after inactivity
-  const handleScrollStart = (categoryId) => {
-    // Clear existing timeout
-    if (scrollTimeouts[categoryId]) {
-      clearTimeout(scrollTimeouts[categoryId]);
-    }
-  };
-
-  const handleScrollEnd = (categoryId) => {
-    // Set timeout to restore the "See All" button after 3 seconds of inactivity
-    const timeout = setTimeout(() => {
-      setExpandedSections(prev => ({
-        ...prev,
-        [categoryId]: false
-      }));
-      setScrollTimeouts(prev => {
-        const newTimeouts = { ...prev };
-        delete newTimeouts[categoryId];
-        return newTimeouts;
-      });
-    }, 3000);
-    
-    setScrollTimeouts(prev => ({
-      ...prev,
-      [categoryId]: timeout
-    }));
+  const closeSubcategoryModal = () => {
+    setSelectedCategory(null);
   };
 
   // Define CSS styles
@@ -218,35 +184,6 @@ export default function NewPage() {
         grid-template-columns: repeat(4, 1fr) auto;
       }
     }
-    .category-expanded {
-      display: flex;
-      overflow-x: auto;
-      gap: 1rem;
-      scroll-behavior: smooth;
-      padding: 0.5rem 0 1rem 0;
-      scrollbar-width: thin;
-      scrollbar-color: #cbd5e0 transparent;
-    }
-    @media (max-width: 768px) {
-      .category-expanded {
-        gap: 0.75rem;
-        padding: 0.25rem 0 0.75rem 0;
-      }
-    }
-    .category-expanded::-webkit-scrollbar {
-      height: 8px;
-    }
-    .category-expanded::-webkit-scrollbar-track {
-      background: #f1f5f9;
-      border-radius: 4px;
-    }
-    .category-expanded::-webkit-scrollbar-thumb {
-      background: #cbd5e0;
-      border-radius: 4px;
-    }
-    .category-expanded::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
-    }
     .see-all-button {
       flex: 0 0 auto;
       width: 240px;
@@ -282,12 +219,6 @@ export default function NewPage() {
     .see-all-button.green-bg:hover {
       transform: scale(1.05);
       box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    }
-    .see-all-button.transparent-bg {
-      background: none;
-    }
-    .see-all-button.transparent-bg:hover {
-      transform: scale(1.05);
     }
     .category-transition {
       transition: all 0.3s ease-in-out;
@@ -339,6 +270,44 @@ export default function NewPage() {
         opacity: 0.5;
       }
     }
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      overflow-y: auto;
+    }
+    .modal-content {
+      background: white;
+      width: 100%;
+      max-width: 100%;
+      height: 100%;
+      padding: 1rem;
+      position: relative;
+      overflow-y: auto;
+    }
+    .subcategory-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    @media (max-width: 768px) {
+      .subcategory-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+      }
+    }
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .subcategory-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
   `
 
   // Skeleton loader for product section
@@ -367,7 +336,6 @@ export default function NewPage() {
   };
 
   const handleAddToCart = (productToAdd, quantityDelta = 1) => {
-   
     if (!productToAdd) return;
 
     const cartKey = getCartKey();
@@ -398,8 +366,7 @@ export default function NewPage() {
         setCartMessage("Product quantity decreased!");
     } else if (quantityDelta < 0 && existingItemIndex > -1) {
         setCartMessage("Product removed from cart!");
-    }
-     else if (quantityDelta > 0 && existingItemIndex > -1) {
+    } else if (quantityDelta > 0 && existingItemIndex > -1) {
         setCartMessage("Product quantity increased!");
     } else if (quantityDelta > 0) {
         setCartMessage("Product added to cart!");
@@ -446,7 +413,7 @@ export default function NewPage() {
   const ProductCard = ({ product }) => {
     const getInitialQuantity = () => {
       if (typeof window === 'undefined') return 0; // Guard for SSR or pre-hydration
-      const cartKey = getCartKey(); // Uses getCartKey from NewPage's scope
+      const cartKey = getCartKey();
       const cart = JSON.parse(localStorage.getItem(cartKey)) || [];
       const itemInCart = cart.find(item => item.product_id === product.id);
       return itemInCart ? itemInCart.quantity : 0;
@@ -474,13 +441,13 @@ export default function NewPage() {
     const handleIncrement = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      handleAddToCart(product, 1); // Uses handleAddToCart from NewPage's scope
+      handleAddToCart(product, 1);
     };
 
     const handleDecrement = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      handleAddToCart(product, -1); // Uses handleAddToCart from NewPage's scope
+      handleAddToCart(product, -1);
     };
 
     return (
@@ -530,8 +497,7 @@ export default function NewPage() {
               </div>
               
               {/* Add Button / Quantity Selector Wrapper */}
-              <div className="flex-shrink-0 ml-2 sm:ml-3 h-9 w-24 sm:w-28 relative"> {/* Responsive width wrapper */}
-                {/* Initial Add Button */}
+              <div className="flex-shrink-0 ml-2 sm:ml-3 h-9 w-24 sm:w-28 relative">
                 <button 
                   className={`absolute inset-0 bg-gray-300 hover:bg-gray-400 transition-all duration-300 ease-in-out rounded-lg flex items-center justify-center group ${
                     quantityInCart === 0 ? 'opacity-100 transform scale-100 pointer-events-auto' : 'opacity-0 transform scale-90 pointer-events-none'
@@ -557,7 +523,6 @@ export default function NewPage() {
                   </svg>
                 </button>
 
-                {/* Quantity Selector */}
                 <div
                   className={`absolute inset-0 flex items-center justify-around rounded-lg transition-all duration-300 ease-in-out ${
                     quantityInCart > 0 ? 'opacity-100 transform scale-100 pointer-events-auto' : 'opacity-0 transform scale-90 pointer-events-none'
@@ -596,6 +561,63 @@ export default function NewPage() {
     <div className="ml-5 mr-5">
       <style dangerouslySetInnerHTML={{ __html: style }} />
       
+      {/* Subcategory Modal */}
+      {selectedCategory && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="mb-4 sm:mb-6">
+              <button
+                onClick={closeSubcategoryModal}
+                className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="mr-2"
+                >
+                  <path
+                    d="M15 19L8 12L15 5"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span className="text-sm sm:text-base font-medium">Back to Categories</span>
+              </button>
+            </div>
+
+            <div className="flex justify-between items-center mb-4 sm:mb-6 px-2 sm:px-0">
+              <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-[#373737] tracking-tight">
+                {selectedCategory.name}
+              </h2>
+            </div>
+
+            <div className="relative px-2 sm:px-0">
+              {categoriesLoading ? (
+                <div className="subcategory-grid">
+                  {[1, 2, 3, 4].map((i) => (
+                    <SubcategorySkeleton key={i} />
+                  ))}
+                </div>
+              ) : selectedCategory.children && selectedCategory.children.length > 0 ? (
+                <div className="subcategory-grid">
+                  {selectedCategory.children.map((childCategory) => (
+                    <CategoryCard key={childCategory.id} childCategory={childCategory} />
+                  ))}
+                </div>
+              ) : (
+                <div className="h-64 flex items-center justify-center">
+                  <p className="text-gray-500">No subcategories found.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Categories Section */}
       <div className="mb-12">
         {categoriesLoading ? (
@@ -605,7 +627,7 @@ export default function NewPage() {
             <CategorySkeleton />
           </>
         ) : categories.length ? (
-          <>            {/* Display only the three default categories when not showing all */}
+          <>
             {(showAllCategories ? categories : categories.filter(cat => defaultCategoryNames.includes(cat.name)))
               .filter(cat => cat.children && cat.children.length > 0)
               .map((parentCategory) => (
@@ -614,109 +636,48 @@ export default function NewPage() {
                     <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-[#373737] tracking-tight">{parentCategory.name}</h2>
                   </div>
                   
-                  {expandedSections[parentCategory.id] ? (
-                    // Expanded view - horizontal scroll with all items and proper container
-                    <div className="relative px-2 sm:px-0">
-                      <div 
-                        className="category-expanded"
-                        onScroll={(e) => {
-                          handleScrollStart(parentCategory.id);
-                          clearTimeout(e.target.scrollTimeout);
-                          e.target.scrollTimeout = setTimeout(() => {
-                            handleScrollEnd(parentCategory.id);
-                          }, 150);
-                        }}
-                        onMouseEnter={() => handleScrollStart(parentCategory.id)}
-                        onMouseLeave={() => handleScrollEnd(parentCategory.id)}
-                        onFocus={() => handleScrollStart(parentCategory.id)}
-                        onBlur={() => handleScrollEnd(parentCategory.id)}
-                      >
-                        {parentCategory.children.map((childCategory) => (
-                          <div key={childCategory.id} className="flex-shrink-0" style={{ minWidth: window.innerWidth < 768 ? '200px' : '240px' }}>
-                            <CategoryCard childCategory={childCategory} />
-                          </div>
+                  <div className="px-2 sm:px-0">
+                    <div className={parentCategory.children.length > 4 ? "category-grid-with-button" : "category-grid"}>
+                      {parentCategory.children
+                        .slice(0, window.innerWidth < 768 ? 3 : 4)
+                        .map((childCategory) => (
+                          <CategoryCard key={childCategory.id} childCategory={childCategory} />
                         ))}
-                        {/* Arrow button for navigation back */}
-                        <button 
-                          onClick={() => toggleSection(parentCategory.id)}
-                          className="see-all-button transparent-bg"
-                        >
-                          {/* White circle with back arrow */}
-                          <div className="bg-white rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center shadow-md">
-                            <svg 
-                              width="16" 
-                              height="16" 
-                              viewBox="0 0 24 24" 
-                              fill="none" 
-                              className="text-black sm:w-5 sm:h-5"
-                            >
-                              <path 
-                                d="M19 5L5 19M5 19H16M5 19V8" 
-                                stroke="currentColor" 
-                                strokeWidth="2.5" 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          </div>
-                          
-                          {/* Back text */}
-                          <span className="text-black text-xs sm:text-sm font-medium">
-                            Back
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    // Grid view - responsive grid + see all button
-                    <div className="px-2 sm:px-0">
-                      <div className={parentCategory.children.length > 4 ? "category-grid-with-button" : "category-grid"}>
-                        {parentCategory.children
-                          .slice(0, window.innerWidth < 768 ? 3 : 4)
-                          .map((childCategory) => (
-                            <CategoryCard key={childCategory.id} childCategory={childCategory} />
-                          ))}
                         
-                        {/* See All Button - responsive positioning */}
-                        {parentCategory.children.length > (window.innerWidth < 768 ? 3 : 4) && (
-                          <div className="lg:contents">
-                            <button 
-                              onClick={() => toggleSection(parentCategory.id)}
-                              className="see-all-button green-bg w-full lg:w-auto mt-4 lg:mt-0 mx-auto lg:mx-0"
-                            >
-                              {/* White circle with arrow */}
-                              <div className="bg-white rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center shadow-md">
-                                <svg 
-                                  width="16" 
-                                  height="16" 
-                                  viewBox="0 0 24 24" 
-                                  fill="none" 
-                                  className="text-black sm:w-5 sm:h-5"
-                                >
-                                  <path 
-                                    d="M5 19L19 5M19 5H8M19 5V16" 
-                                    stroke="currentColor" 
-                                    strokeWidth="2.5" 
-                                    strokeLinecap="round" 
-                                    strokeLinejoin="round"
-                                  />
-                                </svg>
-                              </div>
-                              
-                              {/* See all text */}
-                              <span className="text-black text-xs sm:text-sm font-medium">
-                                See all
-                              </span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      {parentCategory.children.length > (window.innerWidth < 768 ? 3 : 4) && (
+                        <div className="lg:contents">
+                          <button 
+                            onClick={() => openSubcategoryModal(parentCategory)}
+                            className="see-all-button green-bg w-full lg:w-auto mt-4 lg:mt-0 mx-auto lg:mx-0"
+                          >
+                            <div className="bg-white rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center shadow-md">
+                              <svg 
+                                width="16" 
+                                height="16" 
+                                viewBox="0 0 24 24" 
+                                fill="none" 
+                                className="text-black sm:w-5 sm:h-5"
+                              >
+                                <path 
+                                  d="M5 19L19 5M19 5H8M19 5V16" 
+                                  stroke="currentColor" 
+                                  strokeWidth="2.5" 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </div>
+                            <span className="text-black text-xs sm:text-sm font-medium">
+                              See all
+                            </span>
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               ))}
             
-            {/* Single "Explore All Categories" button - responsive */}
             <div className="flex items-center justify-center w-full px-4 sm:px-0">
               <button 
                 className="w-full max-w-xs sm:max-w-sm py-3 sm:py-4 mt-6 sm:mt-8 text-base sm:text-lg text-center bg-[#BBEB6D] text-black rounded-xl sm:rounded-2xl font-bold hover:from-green-500 hover:to-green-700 hover:scale-105 transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus:ring-4 focus:ring-green-200"
@@ -842,7 +803,6 @@ export default function NewPage() {
           {cartMessage}
         </div>
       )}
-      
     </div>
   )
 }
