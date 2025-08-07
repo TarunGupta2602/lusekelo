@@ -1,10 +1,8 @@
-
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -35,53 +33,41 @@ const categoryMapping = {
   800: [801, 802, 803, 804], // Books & Media
 }
 
-// Helper to normalize image path for both strings and arrays, with URL validation
+// Helper to normalize image path and return the first valid image
 function normalizeImagePath(path) {
   const defaultImage = '/placeholder-product.jpg'
   
   if (!path) {
     console.warn('normalizeImagePath: Received null or undefined path')
-    return [defaultImage]
+    return defaultImage
   }
 
   const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
 
   if (Array.isArray(path)) {
-    const normalized = path
-      .map((p, index) => {
-        if (!p || typeof p !== 'string') {
-          console.warn(`normalizeImagePath: Invalid path at index ${index}:`, p)
-          return null
-        }
-        const trimmedPath = p.trim()
-        if (!validImageExtensions.some(ext => trimmedPath.toLowerCase().endsWith(ext))) {
-          console.warn(`normalizeImagePath: Invalid image extension for path at index ${index}:`, trimmedPath)
-          return null
-        }
-        return trimmedPath.replace(/^(\.\.\/)+assets\//, '/')
-      })
-      .filter(p => p)
+    const validImage = path
+      .map(p => p?.trim())
+      .find(p => p && validImageExtensions.some(ext => p.toLowerCase().endsWith(ext)))
 
-    return normalized.length > 0 ? normalized : [defaultImage]
+    if (validImage) {
+      return validImage.replace(/^(\.\.\/)+assets\//, '/')
+    }
+    console.warn('normalizeImagePath: No valid image found in array:', path)
+    return defaultImage
   }
 
   if (typeof path !== 'string') {
     console.warn('normalizeImagePath: Invalid path type:', path)
-    return [defaultImage]
+    return defaultImage
   }
 
   const trimmedPath = path.trim()
-  if (!trimmedPath) {
-    console.warn('normalizeImagePath: Empty string path')
-    return [defaultImage]
+  if (!trimmedPath || !validImageExtensions.some(ext => trimmedPath.toLowerCase().endsWith(ext))) {
+    console.warn('normalizeImagePath: Invalid or empty image path:', trimmedPath)
+    return defaultImage
   }
 
-  if (!validImageExtensions.some(ext => trimmedPath.toLowerCase().endsWith(ext))) {
-    console.warn('normalizeImagePath: Invalid image extension for path:', trimmedPath)
-    return [defaultImage]
-  }
-
-  return [trimmedPath.replace(/^(\.\.\/)+assets\//, '/')]
+  return trimmedPath.replace(/^(\.\.\/)+assets\//, '/')
 }
 
 export default function ProductsPage() {
@@ -92,8 +78,6 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState([])
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [supermarkets, setSupermarkets] = useState({})
-  const scrollRefs = useRef({})
-  const [currentImage, setCurrentImage] = useState({})
 
   // Set categories to mainCategories
   useEffect(() => {
@@ -149,7 +133,7 @@ export default function ProductsPage() {
 
         const normalizedProducts = productsData.map(product => ({
           ...product,
-          images: normalizeImagePath(product.image)
+          image: normalizeImagePath(product.image)
         }))
 
         setProducts(normalizedProducts)
@@ -170,42 +154,18 @@ export default function ProductsPage() {
 
   // Find selected category name
   const selectedCategoryName = selectedCategory
-    ? (mainCategories.find(c => c.id === selectedCategory)?.name || 'Category')
+    ? (mainCategories.find(c => c.id === c.id === selectedCategory)?.name || 'Category')
     : 'All Products'
 
-  // Scroll handlers for image galleries
-  const scrollLeft = (productId) => {
-    if (scrollRefs.current[productId]) {
-      scrollRefs.current[productId].scrollBy({ left: -260, behavior: 'smooth' })
-    }
-  }
-
-  const scrollRight = (productId) => {
-    if (scrollRefs.current[productId]) {
-      scrollRefs.current[productId].scrollBy({ left: 260, behavior: 'smooth' })
-    }
-  }
-
-  // Track current image for scroll indicators
-  const handleScroll = (productId) => {
-    const scrollContainer = scrollRefs.current[productId]
-    if (scrollContainer) {
-      const scrollLeft = scrollContainer.scrollLeft
-      const imageWidth = 220 // Match max-w-[220px]
-      const index = Math.round(scrollLeft / imageWidth)
-      setCurrentImage(prev => ({ ...prev, [productId]: index }))
-    }
-  }
-
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-teal-900 mb-4 sm:mb-6">Browse Products</h1>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 bg-gray-100 min-h-screen">
+      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-6 sm:mb-8">Browse Products</h1>
       
       {/* Category Filters */}
-      <div className="mb-4 sm:mb-6 overflow-x-auto no-scrollbar">
-        <div className="flex flex-nowrap gap-2 sm:gap-3 pb-2">
+      <div className="mb-6 sm:mb-8 overflow-x-auto no-scrollbar">
+        <div className="flex flex-nowrap gap-3 pb-2">
           <button
-            className={`flex-shrink-0 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-sm sm:text-base font-semibold transition-all duration-300 ${selectedCategory === null ? 'bg-teal-600 text-white shadow-md' : 'bg-white text-teal-700 border border-teal-300 hover:bg-teal-100'}`}
+            className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-all duration-200 ${selectedCategory === null ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-200'}`}
             onClick={() => setSelectedCategory(null)}
           >
             All
@@ -213,7 +173,7 @@ export default function ProductsPage() {
           {categories.map(cat => (
             <button
               key={cat.id}
-              className={`flex-shrink-0 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-sm sm:text-base font-semibold transition-all duration-300 ${selectedCategory === cat.id ? 'bg-teal-600 text-white shadow-md' : 'bg-white text-teal-700 border border-teal-300 hover:bg-teal-100'}`}
+              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-all duration-200 ${selectedCategory === cat.id ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-200'}`}
               onClick={() => setSelectedCategory(cat.id)}
             >
               {cat.name}
@@ -222,93 +182,50 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-700 mb-4 sm:mb-6">{selectedCategoryName}</h2>
+      <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-4 sm:mb-6">{selectedCategoryName}</h2>
 
       {/* Error Message */}
       {error && (
-        <div className="mb-4 sm:mb-6 text-red-600 text-center text-sm sm:text-base">{error}</div>
+        <div className="mb-6 text-red-500 bg-red-100 p-4 rounded-lg text-center text-sm sm:text-base">{error}</div>
       )}
 
       {/* Loading State */}
       {loading ? (
         <div className="flex justify-center items-center h-64">
-          <span className="text-gray-500 text-base sm:text-lg animate-pulse">Loading products...</span>
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       ) : filteredProducts.length ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
           {filteredProducts.map(product => (
             <Link
               key={product.id}
               href={`/products/${product.id}`}
-              className="bg-white rounded-xl shadow-md p-4 sm:p-5 flex flex-col hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group"
+              className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group"
             >
-              {/* Image Gallery */}
-              <div className="relative mb-4 sm:mb-5">
-                <div
-                  ref={(el) => (scrollRefs.current[product.id] = el)}
-                  onScroll={() => handleScroll(product.id)}
-                  className="flex overflow-x-auto gap-3 scroll-smooth no-scrollbar snap-x snap-mandatory justify-center"
-                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                >
-                  {product.images.length > 0 ? (
-                    product.images.map((image, index) => (
-                      <div key={index} className="flex-shrink-0 snap-center w-full max-w-[220px] sm:max-w-[260px] flex justify-center">
-                        <Image
-                          src={image}
-                          alt={`${product.name} image ${index + 1}`}
-                          width={220}
-                          height={160}
-                          className="object-contain rounded-lg w-full h-36 sm:h-44 bg-gray-100"
-                          loading={index > 0 ? 'lazy' : undefined}
-                        />
-                      </div>
-                    ))
-                  ) : (
-                    <div className="w-full h-36 sm:h-44 flex items-center justify-center bg-gray-100 rounded-lg snap-center">
-                      <span className="text-gray-400 text-sm sm:text-base">No image</span>
-                    </div>
-                  )}
-                </div>
-                {product.images.length > 1 && (
-                  <>
-                    <button
-                      onClick={(e) => { e.preventDefault(); scrollLeft(product.id); }}
-                      aria-label={`Scroll left for ${product.name} images`}
-                      className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1.5 sm:p-2 shadow-md hover:bg-teal-100 transition-all duration-300 sm:opacity-0 sm:group-hover:opacity-100"
-                    >
-                      <ChevronLeft size={16} className="text-teal-700" />
-                    </button>
-                    <button
-                      onClick={(e) => { e.preventDefault(); scrollRight(product.id); }}
-                      aria-label={`Scroll right for ${product.name} images`}
-                      className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1.5 sm:p-2 shadow-md hover:bg-teal-100 transition-all duration-300 sm:opacity-0 sm:group-hover:opacity-100"
-                    >
-                      <ChevronRight size={16} className="text-teal-700" />
-                    </button>
-                    {/* Mobile Scroll Indicators */}
-                    <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 sm:hidden">
-                      {product.images.map((_, index) => (
-                        <span
-                          key={index}
-                          className={`w-1.5 h-1.5 rounded-full ${index === (currentImage[product.id] || 0) ? 'bg-teal-600' : 'bg-gray-300'} transition-all duration-300`}
-                        ></span>
-                      ))}
-                    </div>
-                  </>
-                )}
+              {/* Product Image */}
+              <div className="relative w-full h-48 sm:h-56 bg-gray-100">
+                <Image
+                  src={product.image}
+                  alt={product.name}
+                  fill
+                  className="object-contain p-4"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                />
               </div>
 
               {/* Product Details */}
-              <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-2 line-clamp-2">{product.name}</h2>
-              <p className="text-gray-600 text-sm mb-2 line-clamp-2 sm:line-clamp-3">{product.description}</p>
-              <div className="flex flex-col gap-1 text-sm text-gray-500 mb-2">
-                <span>Quantity: {product.quantity}</span>
-                {supermarkets[product.supermarket_id] && (
-                  <span>Supermarket: {supermarkets[product.supermarket_id]}</span>
-                )}
-              </div>
-              <div className="flex items-center justify-between mt-auto">
-                <span className="text-green-700 font-bold text-base sm:text-lg">${product.price.toFixed(2)}</span>
+              <div className="p-4 sm:p-5 flex flex-col flex-grow">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-2 line-clamp-2">{product.name}</h2>
+                <p className="text-gray-600 text-sm mb-3 line-clamp-2">{product.description}</p>
+                <div className="flex flex-col gap-1 text-sm text-gray-500 mb-3">
+                  <span>Quantity: {product.quantity}</span>
+                  {supermarkets[product.supermarket_id] && (
+                    <span>Supermarket: {supermarkets[product.supermarket_id]}</span>
+                  )}
+                </div>
+                <div className="mt-auto">
+                  <span className="text-blue-600 font-bold text-base sm:text-lg">${product.price.toFixed(2)}</span>
+                </div>
               </div>
             </Link>
           ))}
@@ -322,12 +239,6 @@ export default function ProductsPage() {
       <style jsx>{`
         .no-scrollbar::-webkit-scrollbar {
           display: none;
-        }
-        .snap-x {
-          scroll-snap-type: x mandatory;
-        }
-        .snap-center {
-          scroll-snap-align: center;
         }
       `}</style>
     </div>

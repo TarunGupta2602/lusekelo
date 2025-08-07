@@ -49,7 +49,7 @@ export default async function CategoryProducts({ params, searchParams }) {
   }
 
   // Debug: Log raw products to check for duplicates
-  console.log('Raw products:', allProducts);
+  
 
   // Group products by normalized name and select the one with the lowest price
   const products = Object.values(
@@ -67,7 +67,7 @@ export default async function CategoryProducts({ params, searchParams }) {
   );
 
   // Debug: Log deduplicated products
-  console.log('Deduplicated products:', products);
+  
 
   // Get category name
   const { data: category } = await supabase
