@@ -1,11 +1,12 @@
 "use client";
-import { Suspense } from 'react';
-import SuccessContent from './SuccessContent';
 
-export default function CheckoutSuccess() {
+import { Suspense } from "react";
+import SuccessPageContent from "./SuccessPageContent";
+
+export default function SuccessPage() {
   return (
-    <Suspense fallback={<div className="p-10 text-center text-xl text-gray-500">Loading...</div>}>
-      <SuccessContent />
+    <Suspense fallback={<div className="text-center py-20">Loading...</div>}>
+      <SuccessPageContent />
     </Suspense>
   );
 }
