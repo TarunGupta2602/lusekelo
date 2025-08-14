@@ -1,12 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@supabase/supabase-js';
+import { debounce } from 'lodash';
+import React from 'react';
 
 // Move this constant outside the component
 const defaultCategoryNames = ["Food & Drinks", "Household Essentials", "Beauty & Personal Care"]
+
+// Normalize image paths
+const normalizeImagePath = (path) => {
+  if (!path) return '/default-image.jpg';
+  const imagePath = Array.isArray(path) ? (path[0] || '/default-image.jpg') : path;
+  return imagePath.replace(/^(\.\.\/)+assets\//, '/');
+};
 
 // Skeleton loader for category
 const CategorySkeleton = () => (
@@ -26,7 +35,9 @@ const CategorySkeleton = () => (
       ))}
     </div>
   </div>
-)
+);
+CategorySkeleton.displayName = 'CategorySkeleton';
+const MemoizedCategorySkeleton = React.memo(CategorySkeleton);
 
 // Skeleton loader for subcategory modal
 const SubcategorySkeleton = () => (
@@ -36,12 +47,185 @@ const SubcategorySkeleton = () => (
     <div className="h-4 bg-gray-200 rounded w-2/3 mb-4 animate-pulse"></div>
     <div className="h-32 bg-gray-200 rounded-lg animate-pulse"></div>
   </div>
-)
+);
+SubcategorySkeleton.displayName = 'SubcategorySkeleton';
+const MemoizedSubcategorySkeleton = React.memo(SubcategorySkeleton);
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
+
+const ProductCard = React.memo(({ product, cart, handleAddToCart }) => {
+  const quantityInCart = cart.find((item) => item.itemId === `${product.id}`)?.quantity || 0;
+
+  const handleIncrement = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleAddToCart(product, 1);
+  };
+
+  const handleDecrement = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleAddToCart(product, -1);
+  };
+
+  return (
+    <Link href={`/products/${product.id}`} key={product.id}>
+      <div className="product-card bg-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow duration-300 w-full h-[380px] flex flex-col">
+        <div className="bg-gray-50 rounded-xl p-4 mb-3 flex items-center justify-center h-[160px] flex-shrink-0">
+          {product.image ? (
+            <Image
+              src={normalizeImagePath(product.image)}
+              alt={product.name}
+              width={140}
+              height={140}
+              className="object-contain w-full h-full group-hover:scale-105 transition-transform duration-200"
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="text-gray-400">No image</span>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col flex-grow">
+          <h3 className="text-lg font-semibold text-gray-900 line-clamp-2 h-[2.8rem] mb-2">
+            {product.name}
+          </h3>
+          <p className="text-gray-400 text-sm line-clamp-3 h-[3.5rem] mb-3">
+            {product.description || 'No description available'}
+          </p>
+          <div className="flex items-center justify-between mt-auto">
+            <div className="flex-1">
+              <div className="text-xl font-bold text-gray-900">${product.price}</div>
+              {product.quantity && (
+                <p className="text-gray-400 text-xs mt-0.5">Qty: {product.quantity}</p>
+              )}
+            </div>
+            <div className="flex-shrink-0 ml-2 sm:ml-3 h-9 w-24 sm:w-28 relative">
+              <button
+                className={`absolute inset-0 bg-gray-300 hover:bg-gray-400 transition-all duration-300 ease-in-out rounded-lg flex items-center justify-center group ${
+                  quantityInCart === 0
+                    ? 'opacity-100 transform scale-100 pointer-events-auto'
+                    : 'opacity-0 transform scale-90 pointer-events-none'
+                }`}
+                onClick={handleIncrement}
+                title="Add to cart"
+                tabIndex={quantityInCart === 0 ? 0 : -1}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="text-gray-600 group-hover:text-gray-700"
+                >
+                  <path
+                    d="M12 5V19M5 12H19"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+              <div
+                className={`absolute inset-0 flex items-center justify-around rounded-lg transition-all duration-300 ease-in-out ${
+                  quantityInCart > 0
+                    ? 'opacity-100 transform scale-100 pointer-events-auto'
+                    : 'opacity-0 transform scale-90 pointer-events-none'
+                }`}
+                aria-hidden={quantityInCart === 0}
+              >
+                <button
+                  onClick={handleDecrement}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-8 sm:w-9 h-full flex items-center justify-center transition-colors"
+                  title="Decrease quantity"
+                  tabIndex={quantityInCart > 0 ? 0 : -1}
+                >
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </button>
+                <span className="text-sm sm:text-base font-medium text-gray-800 w-7 sm:w-8 h-full flex items-center justify-center select-none">
+                  {quantityInCart}
+                </span>
+                <button
+                  onClick={handleIncrement}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-8 sm:w-9 h-full flex items-center justify-center transition-colors"
+                  title="Increase quantity"
+                  tabIndex={quantityInCart > 0 ? 0 : -1}
+                >
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+});
+ProductCard.displayName = 'ProductCard'; // Added displayName
+
+const CategoryCard = React.memo(({ childCategory }) => (
+  <Link
+    key={childCategory.id}
+    href={`/new/${childCategory.id}`}
+    className="category-card bg-white border border-white rounded-2xl hover:scale-[1.02] transition-all duration-200 flex items-center group p-4 sm:p-6 min-h-[160px] sm:min-h-[180px] relative overflow-hidden"
+  >
+    <div className="flex items-center w-full h-full">
+      <div className="flex-1 pr-4 sm:pr-6">
+        <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1 sm:mb-2 group-hover:text-green-700 transition-colors line-clamp-2">
+          {childCategory.name}
+        </h3>
+        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 sm:line-clamp-3">
+          {childCategory.description}
+        </p>
+      </div>
+      <div className="flex-shrink-0 w-24 h-24 sm:w-32 sm:h-32">
+        {childCategory.image ? (
+          <Image
+            src={normalizeImagePath(childCategory.image)}
+            alt={childCategory.name}
+            width={128}
+            height={128}
+            className="object-contain w-full h-full rounded-xl bg-gray-50 group-hover:scale-105 transition-transform duration-200"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-xl">
+            <span className="text-gray-400 text-xs">No image</span>
+          </div>
+        )}
+      </div>
+    </div>
+  </Link>
+));
+CategoryCard.displayName = 'CategoryCard'; // Added displayName
 
 export default function NewPage() {
   const [electronics, setElectronics] = useState([])
@@ -54,27 +238,32 @@ export default function NewPage() {
   const [cartMessage, setCartMessage] = useState("");
   const [user, setUser] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [cart, setCart] = useState([]);
 
-  // Normalize image paths
-  const normalizeImagePath = (path) => {
-    if (!path) return '/default-image.jpg';
-    const imagePath = Array.isArray(path) ? (path[0] || '/default-image.jpg') : path;
-    return imagePath.replace(/^(\.\.\/)+assets\//, '/');
-  };
-
-  // Fetch categories with optimized loading
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchData = async () => {
       try {
         setCategoriesLoading(true)
-        const res = await fetch('/api/categories')
-        const data = await res.json()
-        if (data.error) {
-          throw new Error(data.error)
+        setProductsLoading(true)
+
+        const [categoriesRes, productsRes] = await Promise.all([
+          fetch('/api/categories'),
+          fetch('/api/products')
+        ])
+
+        const categoriesData = await categoriesRes.json()
+        const productsData = await productsRes.json()
+
+        if (categoriesData.error) {
+          throw new Error(categoriesData.error)
+        }
+        
+        if (productsData.error) {
+          throw new Error(productsData.error)
         }
         
         // Sort to prioritize our default categories
-        const sortedCategories = [...data].sort((a, b) => {
+        const sortedCategories = [...categoriesData].sort((a, b) => {
           const aIndex = defaultCategoryNames.indexOf(a.name)
           const bIndex = defaultCategoryNames.indexOf(b.name)
           if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex
@@ -84,49 +273,124 @@ export default function NewPage() {
         })
         
         setCategories(sortedCategories)
+        setElectronics(productsData.filter(product => product.categoryid === 1))
+        setBreakfast(productsData.filter(product => product.categoryid === 2))
       } catch (err) {
-        console.error('Failed to fetch categories:', err)
+        console.error('Failed to fetch data:', err)
       } finally {
         setCategoriesLoading(false)
-        setLoading(false)
-      }
-    }
-    fetchCategories()
-  }, [])
-
-  // Fetch products with optimized loading
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setProductsLoading(true)
-        const res = await fetch('/api/products')
-        const productsData = await res.json()
-        const electronicsProducts = productsData.filter(product => product.categoryid === 1)
-        const breakfastProducts = productsData.filter(product => product.categoryid === 2)
-        setElectronics(electronicsProducts)
-        setBreakfast(breakfastProducts)
-      } catch (err) {
-        console.error('Failed to fetch products:', err)
-      } finally {
         setProductsLoading(false)
         setLoading(false)
       }
     }
-    fetchProducts()
+    fetchData()
   }, [])
 
-  // Fetch user for cart key
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchUserAndCart = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (!error && data && data.user) {
         setUser(data.user);
+        const { data: cartData, error: cartError } = await supabase
+          .from('carts')
+          .select('store_carts')
+          .eq('user_id', data.user.id)
+          .single();
+        if (!cartError && cartData?.store_carts) {
+          setCart(cartData.store_carts);
+        }
       } else {
         setUser(null);
+        setCart(JSON.parse(localStorage.getItem('cart_guest') || '[]'));
       }
+      setLoading(false);
     };
-    fetchUser();
+    fetchUserAndCart();
   }, []);
+
+  const debouncedUpdateCart = useMemo(
+    () =>
+      debounce(async (newCart, userId) => {
+        if (!userId) {
+          localStorage.setItem('cart_guest', JSON.stringify(newCart));
+          return;
+        }
+        const { error } = await supabase
+          .from('carts')
+          .upsert(
+            {
+              user_id: userId,
+              store_carts: newCart,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id' }
+          );
+        if (error) {
+          console.error('Error updating cart:', error);
+          setCartMessage("Failed to update cart.");
+          setTimeout(() => setCartMessage(""), 2000);
+        }
+      }, 300),
+    []
+  );
+
+  const updateCartInSupabase = useCallback(
+    (newCart, userId) => debouncedUpdateCart(newCart, userId),
+    [debouncedUpdateCart]
+  );
+
+  const handleAddToCart = async (productToAdd, quantityDelta = 1) => {
+    if (!productToAdd || !productToAdd.id) {
+      setCartMessage("Invalid product data.");
+      setTimeout(() => setCartMessage(""), 2000);
+      return;
+    }
+
+    try {
+      setCart((prevCart) => {
+        const newCart = [...prevCart];
+        const itemId = `${productToAdd.id}`;
+        const existingItemIndex = newCart.findIndex((item) => item.itemId === itemId);
+
+        if (existingItemIndex > -1) {
+          newCart[existingItemIndex].quantity += quantityDelta;
+          if (newCart[existingItemIndex].quantity <= 0) {
+            newCart.splice(existingItemIndex, 1);
+            setCartMessage("Product removed from cart!");
+          } else {
+            setCartMessage(quantityDelta > 0 ? "Product quantity increased!" : "Product quantity decreased!");
+          }
+        } else if (quantityDelta > 0) {
+          newCart.push({
+            itemId: itemId,
+            product_id: productToAdd.id,
+            quantity: quantityDelta,
+            name: productToAdd.name,
+            price: productToAdd.price,
+            image: productToAdd.image,
+          });
+          setCartMessage("Product added to cart!");
+        }
+
+        if (!user) {
+          localStorage.setItem('cart_guest', JSON.stringify(newCart));
+        }
+
+        window.dispatchEvent(new Event("cartUpdated"));
+
+        if (user) {
+          updateCartInSupabase(newCart, user.id);
+        }
+
+        setTimeout(() => setCartMessage(""), 2000);
+        return newCart;
+      });
+    } catch (error) {
+      console.error('Error in handleAddToCart:', error);
+      setCartMessage("An error occurred while updating cart.");
+      setTimeout(() => setCartMessage(""), 2000);
+    }
+  };
 
   // Handle opening/closing subcategory modal
   const openSubcategoryModal = (category) => {
@@ -308,6 +572,18 @@ export default function NewPage() {
         grid-template-columns: repeat(2, 1fr);
       }
     }
+    .product-card .relative {
+      transition: all 0.4s ease-in-out;
+    }
+    .product-card .absolute {
+      transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out, visibility 0.4s ease-in-out;
+    }
+    .product-card .absolute.opacity-0 {
+      visibility: hidden;
+    }
+    .product-card .absolute.opacity-100 {
+      visibility: visible;
+    }
   `
 
   // Skeleton loader for product section
@@ -326,236 +602,8 @@ export default function NewPage() {
         ))}
       </div>
     </div>
-  )
-
-  const getCartKey = () => {
-    if (user && user.id) {
-      return `cart_${user.id}`;
-    }
-    return 'cart_guest';
-  };
-
-  const handleAddToCart = (productToAdd, quantityDelta = 1) => {
-    if (!productToAdd) return;
-
-    const cartKey = getCartKey();
-    let cart = JSON.parse(localStorage.getItem(cartKey)) || [];
-    const existingItemIndex = cart.findIndex((item) => item.product_id === productToAdd.id);
-
-    if (existingItemIndex > -1) {
-      cart[existingItemIndex].quantity += quantityDelta;
-      if (cart[existingItemIndex].quantity <= 0) {
-        cart.splice(existingItemIndex, 1); // Remove item if quantity is 0 or less
-      }
-    } else if (quantityDelta > 0) { // Only add if not existing and quantityDelta is positive
-      cart.push({
-        product_id: productToAdd.id,
-        quantity: quantityDelta,
-        name: productToAdd.name,
-        price: productToAdd.price,
-        image: productToAdd.image,
-      });
-    }
-
-    localStorage.setItem(cartKey, JSON.stringify(cart));
-    window.dispatchEvent(new Event("cartUpdated"));
-
-    if (cart.length === 0 && existingItemIndex > -1 && quantityDelta < 0) {
-        setCartMessage("Product removed from cart!");
-    } else if (quantityDelta < 0 && existingItemIndex > -1 && cart.find(item => item.product_id === productToAdd.id)) {
-        setCartMessage("Product quantity decreased!");
-    } else if (quantityDelta < 0 && existingItemIndex > -1) {
-        setCartMessage("Product removed from cart!");
-    } else if (quantityDelta > 0 && existingItemIndex > -1) {
-        setCartMessage("Product quantity increased!");
-    } else if (quantityDelta > 0) {
-        setCartMessage("Product added to cart!");
-    }
-    setTimeout(() => setCartMessage(""), 2000);
-  };
-
-  // Enhanced Category Card with title and desc on left, image on right
-  const CategoryCard = ({ childCategory }) => (
-    <Link
-      key={childCategory.id}
-      href={`/new/${childCategory.id}`}
-      className="category-card bg-white border border-white rounded-2xl hover:scale-[1.02] transition-all duration-200 flex items-center group p-4 sm:p-6 min-h-[160px] sm:min-h-[180px] relative overflow-hidden"
-    >
-      <div className="flex items-center w-full h-full">
-        {/* Text content on the left */}
-        <div className="flex-1 pr-4 sm:pr-6">
-          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1 sm:mb-2 group-hover:text-green-700 transition-colors line-clamp-2">{childCategory.name}</h3>
-          <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 sm:line-clamp-3">{childCategory.description}</p>
-        </div>
-        
-        {/* Image on the right */}
-        <div className="flex-shrink-0 w-24 h-24 sm:w-32 sm:h-32">
-          {childCategory.image ? (
-            <Image
-              src={normalizeImagePath(childCategory.image)}
-              alt={childCategory.name}
-              width={128}
-              height={128}
-              className="object-contain w-full h-full rounded-xl bg-gray-50 group-hover:scale-105 transition-transform duration-200"
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-xl">
-              <span className="text-gray-400 text-xs">No image</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </Link>
   );
-
-  // Enhanced Product Card for product sections
-  const ProductCard = ({ product }) => {
-    const getInitialQuantity = () => {
-      if (typeof window === 'undefined') return 0; // Guard for SSR or pre-hydration
-      const cartKey = getCartKey();
-      const cart = JSON.parse(localStorage.getItem(cartKey)) || [];
-      const itemInCart = cart.find(item => item.product_id === product.id);
-      return itemInCart ? itemInCart.quantity : 0;
-    };
-
-    const [quantityInCart, setQuantityInCart] = useState(getInitialQuantity());
-
-    useEffect(() => {
-      const updateQuantityDisplay = () => {
-        if (typeof window === 'undefined') return;
-        const cartKey = getCartKey();
-        const cart = JSON.parse(localStorage.getItem(cartKey)) || [];
-        const itemInCart = cart.find(item => item.product_id === product.id);
-        setQuantityInCart(itemInCart ? itemInCart.quantity : 0);
-      };
-
-      updateQuantityDisplay();
-
-      window.addEventListener('cartUpdated', updateQuantityDisplay);
-      return () => {
-        window.removeEventListener('cartUpdated', updateQuantityDisplay);
-      };
-    }, [product.id]);
-
-    const handleIncrement = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      handleAddToCart(product, 1);
-    };
-
-    const handleDecrement = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      handleAddToCart(product, -1);
-    };
-
-    return (
-      <Link href={`/products/${product.id}`} key={product.id}>
-        <div className="product-card bg-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow duration-300 w-full h-[380px] flex flex-col">
-          {/* Product Image - Fixed height */}
-          <div className="bg-gray-50 rounded-xl p-4 mb-3 flex items-center justify-center h-[160px] flex-shrink-0">
-            {product.image ? (
-              <Image
-                src={normalizeImagePath(product.image)}
-                alt={product.name}
-                width={140}
-                height={140}
-                className="object-contain w-full h-full group-hover:scale-105 transition-transform duration-200"
-                loading="lazy"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <span className="text-gray-400">No image</span>
-              </div>
-            )}
-          </div>
-          
-          {/* Product Info - Flexible content area */}
-          <div className="flex flex-col flex-grow">
-            {/* Title - Fixed height */}
-            <h3 className="text-lg font-semibold text-gray-900 line-clamp-2 h-[2.8rem] mb-2">
-              {product.name}
-            </h3>
-            
-            {/* Description - Fixed height */}
-            <p className="text-gray-400 text-sm line-clamp-3 h-[3.5rem] mb-3">
-              {product.description || "No description available"}
-            </p>
-            
-            {/* Price Section - Fixed at bottom */}
-            <div className="flex items-center justify-between mt-auto">
-              <div className="flex-1">
-                <div className="text-xl font-bold text-gray-900">
-                  ${product.price}
-                </div>
-                {product.quantity && (
-                  <p className="text-gray-400 text-xs mt-0.5">
-                    Qty: {product.quantity}
-                  </p>
-                )}
-              </div>
-              
-              {/* Add Button / Quantity Selector Wrapper */}
-              <div className="flex-shrink-0 ml-2 sm:ml-3 h-9 w-24 sm:w-28 relative">
-                <button 
-                  className={`absolute inset-0 bg-gray-300 hover:bg-gray-400 transition-all duration-300 ease-in-out rounded-lg flex items-center justify-center group ${
-                    quantityInCart === 0 ? 'opacity-100 transform scale-100 pointer-events-auto' : 'opacity-0 transform scale-90 pointer-events-none'
-                  }`}
-                  onClick={handleIncrement}
-                  title="Add to cart"
-                  tabIndex={quantityInCart === 0 ? 0 : -1}
-                >
-                  <svg 
-                    width="18" 
-                    height="18" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    className="text-gray-600 group-hover:text-gray-700"
-                  >
-                    <path 
-                      d="M12 5V19M5 12H19" 
-                      stroke="currentColor" 
-                      strokeWidth="2" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-
-                <div
-                  className={`absolute inset-0 flex items-center justify-around rounded-lg transition-all duration-300 ease-in-out ${
-                    quantityInCart > 0 ? 'opacity-100 transform scale-100 pointer-events-auto' : 'opacity-0 transform scale-90 pointer-events-none'
-                  }`}
-                  aria-hidden={quantityInCart === 0}
-                >
-                  <button 
-                    onClick={handleDecrement}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-8 sm:w-9 h-full flex items-center justify-center transition-colors"
-                    title="Decrease quantity"
-                    tabIndex={quantityInCart > 0 ? 0 : -1}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  </button>
-                  <span className="text-sm sm:text-base font-medium text-gray-800 w-7 sm:w-8 h-full flex items-center justify-center select-none">
-                    {quantityInCart}
-                  </span>
-                  <button 
-                    onClick={handleIncrement}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-8 sm:w-9 h-full flex items-center justify-center transition-colors"
-                    title="Increase quantity"
-                    tabIndex={quantityInCart > 0 ? 0 : -1}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Link>
-    );
-  };
+  ProductSectionSkeleton.displayName = 'ProductSectionSkeleton';
 
   return (
     <div className="ml-5 mr-5">
@@ -599,7 +647,7 @@ export default function NewPage() {
               {categoriesLoading ? (
                 <div className="subcategory-grid">
                   {[1, 2, 3, 4].map((i) => (
-                    <SubcategorySkeleton key={i} />
+                    <MemoizedSubcategorySkeleton key={i} />
                   ))}
                 </div>
               ) : selectedCategory.children && selectedCategory.children.length > 0 ? (
@@ -622,9 +670,9 @@ export default function NewPage() {
       <div className="mb-12">
         {categoriesLoading ? (
           <>
-            <CategorySkeleton />
-            <CategorySkeleton />
-            <CategorySkeleton />
+            <MemoizedCategorySkeleton />
+            <MemoizedCategorySkeleton />
+            <MemoizedCategorySkeleton />
           </>
         ) : categories.length ? (
           <>
@@ -753,7 +801,12 @@ export default function NewPage() {
                 <div className="flex space-x-6 pb-4">
                   {electronics.length ? (
                     electronics.map((product) => (
-                      <ProductCard key={product.id} product={product} />
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        cart={cart}
+                        handleAddToCart={handleAddToCart}
+                      />
                     ))
                   ) : (
                     <p className="text-gray-500 p-4">No Electronics products found.</p>
@@ -785,7 +838,12 @@ export default function NewPage() {
                 <div className="flex space-x-6 pb-4">
                   {breakfast.length ? (
                     breakfast.map((product) => (
-                      <ProductCard key={product.id} product={product} />
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        cart={cart}
+                        handleAddToCart={handleAddToCart}
+                      />
                     ))
                   ) : (
                     <p className="text-gray-500 p-4">No Breakfast products found.</p>

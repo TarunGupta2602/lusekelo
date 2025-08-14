@@ -1,4 +1,6 @@
+
 "use client";
+
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -8,13 +10,11 @@ import { MdOutlineShoppingCart } from "react-icons/md";
 import CustomAuthModal from '../../components/CustomAuthModal';
 import { useRouter } from "next/navigation";
 
-// Shared cart key utility
-export function getCartKeyFromUser(user) {
-  if (user && user.id) {
-    return `cart_${user.id}`;
-  }
-  return 'cart_guest';
-}
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 // Normalize image path to handle both single strings and arrays
 const normalizeImagePath = (path) => {
@@ -36,158 +36,377 @@ const normalizeImageUrl = (url) => {
   return url;
 };
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
-
 export default function CartPage() {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const router = useRouter();
 
   // Fetch user on mount
   useEffect(() => {
     const fetchUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (!error && data && data.user) {
-        setUser(data.user);
-      } else {
-        setUser(null);
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (!error && data?.user) {
+          setUser(data.user);
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        console.error('Error fetching user:', err);
       }
     };
     fetchUser();
   }, []);
 
-  const getCartKey = useCallback(() => getCartKeyFromUser(user), [user]);
-
-  // Fetch cart items from localStorage when the component is mounted
+  // Migrate guest cart to DB when user logs in
   useEffect(() => {
-    const fetchCartItems = () => {
-      try {
-        const cart = JSON.parse(localStorage.getItem(getCartKey()) || "[]");
-        console.log('Cart items:', cart); // Debug log to inspect cart data
-        setCartItems(cart);
+    const migrateGuestCart = async () => {
+      if (!user) return;
 
-        // Calculate the total price with validation
-        const totalPrice = cart.reduce(
-          (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-          0
-        );
-        setTotal(totalPrice);
-      } catch (error) {
-        console.error("Error fetching cart items:", error);
-      } finally {
-        setLoading(false);
+      const guestCartKey = 'cart_guest';
+      const guestCart = JSON.parse(localStorage.getItem(guestCartKey)) || [];
+      if (guestCart.length === 0) return;
+
+      try {
+        // Fetch current DB cart
+        const { data, error } = await supabase
+          .from('carts')
+          .select('store_carts')
+          .eq('user_id', user.id)
+          .single();
+
+        let currentCart = [];
+        if (data && data.store_carts) {
+          currentCart = data.store_carts;
+        }
+
+        // Merge guest cart into current cart
+        guestCart.forEach((guestItem) => {
+          const existingItem = currentCart.find((item) => item.itemId === guestItem.itemId);
+          if (existingItem) {
+            existingItem.quantity += guestItem.quantity;
+          } else {
+            currentCart.push(guestItem);
+          }
+        });
+
+        // Upsert updated cart to DB
+        const { error: upsertError } = await supabase
+          .from('carts')
+          .upsert(
+            {
+              user_id: user.id,
+              store_carts: currentCart,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id' }
+          );
+
+        if (upsertError) {
+          console.error('Error migrating cart:', upsertError);
+          setErrorMessage('Failed to migrate guest cart.');
+          setTimeout(() => setErrorMessage(''), 3000);
+        } else {
+          localStorage.removeItem(guestCartKey);
+          window.dispatchEvent(new Event('cartUpdated'));
+        }
+      } catch (err) {
+        console.error('Error during cart migration:', err);
+        setErrorMessage('An error occurred while migrating cart.');
+        setTimeout(() => setErrorMessage(''), 3000);
       }
     };
 
+    migrateGuestCart();
+  }, [user]);
+
+  // Fetch cart items
+  const fetchCartItems = useCallback(async () => {
+    try {
+      setLoading(true);
+      let cart = [];
+      
+      if (!user) {
+        // Guest cart from localStorage
+        cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
+      } else {
+        // Authenticated user cart from DB
+        const { data, error } = await supabase
+          .from('carts')
+          .select('store_carts')
+          .eq('user_id', user.id)
+          .single();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116: No rows found
+          console.error('Error fetching cart:', error);
+          setErrorMessage('Failed to fetch cart.');
+          setTimeout(() => setErrorMessage(''), 3000);
+          return;
+        }
+        cart = data?.store_carts || [];
+      }
+
+      console.log('Cart items:', cart); // Debug log
+      setCartItems(cart);
+
+      // Calculate total price
+      const totalPrice = cart.reduce(
+        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        0
+      );
+      setTotal(totalPrice);
+    } catch (error) {
+      console.error('Error fetching cart items:', error);
+      setErrorMessage('An error occurred while fetching cart.');
+      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
     fetchCartItems();
-    // Listen for cart updates (for cross-tab sync)
+    // Listen for cart updates
     const handleCartUpdate = () => fetchCartItems();
     window.addEventListener('cartUpdated', handleCartUpdate);
     return () => window.removeEventListener('cartUpdated', handleCartUpdate);
-  }, [user, getCartKey]);
+  }, [fetchCartItems]);
 
   // Protect cart page: show modal if not authenticated
   useEffect(() => {
-    if (!loading && (!user || !user.id)) {
+    if (!loading && !user) {
       setShowAuthModal(true);
     } else {
       setShowAuthModal(false);
     }
   }, [user, loading]);
 
-  const handleAddToCart = (product) => {
-    // Validate product data before adding
-    if (!product || !product.product_id || (!product.image && !Array.isArray(product.image))) {
+  const handleAddToCart = async (product) => {
+    if (!product || !product.product_id || !product.itemId) {
       console.error('Invalid product data:', product);
+      setErrorMessage('Invalid product data.');
+      setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
-    const cartKey = getCartKey();
-    const existingCart = JSON.parse(localStorage.getItem(cartKey) || "[]");
-    const existingItemIndex = existingCart.findIndex(
-      (item) => item.product_id === product.product_id
-    );
 
-    let updatedCart;
+    try {
+      let updatedCart = [...cartItems];
+      const existingItem = updatedCart.find((item) => item.itemId === product.itemId);
 
-    if (existingItemIndex !== -1) {
-      updatedCart = existingCart.map((item, index) =>
-        index === existingItemIndex
-          ? { ...item, quantity: item.quantity + 1 }
+      if (existingItem) {
+        existingItem.quantity += 1;
+      } else {
+        updatedCart.push({ ...product, quantity: 1 });
+      }
+
+      if (!user) {
+        // Update guest cart in localStorage
+        localStorage.setItem('cart_guest', JSON.stringify(updatedCart));
+      } else {
+        // Update authenticated user cart in DB
+        const { error } = await supabase
+          .from('carts')
+          .upsert(
+            {
+              user_id: user.id,
+              store_carts: updatedCart,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id' }
+          );
+
+        if (error) {
+          console.error('Error updating cart:', error);
+          setErrorMessage('Failed to add product to cart.');
+          setTimeout(() => setErrorMessage(''), 3000);
+          return;
+        }
+      }
+
+      setCartItems(updatedCart);
+      const newTotal = updatedCart.reduce(
+        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        0
+      );
+      setTotal(newTotal);
+      window.dispatchEvent(new Event('cartUpdated'));
+    } catch (error) {
+      console.error('Error in handleAddToCart:', error);
+      setErrorMessage('An error occurred while adding to cart.');
+      setTimeout(() => setErrorMessage(''), 3000);
+    }
+  };
+
+  const handleRemoveItem = async (itemId) => {
+    try {
+      let updatedCart = cartItems.filter((item) => item.itemId !== itemId);
+
+      if (!user) {
+        // Update guest cart in localStorage
+        localStorage.setItem('cart_guest', JSON.stringify(updatedCart));
+      } else {
+        // Update authenticated user cart in DB
+        const { error } = await supabase
+          .from('carts')
+          .upsert(
+            {
+              user_id: user.id,
+              store_carts: updatedCart,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id' }
+          );
+
+        if (error) {
+          console.error('Error removing item:', error);
+          setErrorMessage('Failed to remove item from cart.');
+          setTimeout(() => setErrorMessage(''), 3000);
+          return;
+        }
+      }
+
+      setCartItems(updatedCart);
+      const newTotal = updatedCart.reduce(
+        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        0
+      );
+      setTotal(newTotal);
+      window.dispatchEvent(new Event('cartUpdated'));
+    } catch (error) {
+      console.error('Error in handleRemoveItem:', error);
+      setErrorMessage('An error occurred while removing item.');
+      setTimeout(() => setErrorMessage(''), 3000);
+    }
+  };
+
+  const handleIncreaseQuantity = async (itemId) => {
+    try {
+      let updatedCart = cartItems.map((item) =>
+        item.itemId === itemId ? { ...item, quantity: item.quantity + 1 } : item
+      );
+
+      if (!user) {
+        // Update guest cart in localStorage
+        localStorage.setItem('cart_guest', JSON.stringify(updatedCart));
+      } else {
+        // Update authenticated user cart in DB
+        const { error } = await supabase
+          .from('carts')
+          .upsert(
+            {
+              user_id: user.id,
+              store_carts: updatedCart,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id' }
+          );
+
+        if (error) {
+          console.error('Error increasing quantity:', error);
+          setErrorMessage('Failed to update quantity.');
+          setTimeout(() => setErrorMessage(''), 3000);
+          return;
+        }
+      }
+
+      setCartItems(updatedCart);
+      const newTotal = updatedCart.reduce(
+        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        0
+      );
+      setTotal(newTotal);
+      window.dispatchEvent(new Event('cartUpdated'));
+    } catch (error) {
+      console.error('Error in handleIncreaseQuantity:', error);
+      setErrorMessage('An error occurred while updating quantity.');
+      setTimeout(() => setErrorMessage(''), 3000);
+    }
+  };
+
+  const handleDecreaseQuantity = async (itemId) => {
+    try {
+      let updatedCart = cartItems.map((item) =>
+        item.itemId === itemId && item.quantity > 1
+          ? { ...item, quantity: item.quantity - 1 }
           : item
       );
-    } else {
-      updatedCart = [...existingCart, { ...product, quantity: 1 }];
+
+      if (!user) {
+        // Update guest cart in localStorage
+        localStorage.setItem('cart_guest', JSON.stringify(updatedCart));
+      } else {
+        // Update authenticated user cart in DB
+        const { error } = await supabase
+          .from('carts')
+          .upsert(
+            {
+              user_id: user.id,
+              store_carts: updatedCart,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id' }
+          );
+
+        if (error) {
+          console.error('Error decreasing quantity:', error);
+          setErrorMessage('Failed to update quantity.');
+          setTimeout(() => setErrorMessage(''), 3000);
+          return;
+        }
+      }
+
+      setCartItems(updatedCart);
+      const newTotal = updatedCart.reduce(
+        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        0
+      );
+      setTotal(newTotal);
+      window.dispatchEvent(new Event('cartUpdated'));
+    } catch (error) {
+      console.error('Error in handleDecreaseQuantity:', error);
+      setErrorMessage('An error occurred while updating quantity.');
+      setTimeout(() => setErrorMessage(''), 3000);
     }
-
-    localStorage.setItem(cartKey, JSON.stringify(updatedCart));
-    window.dispatchEvent(new Event("cartUpdated"));
   };
 
-  const handleRemoveItem = (productId) => {
-    const cartKey = getCartKey();
-    const updatedCart = cartItems.filter((item) => item.product_id !== productId);
-    localStorage.setItem(cartKey, JSON.stringify(updatedCart));
-    setCartItems(updatedCart);
+  const handleClearCart = async () => {
+    try {
+      if (!user) {
+        // Clear guest cart in localStorage
+        localStorage.removeItem('cart_guest');
+      } else {
+        // Clear authenticated user cart in DB
+        const { error } = await supabase
+          .from('carts')
+          .upsert(
+            {
+              user_id: user.id,
+              store_carts: [],
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id' }
+          );
 
-    const newTotal = updatedCart.reduce(
-      (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-      0
-    );
-    setTotal(newTotal);
+        if (error) {
+          console.error('Error clearing cart:', error);
+          setErrorMessage('Failed to clear cart.');
+          setTimeout(() => setErrorMessage(''), 3000);
+          return;
+        }
+      }
 
-    window.dispatchEvent(new Event("cartUpdated"));
-  };
-
-  const handleIncreaseQuantity = (productId) => {
-    const cartKey = getCartKey();
-    const updatedCart = cartItems.map((item) =>
-      item.product_id === productId
-        ? { ...item, quantity: item.quantity + 1 }
-        : item
-    );
-    localStorage.setItem(cartKey, JSON.stringify(updatedCart));
-    setCartItems(updatedCart);
-
-    const newTotal = updatedCart.reduce(
-      (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-      0
-    );
-    setTotal(newTotal);
-
-    window.dispatchEvent(new Event("cartUpdated"));
-  };
-
-  const handleDecreaseQuantity = (productId) => {
-    const cartKey = getCartKey();
-    const updatedCart = cartItems.map((item) =>
-      item.product_id === productId && item.quantity > 1
-        ? { ...item, quantity: item.quantity - 1 }
-        : item
-    );
-    localStorage.setItem(cartKey, JSON.stringify(updatedCart));
-    setCartItems(updatedCart);
-
-    const newTotal = updatedCart.reduce(
-      (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-      0
-    );
-    setTotal(newTotal);
-
-    window.dispatchEvent(new Event("cartUpdated"));
-  };
-
-  const handleClearCart = () => {
-    const cartKey = getCartKey();
-    localStorage.removeItem(cartKey);
-    setCartItems([]);
-    setTotal(0);
-    window.dispatchEvent(new Event("cartUpdated"));
+      setCartItems([]);
+      setTotal(0);
+      window.dispatchEvent(new Event('cartUpdated'));
+    } catch (error) {
+      console.error('Error in handleClearCart:', error);
+      setErrorMessage('An error occurred while clearing cart.');
+      setTimeout(() => setErrorMessage(''), 3000);
+    }
   };
 
   const handleProceedToCheckout = (e) => {
@@ -206,7 +425,7 @@ export default function CartPage() {
     );
   }
 
-  if (!user || !user.id) {
+  if (!user) {
     return <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />;
   }
 
@@ -231,6 +450,12 @@ export default function CartPage() {
         Your Cart
       </h1>
 
+      {errorMessage && (
+        <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm mb-6">
+          {errorMessage}
+        </div>
+      )}
+
       <div className="bg-white p-6 sm:p-8 rounded-2xl shadow border border-gray-200">
         <div className="divide-y divide-gray-100">
           {cartItems.map((item, index) => {
@@ -240,7 +465,7 @@ export default function CartPage() {
 
             return (
               <div
-                key={item.product_id || index}
+                key={item.itemId || index}
                 className="flex flex-col md:flex-row md:items-center justify-between py-6"
               >
                 <div className="flex items-center gap-6 w-full md:w-2/3">
@@ -257,8 +482,12 @@ export default function CartPage() {
                     <Link href={`/products/${item.product_id}`} className="hover:underline">
                       <h3 className="text-base font-semibold text-gray-900">{item.name || 'Unnamed Product'}</h3>
                     </Link>
-                    {item.category && (
-                      <span className="text-xs text-gray-500">{item.category}</span>
+                    {item.variation && (
+                      <span className="text-xs text-gray-500">
+                        {item.variation.size && item.variation.color
+                          ? `${item.variation.size} / ${item.variation.color}`
+                          : item.variation.size || item.variation.color || 'Variation'}
+                      </span>
                     )}
                     <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
                       <span>Unit Price:</span>
@@ -266,7 +495,7 @@ export default function CartPage() {
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                       <button
-                        onClick={() => handleDecreaseQuantity(item.product_id)}
+                        onClick={() => handleDecreaseQuantity(item.itemId)}
                         className="border border-gray-300 rounded px-2 py-1 text-base font-bold text-gray-700 hover:bg-gray-100"
                         aria-label="Decrease quantity"
                       >
@@ -274,7 +503,7 @@ export default function CartPage() {
                       </button>
                       <span className="text-base font-semibold px-2">{item.quantity || 1}</span>
                       <button
-                        onClick={() => handleIncreaseQuantity(item.product_id)}
+                        onClick={() => handleIncreaseQuantity(item.itemId)}
                         className="border border-gray-300 rounded px-2 py-1 text-base font-bold text-gray-700 hover:bg-gray-100"
                         aria-label="Increase quantity"
                       >
@@ -288,7 +517,7 @@ export default function CartPage() {
                     Subtotal: ${(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}
                   </div>
                   <button
-                    onClick={() => handleRemoveItem(item.product_id)}
+                    onClick={() => handleRemoveItem(item.itemId)}
                     className="flex items-center gap-2 text-red-600 hover:text-white hover:bg-red-500 border border-red-200 px-3 py-1 rounded font-semibold transition-colors"
                     aria-label="Remove item"
                   >

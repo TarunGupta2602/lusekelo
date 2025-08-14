@@ -110,9 +110,7 @@ export default async function CategoryProducts({ params, searchParams }) {
                     </p>
                     <div className="flex items-center justify-between">
                       <span className="font-bold">$ {product.price.toFixed(2)}</span>
-                      <button className="bg-gray-200 hover:bg-gray-300 rounded-full p-1">
-                        <span className="block w-6 h-6 flex items-center justify-center font-bold text-gray-700">+</span>
-                      </button>
+                      
                     </div>
                   </div>
                 </div>

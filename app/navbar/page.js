@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -175,19 +176,35 @@ export default function Navbar() {
     console.log('Loaded categories:', categories);
   }, [products, categories]);
 
-  // Load cart count from localStorage
-  const getCartKey = useCallback(() => {
-    if (user && user.id) {
-      return `cart_${user.id}`;
-    }
-    return 'cart_guest';
-  }, [user]);
+  // Load cart count
+  const loadCartCount = useCallback(async () => {
+    try {
+      let cart = [];
+      if (!user) {
+        // Guest cart from localStorage
+        cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
+      } else {
+        // Authenticated user cart from DB
+        const { data, error } = await supabase
+          .from('carts')
+          .select('store_carts')
+          .eq('user_id', user.id)
+          .single();
 
-  const loadCartCount = useCallback(() => {
-    const cart = JSON.parse(localStorage.getItem(getCartKey()) || "[]");
-    const count = cart.reduce((total, item) => total + item.quantity, 0);
-    setCartCount(count);
-  }, [getCartKey]);
+        if (error && error.code !== 'PGRST116') { // PGRST116: No rows found
+          console.error('Error fetching cart:', error);
+          return;
+        }
+        cart = data?.store_carts || [];
+      }
+
+      const count = cart.reduce((total, item) => total + (Number(item.quantity) || 1), 0);
+      setCartCount(count);
+    } catch (error) {
+      console.error('Error loading cart count:', error);
+      setCartCount(0);
+    }
+  }, [user]);
 
   useEffect(() => {
     loadCartCount();

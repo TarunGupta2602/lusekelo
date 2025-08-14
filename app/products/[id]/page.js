@@ -1,4 +1,3 @@
-
 "use client";
 
 import { createClient } from '@supabase/supabase-js';
@@ -31,12 +30,11 @@ export default function ProductDetailPage({ params }) {
   const [resolvedParams, setResolvedParams] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedVariation, setSelectedVariation] = useState(null);
-  const [cartMessage, setCartMessage] = useState("");
+  const [cartMessage, setCartMessage] = useState('');
   const [user, setUser] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const scrollContainerRef = useRef(null);
 
-  // ... (rest of the code remains unchanged, included for reference)
   useEffect(() => {
     const resolveParams = async () => {
       const resolved = await params;
@@ -48,7 +46,7 @@ export default function ProductDetailPage({ params }) {
   useEffect(() => {
     const fetchUser = async () => {
       const { data, error } = await supabase.auth.getUser();
-      if (!error && data && data.user) {
+      if (!error && data?.user) {
         setUser(data.user);
       } else {
         setUser(null);
@@ -72,7 +70,7 @@ export default function ProductDetailPage({ params }) {
           .single();
 
         if (error) {
-          console.error("Supabase error:", error);
+          console.error('Supabase error:', error);
           setProduct(null);
         } else {
           setProduct(data);
@@ -88,19 +86,19 @@ export default function ProductDetailPage({ params }) {
               .neq('id', id)
               .limit(10);
 
-            if (!relatedError && relatedData) {
-              setRelatedProducts(relatedData);
-            } else {
-              console.error("Error fetching related products:", relatedError);
+            if (relatedError) {
+              console.error('Error fetching related products:', relatedError);
               setRelatedProducts([]);
+            } else {
+              setRelatedProducts(relatedData || []);
             }
           } catch (relatedErr) {
-            console.error("Exception fetching related products:", relatedErr);
+            console.error('Exception fetching related products:', relatedErr);
             setRelatedProducts([]);
           }
         }
       } catch (err) {
-        console.error("Error fetching product:", err);
+        console.error('Error fetching product:', err);
         setProduct(null);
       } finally {
         setLoading(false);
@@ -110,40 +108,140 @@ export default function ProductDetailPage({ params }) {
     fetchProduct();
   }, [resolvedParams]);
 
-  const getCartKey = () => {
-    if (user && user.id) {
-      return `cart_${user.id}`;
-    }
-    return 'cart_guest';
-  };
+  // Migrate guest cart to DB when user logs in
+  useEffect(() => {
+    const migrateGuestCart = async () => {
+      if (!user) return;
 
-  const handleAddToCart = (productToAdd = product, qty = quantity, variation = selectedVariation) => {
+      const guestCartKey = 'cart_guest';
+      const guestCart = JSON.parse(localStorage.getItem(guestCartKey)) || [];
+      if (guestCart.length === 0) return;
+
+      try {
+        // Fetch current DB cart
+        const { data, error } = await supabase
+          .from('carts')
+          .select('store_carts')
+          .eq('user_id', user.id)
+          .single();
+
+        let currentCart = [];
+        if (data && data.store_carts) {
+          currentCart = data.store_carts;
+        }
+
+        // Merge guest cart into current cart
+        guestCart.forEach((guestItem) => {
+          const existingItem = currentCart.find((item) => item.itemId === guestItem.itemId);
+          if (existingItem) {
+            existingItem.quantity += guestItem.quantity;
+          } else {
+            currentCart.push(guestItem);
+          }
+        });
+
+        // Upsert updated cart to DB
+        const { error: upsertError } = await supabase
+          .from('carts')
+          .upsert(
+            {
+              user_id: user.id,
+              store_carts: currentCart,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id' }
+          );
+
+        if (upsertError) {
+          console.error('Error migrating cart:', upsertError);
+        } else {
+          localStorage.removeItem(guestCartKey);
+          window.dispatchEvent(new Event('cartUpdated'));
+        }
+      } catch (err) {
+        console.error('Error during cart migration:', err);
+      }
+    };
+
+    migrateGuestCart();
+  }, [user]);
+
+  const handleAddToCart = async (productToAdd = product, qty = quantity, variation = selectedVariation) => {
     if (!productToAdd) return;
 
-    const cartKey = getCartKey();
-    const cart = JSON.parse(localStorage.getItem(cartKey)) || [];
     const itemId = variation ? `${productToAdd.id}_${JSON.stringify(variation)}` : productToAdd.id;
-    const existingItem = cart.find((item) => item.itemId === itemId);
+    const newItem = {
+      itemId,
+      product_id: productToAdd.id,
+      quantity: qty,
+      name: productToAdd.name,
+      price: variation ? variation.price : productToAdd.price,
+      image: Array.isArray(productToAdd.image) ? productToAdd.image[0] : productToAdd.image,
+      variation: variation || null,
+    };
 
-    if (existingItem) {
-      existingItem.quantity += qty;
-    } else {
-      cart.push({
-        itemId,
-        product_id: productToAdd.id,
-        quantity: qty,
-        name: productToAdd.name,
-        price: variation ? variation.price : productToAdd.price,
-        image: Array.isArray(productToAdd.image) ? productToAdd.image[0] : productToAdd.image,
-        variation: variation || null,
-      });
+    try {
+      if (!user) {
+        // Handle guest cart in localStorage
+        const cartKey = 'cart_guest';
+        let cart = JSON.parse(localStorage.getItem(cartKey)) || [];
+        const existingItem = cart.find((item) => item.itemId === itemId);
+
+        if (existingItem) {
+          existingItem.quantity += qty;
+        } else {
+          cart.push(newItem);
+        }
+
+        localStorage.setItem(cartKey, JSON.stringify(cart));
+      } else {
+        // Handle authenticated user cart in DB
+        const { data, error } = await supabase
+          .from('carts')
+          .select('store_carts')
+          .eq('user_id', user.id)
+          .single();
+
+        let cart = [];
+        if (data && data.store_carts) {
+          cart = data.store_carts;
+        }
+
+        const existingItem = cart.find((item) => item.itemId === itemId);
+
+        if (existingItem) {
+          existingItem.quantity += qty;
+        } else {
+          cart.push(newItem);
+        }
+
+        const { error: upsertError } = await supabase
+          .from('carts')
+          .upsert(
+            {
+              user_id: user.id,
+              store_carts: cart,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id' }
+          );
+
+        if (upsertError) {
+          console.error('Error updating cart:', upsertError);
+          setCartMessage('Failed to add product to cart.');
+          setTimeout(() => setCartMessage(''), 3000);
+          return;
+        }
+      }
+
+      window.dispatchEvent(new Event('cartUpdated'));
+      setCartMessage('Product added to cart!');
+      setTimeout(() => setCartMessage(''), 3000);
+    } catch (err) {
+      console.error('Error in handleAddToCart:', err);
+      setCartMessage('An error occurred while adding to cart.');
+      setTimeout(() => setCartMessage(''), 3000);
     }
-
-    localStorage.setItem(cartKey, JSON.stringify(cart));
-    window.dispatchEvent(new Event("cartUpdated"));
-
-    setCartMessage("Product added to cart!");
-    setTimeout(() => setCartMessage(""), 3000);
   };
 
   const incrementQuantity = () => setQuantity((prev) => prev + 1);
@@ -162,12 +260,12 @@ export default function ProductDetailPage({ params }) {
   };
 
   const nextImage = () => {
-    const imagePaths = normalizeImagePath(product.image);
+    const imagePaths = normalizeImagePath(product?.image);
     setCurrentImageIndex((prev) => (prev + 1) % imagePaths.length);
   };
 
   const prevImage = () => {
-    const imagePaths = normalizeImagePath(product.image);
+    const imagePaths = normalizeImagePath(product?.image);
     setCurrentImageIndex((prev) => (prev - 1 + imagePaths.length) % imagePaths.length);
   };
 
@@ -223,7 +321,7 @@ export default function ProductDetailPage({ params }) {
                   </button>
                 </>
               )}
-              
+
               {currentImage ? (
                 <Image
                   src={currentImage}
@@ -237,7 +335,7 @@ export default function ProductDetailPage({ params }) {
                   No Image Available
                 </div>
               )}
-              
+
               {imagePaths.length > 1 && (
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
                   {imagePaths.map((_, index) => (
@@ -287,7 +385,7 @@ export default function ProductDetailPage({ params }) {
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
-                
+
                 <div className="flex items-center text-orange-500 text-sm">
                   <span className="mr-1">⚠️</span>
                   <span>Limited Quantity Available</span>
@@ -327,7 +425,7 @@ export default function ProductDetailPage({ params }) {
             </div>
 
             <p className="text-gray-600 leading-relaxed text-sm sm:text-base">
-              {product.description || "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt."}
+              {product.description || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.'}
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4">
@@ -351,7 +449,7 @@ export default function ProductDetailPage({ params }) {
         {/* Related Items */}
         <div className="mt-12 sm:mt-16">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Related Items</h2>
-          
+
           <div className="relative">
             {relatedProducts.length > 0 && (
               <>
@@ -399,16 +497,16 @@ export default function ProductDetailPage({ params }) {
                               No Image
                             </div>
                           )}
-                          
+
                           <div className="absolute inset-0 border-2 border-blue-400 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
-                        
+
                         <div className="p-3 sm:p-4 space-y-2">
                           <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">
                             {relatedProduct.name}
                           </h3>
                           <p className="text-xs sm:text-sm text-gray-500">100g Standard Portion</p>
-                          
+
                           <div className="flex items-center justify-between">
                             <div className="space-y-1">
                               <div className="text-base sm:text-lg font-bold text-gray-900">
@@ -419,7 +517,7 @@ export default function ProductDetailPage({ params }) {
                                 <span className="ml-1 text-xs sm:text-sm text-gray-600">4.25</span>
                               </div>
                             </div>
-                            
+
                             <button
                               className="bg-gray-100 hover:bg-gray-200 rounded-lg p-2 transition-colors"
                               onClick={(e) => {
