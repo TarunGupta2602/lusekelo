@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
@@ -47,8 +46,8 @@ const ProductCard = React.memo(({ product, cart, handleAddToCart }) => {
 
   return (
     <Link href={`/products/${product.id}`} key={product.id}>
-      <div className="product-card bg-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow duration-300 w-full h-[380px] flex flex-col">
-        <div className="bg-gray-50 rounded-xl p-4 mb-3 flex items-center justify-center h-[160px] flex-shrink-0">
+      <div className="product-card bg-white rounded-2xl p-3 sm:p-4 lg:p-5 shadow-lg hover:shadow-xl transition-shadow duration-300 w-full h-[340px] sm:h-[360px] lg:h-[380px] flex flex-col">
+        <div className="bg-gray-50 rounded-xl p-2 sm:p-3 lg:p-4 mb-2 sm:mb-3 flex items-center justify-center h-[120px] sm:h-[140px] lg:h-[160px] flex-shrink-0">
           {product.image ? (
             <Image
               src={normalizeImagePath(product.image)}
@@ -60,25 +59,27 @@ const ProductCard = React.memo(({ product, cart, handleAddToCart }) => {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <span className="text-gray-400">No image</span>
+              <span className="text-gray-400 text-xs sm:text-sm">No image</span>
             </div>
           )}
         </div>
         <div className="flex flex-col flex-grow">
-          <h3 className="text-lg font-semibold text-gray-900 line-clamp-2 h-[2.8rem] mb-2">
+          <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 line-clamp-2 h-[2.2rem] sm:h-[2.4rem] lg:h-[2.8rem] mb-1 sm:mb-2">
             {product.name}
           </h3>
-          <p className="text-gray-400 text-sm line-clamp-3 h-[3.5rem] mb-3">
+          <p className="text-gray-400 text-xs sm:text-sm line-clamp-2 sm:line-clamp-3 h-[2.4rem] sm:h-[3.5rem] mb-2 sm:mb-3">
             {product.description || 'No description available'}
           </p>
           <div className="flex items-center justify-between mt-auto">
-            <div className="flex-1">
-              <div className="text-xl font-bold text-gray-900">${product.price.toFixed(2)}</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 truncate">
+                ${product.price.toFixed(2)}
+              </div>
               {product.quantity && (
-                <p className="text-gray-400 text-xs mt-0.5">Qty: {product.quantity}</p>
+                <p className="text-gray-400 text-xs mt-0.5 truncate">Qty: {product.quantity}</p>
               )}
             </div>
-            <div className="flex-shrink-0 ml-2 sm:ml-3 h-9 w-24 sm:w-28 relative">
+            <div className="flex-shrink-0 ml-2 h-8 sm:h-9 w-20 sm:w-24 lg:w-28 relative">
               <button
                 className={`absolute inset-0 bg-gray-300 hover:bg-gray-400 transition-all duration-300 ease-in-out rounded-lg flex items-center justify-center group ${
                   quantityInCart === 0
@@ -90,11 +91,11 @@ const ProductCard = React.memo(({ product, cart, handleAddToCart }) => {
                 tabIndex={quantityInCart === 0 ? 0 : -1}
               >
                 <svg
-                  width="18"
-                  height="18"
+                  width="16"
+                  height="16"
                   viewBox="0 0 24 24"
                   fill="none"
-                  className="text-gray-600 group-hover:text-gray-700"
+                  className="sm:w-[18px] sm:h-[18px] text-gray-600 group-hover:text-gray-700"
                 >
                   <path
                     d="M12 5V19M5 12H19"
@@ -115,41 +116,43 @@ const ProductCard = React.memo(({ product, cart, handleAddToCart }) => {
               >
                 <button
                   onClick={handleDecrement}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-8 sm:w-9 h-full flex items-center justify-center transition-colors"
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-6 sm:w-8 lg:w-9 h-full flex items-center justify-center transition-colors"
                   title="Decrease quantity"
                   tabIndex={quantityInCart > 0 ? 0 : -1}
                 >
                   <svg
-                    width="12"
-                    height="12"
+                    width="10"
+                    height="10"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    className="sm:w-3 sm:h-3"
                   >
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
                 </button>
-                <span className="text-sm sm:text-base font-medium text-gray-800 w-7 sm:w-8 h-full flex items-center justify-center select-none">
+                <span className="text-xs sm:text-sm lg:text-base font-medium text-gray-800 w-5 sm:w-7 lg:w-8 h-full flex items-center justify-center select-none">
                   {quantityInCart}
                 </span>
                 <button
                   onClick={handleIncrement}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-8 sm:w-9 h-full flex items-center justify-center transition-colors"
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md w-6 sm:w-8 lg:w-9 h-full flex items-center justify-center transition-colors"
                   title="Increase quantity"
                   tabIndex={quantityInCart > 0 ? 0 : -1}
                 >
                   <svg
-                    width="12"
-                    height="12"
+                    width="10"
+                    height="10"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    className="sm:w-3 sm:h-3"
                   >
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -341,17 +344,11 @@ export default function CategoryProducts({ params, searchParams }) {
     }
   };
 
-  // CSS styles from NewPage
+  // CSS styles - responsive version
   const style = `
     .product-card {
       flex: 0 0 auto;
-      width: 240px;
       scroll-snap-align: start;
-    }
-    @media (max-width: 768px) {
-      .product-card {
-        width: 200px;
-      }
     }
     .product-card .relative {
       transition: all 0.4s ease-in-out;
@@ -368,31 +365,44 @@ export default function CategoryProducts({ params, searchParams }) {
   `;
 
   return (
-    <div className="p-6 mt-20 mb-20 bg-gray-50">
+    <div className="p-3 sm:p-4 lg:p-6 mt-16 sm:mt-18 lg:mt-20 mb-16 sm:mb-18 lg:mb-20 bg-gray-50 min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: style }} />
-      <h1 className="text-2xl font-bold mb-6">
-        {categoryName}
-        {storeId && (
-          <span className="text-gray-500 text-lg ml-2">(Filtered by store)</span>
-        )}
-      </h1>
+      
+      {/* Header */}
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
+          {categoryName}
+          {storeId && (
+            <span className="text-gray-500 text-sm sm:text-base lg:text-lg ml-2 block sm:inline">
+              (Filtered by store)
+            </span>
+          )}
+        </h1>
+      </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-10">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="bg-white rounded-2xl shadow-lg p-4 border border-gray-100">
-              <div className="mb-4 h-48 bg-gray-200 rounded-xl animate-pulse"></div>
-              <div className="h-6 bg-gray-200 rounded w-3/4 mb-2 animate-pulse"></div>
-              <div className="h-6 bg-gray-200 rounded w-1/4 animate-pulse"></div>
+        /* Loading Skeleton - Responsive Grid */
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => (
+            <div key={i} className="bg-white rounded-2xl shadow-lg p-3 sm:p-4 border border-gray-100">
+              <div className="mb-3 sm:mb-4 h-32 sm:h-40 lg:h-48 bg-gray-200 rounded-xl animate-pulse"></div>
+              <div className="h-4 sm:h-5 lg:h-6 bg-gray-200 rounded w-3/4 mb-2 animate-pulse"></div>
+              <div className="h-4 sm:h-5 lg:h-6 bg-gray-200 rounded w-1/4 animate-pulse"></div>
             </div>
           ))}
         </div>
       ) : error ? (
-        <div className="p-6">
-          <p>Error loading products: {error}</p>
+        /* Error State */
+        <div className="flex items-center justify-center min-h-[200px] sm:min-h-[300px]">
+          <div className="text-center p-6 bg-white rounded-lg shadow-md max-w-md mx-auto">
+            <div className="text-red-500 text-4xl sm:text-5xl mb-4">⚠️</div>
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">Error Loading Products</h3>
+            <p className="text-gray-600 text-sm sm:text-base break-words">{error}</p>
+          </div>
         </div>
       ) : products?.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-10">
+        /* Products Grid - Responsive */
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
           {products.map((product) => (
             <ProductCard
               key={product.id}
@@ -403,11 +413,21 @@ export default function CategoryProducts({ params, searchParams }) {
           ))}
         </div>
       ) : (
-        <p>No products found in this {storeId ? "store's " : ""}category.</p>
+        /* Empty State */
+        <div className="flex items-center justify-center min-h-[200px] sm:min-h-[300px]">
+          <div className="text-center p-6 bg-white rounded-lg shadow-md max-w-md mx-auto">
+            <div className="text-gray-400 text-4xl sm:text-5xl mb-4">📦</div>
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">No Products Found</h3>
+            <p className="text-gray-600 text-sm sm:text-base">
+              No products found in this {storeId ? "store's " : ""}category.
+            </p>
+          </div>
+        </div>
       )}
 
+      {/* Cart Message Toast - Responsive */}
       {cartMessage && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-2 rounded-lg shadow-lg z-50">
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-lg z-50 text-sm sm:text-base max-w-[90vw] text-center">
           {cartMessage}
         </div>
       )}
