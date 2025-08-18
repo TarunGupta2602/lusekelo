@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -9,6 +8,7 @@ import debounce from "lodash.debounce";
 import { createClient } from "@supabase/supabase-js";
 import { ProfileSidebar } from "@/app/profile/page";
 import AuthModal from "./AuthModal";
+import { useRouter } from "next/navigation";
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -91,6 +91,7 @@ export default function Navbar() {
   const [products, setProducts] = useState([]);
   const searchInputRef = useRef();
   const searchResultsRef = useRef();
+  const router = useRouter();
 
   // Fetch user from Supabase auth
   useEffect(() => {
@@ -266,6 +267,17 @@ export default function Navbar() {
     };
   }, [debouncedSearch]);
 
+  // Handle form submission (Enter key press)
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    const trimmedQuery = searchQuery.trim();
+    if (trimmedQuery) {
+      router.push(`/search?query=${encodeURIComponent(trimmedQuery)}`);
+      setSearchQuery("");
+      setSearchResults([]);
+    }
+  };
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -398,7 +410,7 @@ export default function Navbar() {
         {/* Mobile Search Bar (Conditional Render) */}
         {mobileSearchOpen && (
           <div className="w-full mt-3 order-last">
-            <form className="relative" onSubmit={(e) => e.preventDefault()}>
+            <form className="relative" onSubmit={handleSearchSubmit}>
               <input
                 type="text"
                 placeholder="Search for grocery, meat and more..."
@@ -698,7 +710,7 @@ export default function Navbar() {
 
         {/* Desktop Search Bar */}
         <div className="hidden lg:block w-[500px] relative">
-          <form className="relative" onSubmit={(e) => e.preventDefault()}>
+          <form className="relative" onSubmit={handleSearchSubmit}>
             <input
               type="text"
               placeholder="Search for grocery, meat and more..."
