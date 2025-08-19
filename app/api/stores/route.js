@@ -20,18 +20,15 @@ export async function GET(request) {
         vendor_id,
         location,
         created_at,
-        location
+        price
       `);
-
     if (error) {
       console.error('Supabase error:', error);
       return NextResponse.json({ error: 'Failed to fetch stores', details: error.message }, { status: 500 });
     }
-
-    // Ensure data is an array; return empty array if no data
     return NextResponse.json(data || [], { status: 200 });
   } catch (err) {
     console.error('Server error in /api/stores:', err);
     return NextResponse.json({ error: 'Internal Server Error', details: err.message }, { status: 500 });
   }
-}
+} 

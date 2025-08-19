@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@supabase/supabase-js';
-import { debounce } from 'lodash';
 import React from 'react';
 
 // Normalize the image path to ensure the image URL is correct
@@ -260,47 +259,35 @@ export default function CategoryProducts({ params, searchParams }) {
     fetchUserAndCart();
   }, [categoryId, storeId]);
 
-  const debouncedUpdateCart = useMemo(
-    () =>
-      debounce(async (newCart, userId) => {
-        if (!userId) {
-          localStorage.setItem('cart_guest', JSON.stringify(newCart));
-          return;
-        }
-        const { error } = await supabase
-          .from('carts')
-          .upsert(
-            {
-              user_id: userId,
-              store_carts: newCart,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id' }
-          );
-        if (error) {
-          console.error('Error updating cart:', error);
-          setCartMessage('Failed to update cart.');
-          setTimeout(() => setCartMessage(''), 2000);
-        }
-      }, 300),
-    []
-  );
-
-  const updateCartInSupabase = useCallback(
-    (newCart, userId) => debouncedUpdateCart(newCart, userId),
-    [debouncedUpdateCart]
-  );
-
-  const handleAddToCart = async (productToAdd, quantityDelta = 1) => {
-    if (!productToAdd || !productToAdd.id) {
-      setCartMessage('Invalid product data.');
+  const updateCartInSupabase = useCallback(async (newCart, userId) => {
+    if (!userId) return;
+    const { error } = await supabase
+      .from('carts')
+      .upsert(
+        {
+          user_id: userId,
+          store_carts: newCart,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+    if (error) {
+      console.error('Error updating cart:', error);
+      setCartMessage('Failed to update cart.');
       setTimeout(() => setCartMessage(''), 2000);
-      return;
     }
+  }, []);
 
-    try {
-      setCart((prevCart) => {
-        const newCart = [...prevCart];
+  const handleAddToCart = useCallback(
+    async (productToAdd, quantityDelta = 1) => {
+      if (!productToAdd || !productToAdd.id) {
+        setCartMessage('Invalid product data.');
+        setTimeout(() => setCartMessage(''), 2000);
+        return;
+      }
+
+      try {
+        let newCart = [...cart];
         const itemId = `${productToAdd.id}`;
         const existingItemIndex = newCart.findIndex((item) => item.itemId === itemId);
 
@@ -324,25 +311,25 @@ export default function CategoryProducts({ params, searchParams }) {
           setCartMessage('Product added to cart!');
         }
 
+        setCart(newCart);
+
         if (!user) {
           localStorage.setItem('cart_guest', JSON.stringify(newCart));
-        }
-
-        window.dispatchEvent(new Event('cartUpdated'));
-
-        if (user) {
-          updateCartInSupabase(newCart, user.id);
+          window.dispatchEvent(new Event('cartUpdated'));
+        } else {
+          await updateCartInSupabase(newCart, user.id);
+          window.dispatchEvent(new Event('cartUpdated'));
         }
 
         setTimeout(() => setCartMessage(''), 2000);
-        return newCart;
-      });
-    } catch (error) {
-      console.error('Error in handleAddToCart:', error);
-      setCartMessage('An error occurred while updating cart.');
-      setTimeout(() => setCartMessage(''), 2000);
-    }
-  };
+      } catch (error) {
+        console.error('Error in handleAddToCart:', error);
+        setCartMessage('An error occurred while updating cart.');
+        setTimeout(() => setCartMessage(''), 2000);
+      }
+    },
+    [cart, user, updateCartInSupabase]
+  );
 
   // CSS styles - responsive version
   const style = `

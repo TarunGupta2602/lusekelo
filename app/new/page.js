@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@supabase/supabase-js';
-import { debounce } from 'lodash';
 import React from 'react';
 
 // Move this constant outside the component
@@ -195,7 +194,7 @@ const CategoryCard = React.memo(({ childCategory }) => (
   <Link
     key={childCategory.id}
     href={`/new/${childCategory.id}`}
-    className="category-card bg-white border border-white rounded-2xl hover:scale-[1.02] transition-all duration-200 flex items-center group p-4 sm:p-6 min-h-[160px] sm:min-h-[180px] relative overflow-hidden"
+    className="category-card bg-white border border-white rounded-2xl hover:scale-[1.02] transition-all duration-200 flex items-center group p-4"
   >
     <div className="flex items-center w-full h-full">
       <div className="flex-1 pr-4 sm:pr-6">
@@ -308,35 +307,26 @@ export default function NewPage() {
     fetchUserAndCart();
   }, []);
 
-  const debouncedUpdateCart = useMemo(
-    () =>
-      debounce(async (newCart, userId) => {
-        if (!userId) {
-          localStorage.setItem('cart_guest', JSON.stringify(newCart));
-          return;
-        }
-        const { error } = await supabase
-          .from('carts')
-          .upsert(
-            {
-              user_id: userId,
-              store_carts: newCart,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id' }
-          );
-        if (error) {
-          console.error('Error updating cart:', error);
-          setCartMessage("Failed to update cart.");
-          setTimeout(() => setCartMessage(""), 2000);
-        }
-      }, 300),
-    []
-  );
-
   const updateCartInSupabase = useCallback(
-    (newCart, userId) => debouncedUpdateCart(newCart, userId),
-    [debouncedUpdateCart]
+    async (newCart, userId) => {
+      if (!userId) return;
+      const { error } = await supabase
+        .from('carts')
+        .upsert(
+          {
+            user_id: userId,
+            store_carts: newCart,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
+      if (error) {
+        console.error('Error updating cart:', error);
+        setCartMessage("Failed to update cart.");
+        setTimeout(() => setCartMessage(""), 2000);
+      }
+    },
+    []
   );
 
   const handleAddToCart = async (productToAdd, quantityDelta = 1) => {
@@ -347,44 +337,41 @@ export default function NewPage() {
     }
 
     try {
-      setCart((prevCart) => {
-        const newCart = [...prevCart];
-        const itemId = `${productToAdd.id}`;
-        const existingItemIndex = newCart.findIndex((item) => item.itemId === itemId);
+      let newCart = [...cart];
+      const itemId = `${productToAdd.id}`;
+      const existingItemIndex = newCart.findIndex((item) => item.itemId === itemId);
 
-        if (existingItemIndex > -1) {
-          newCart[existingItemIndex].quantity += quantityDelta;
-          if (newCart[existingItemIndex].quantity <= 0) {
-            newCart.splice(existingItemIndex, 1);
-            setCartMessage("Product removed from cart!");
-          } else {
-            setCartMessage(quantityDelta > 0 ? "Product quantity increased!" : "Product quantity decreased!");
-          }
-        } else if (quantityDelta > 0) {
-          newCart.push({
-            itemId: itemId,
-            product_id: productToAdd.id,
-            quantity: quantityDelta,
-            name: productToAdd.name,
-            price: productToAdd.price,
-            image: productToAdd.image,
-          });
-          setCartMessage("Product added to cart!");
+      if (existingItemIndex > -1) {
+        newCart[existingItemIndex].quantity += quantityDelta;
+        if (newCart[existingItemIndex].quantity <= 0) {
+          newCart.splice(existingItemIndex, 1);
+          setCartMessage("Product removed from cart!");
+        } else {
+          setCartMessage(quantityDelta > 0 ? "Product quantity increased!" : "Product quantity decreased!");
         }
+      } else if (quantityDelta > 0) {
+        newCart.push({
+          itemId: itemId,
+          product_id: productToAdd.id,
+          quantity: quantityDelta,
+          name: productToAdd.name,
+          price: productToAdd.price,
+          image: productToAdd.image,
+        });
+        setCartMessage("Product added to cart!");
+      }
 
-        if (!user) {
-          localStorage.setItem('cart_guest', JSON.stringify(newCart));
-        }
+      setCart(newCart);
 
+      if (!user) {
+        localStorage.setItem('cart_guest', JSON.stringify(newCart));
         window.dispatchEvent(new Event("cartUpdated"));
+      } else {
+        await updateCartInSupabase(newCart, user.id);
+        window.dispatchEvent(new Event("cartUpdated"));
+      }
 
-        if (user) {
-          updateCartInSupabase(newCart, user.id);
-        }
-
-        setTimeout(() => setCartMessage(""), 2000);
-        return newCart;
-      });
+      setTimeout(() => setCartMessage(""), 2000);
     } catch (error) {
       console.error('Error in handleAddToCart:', error);
       setCartMessage("An error occurred while updating cart.");
@@ -508,16 +495,6 @@ export default function NewPage() {
     }
     .product-scroll::-webkit-scrollbar {
       display: none;
-    }
-    .product-card {
-      flex: 0 0 auto;
-      width: 240px;
-      scroll-snap-align: start;
-    }
-    @media (max-width: 768px) {
-      .product-card {
-        width: 200px;
-      }
     }
     .scroll-container {
       scroll-snap-type: x mandatory;

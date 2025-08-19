@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
 import Image from 'next/image';
-import CustomAuthModal from '../../components/CustomAuthModal';
 import { FaArrowLeft, FaShieldAlt, FaCheckCircle } from 'react-icons/fa';
 import { MdOutlineShoppingCart } from 'react-icons/md';
 import { HiOutlineLockClosed } from 'react-icons/hi';
@@ -37,61 +36,51 @@ const normalizeImageUrl = (url) => {
 };
 
 export default function CheckoutPage() {
-  const [cartItems, setCartItems] = useState([]);
+  // Initialize cartItems with localStorage data for guests to avoid flicker
+  const initialCart = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('cart_guest') || '[]') : [];
+  const [cartItems, setCartItems] = useState(initialCart);
   const [total, setTotal] = useState(0);
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Renamed to avoid confusion
+  const [isCartConfirmedEmpty, setIsCartConfirmedEmpty] = useState(false); // New state to confirm empty cart
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const router = useRouter();
 
-  // Fetch user on mount
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const { data, error } = await supabase.auth.getUser();
-        if (!error && data?.user) {
-          setUser(data.user);
-        } else {
-          setUser(null);
-        }
-      } catch (err) {
-        console.error('Error fetching user:', err);
-        setErrorMessage('Failed to fetch user data.');
-        setTimeout(() => setErrorMessage(''), 3000);
-      }
-    };
-    fetchUser();
-  }, []);
-
-  // Fetch cart items
-  const fetchCartItems = useCallback(async () => {
+  // Fetch user and cart data
+  const fetchUserAndCart = useCallback(async () => {
     try {
-      setLoading(true);
+      setIsLoading(true);
+
+      // Fetch user
+      const { data: userData, error: userError } = await supabase.auth.getUser();
       let cart = [];
 
-      if (!user) {
-        // Guest cart from localStorage
-        cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
-      } else {
-        // Authenticated user cart from DB
-        const { data, error } = await supabase
+      if (!userError && userData?.user) {
+        setUser(userData.user);
+        // Fetch cart for authenticated user
+        const { data: cartData, error: cartError } = await supabase
           .from('carts')
           .select('store_carts')
-          .eq('user_id', user.id)
+          .eq('user_id', userData.user.id)
           .single();
 
-        if (error && error.code !== 'PGRST116') { // PGRST116: No rows found
-          console.error('Error fetching cart:', error);
+        if (cartError && cartError.code !== 'PGRST116') { // PGRST116: No rows found
+          console.error('Error fetching cart:', cartError);
           setErrorMessage('Failed to fetch cart.');
           setTimeout(() => setErrorMessage(''), 3000);
           return;
         }
-        cart = data?.store_carts || [];
+        cart = cartData?.store_carts || [];
+      } else {
+        setUser(null);
+        // Use guest cart from localStorage
+        cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
       }
 
       console.log('Cart items:', cart); // Debug log
       setCartItems(cart);
+      setIsCartConfirmedEmpty(cart.length === 0);
 
       // Calculate total price
       const totalPrice = cart.reduce(
@@ -100,30 +89,31 @@ export default function CheckoutPage() {
       );
       setTotal(totalPrice);
     } catch (error) {
-      console.error('Error fetching cart items:', error);
-      setErrorMessage('An error occurred while fetching cart.');
+      console.error('Error fetching user or cart:', error);
+      setErrorMessage('An error occurred while loading the checkout.');
       setTimeout(() => setErrorMessage(''), 3000);
+      setIsCartConfirmedEmpty(true); // Assume empty on error to avoid stuck loading
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    fetchCartItems();
+    fetchUserAndCart();
     // Listen for cart updates
-    const handleCartUpdate = () => fetchCartItems();
+    const handleCartUpdate = () => fetchUserAndCart();
     window.addEventListener('cartUpdated', handleCartUpdate);
     return () => window.removeEventListener('cartUpdated', handleCartUpdate);
-  }, [fetchCartItems]);
+  }, [fetchUserAndCart]);
 
-  // Protect checkout page: show modal if not authenticated
+  // Protect checkout page: show modal if not authenticated and cart is not empty
   useEffect(() => {
-    if (!loading && !user) {
+    if (!isLoading && !user && cartItems.length > 0) {
       setShowAuthModal(true);
     } else {
       setShowAuthModal(false);
     }
-  }, [user, loading]);
+  }, [user, isLoading, cartItems]);
 
   const loadRazorpayScript = () =>
     new Promise((resolve) => {
@@ -229,6 +219,8 @@ export default function CheckoutPage() {
           // Clear cart in Supabase or localStorage
           if (!user) {
             localStorage.removeItem('cart_guest');
+            setCartItems([]);
+            setIsCartConfirmedEmpty(true);
           } else {
             const { error } = await supabase
               .from('carts')
@@ -245,6 +237,9 @@ export default function CheckoutPage() {
               console.error('Error clearing cart:', error);
               setErrorMessage('Failed to clear cart after payment.');
               setTimeout(() => setErrorMessage(''), 3000);
+            } else {
+              setCartItems([]);
+              setIsCartConfirmedEmpty(true);
             }
           }
 
@@ -275,7 +270,8 @@ export default function CheckoutPage() {
     rzp.open();
   };
 
-  if (loading) {
+  // Show loading skeleton during initial fetch
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-20">
@@ -322,11 +318,8 @@ export default function CheckoutPage() {
     );
   }
 
-  if (!user) {
-    return <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />;
-  }
-
-  if (cartItems.length === 0) {
+  // Show empty cart UI only when cart is confirmed empty
+  if (isCartConfirmedEmpty) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-20">
@@ -518,7 +511,6 @@ export default function CheckoutPage() {
             </div>
           </div>
         </div>
-        <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
       </div>
     </div>
   );

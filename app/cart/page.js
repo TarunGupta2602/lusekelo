@@ -43,9 +43,10 @@ export default function CartPage() {
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [authChecked, setAuthChecked] = useState(false);
   const router = useRouter();
 
-  // Fetch user on mount
+  // Listen to Supabase auth state changes
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -57,22 +58,41 @@ export default function CartPage() {
         }
       } catch (err) {
         console.error('Error fetching user:', err);
+        setUser(null);
+      } finally {
+        setAuthChecked(true);
       }
     };
+
     fetchUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        setUser(session.user);
+        setShowAuthModal(false);
+        setAuthChecked(true);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setShowAuthModal(true);
+        setAuthChecked(true);
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   // Migrate guest cart to DB when user logs in
   useEffect(() => {
     const migrateGuestCart = async () => {
-      if (!user) return;
+      if (!user || !authChecked) return;
 
       const guestCartKey = 'cart_guest';
       const guestCart = JSON.parse(localStorage.getItem(guestCartKey)) || [];
       if (guestCart.length === 0) return;
 
       try {
-        // Fetch current DB cart
         const { data, error } = await supabase
           .from('carts')
           .select('store_carts')
@@ -84,7 +104,6 @@ export default function CartPage() {
           currentCart = data.store_carts;
         }
 
-        // Merge guest cart into current cart
         guestCart.forEach((guestItem) => {
           const existingItem = currentCart.find((item) => item.itemId === guestItem.itemId);
           if (existingItem) {
@@ -94,7 +113,6 @@ export default function CartPage() {
           }
         });
 
-        // Upsert updated cart to DB
         const { error: upsertError } = await supabase
           .from('carts')
           .upsert(
@@ -122,26 +140,27 @@ export default function CartPage() {
     };
 
     migrateGuestCart();
-  }, [user]);
+  }, [user, authChecked]);
 
-  // Fetch cart items
-  const fetchCartItems = useCallback(async () => {
+  // Fetch cart items (modified to support skipLoading for background sync without UI disruption)
+  const fetchCartItems = useCallback(async (options = {}) => {
+    const { skipLoading = false } = options; // New: Optional flag to skip showing loading UI
+    if (!authChecked) return;
+
     try {
-      setLoading(true);
+      if (!skipLoading) setLoading(true); // Only set loading if not skipping (e.g., for initial load)
       let cart = [];
       
       if (!user) {
-        // Guest cart from localStorage
         cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
       } else {
-        // Authenticated user cart from DB
         const { data, error } = await supabase
           .from('carts')
           .select('store_carts')
           .eq('user_id', user.id)
           .single();
 
-        if (error && error.code !== 'PGRST116') { // PGRST116: No rows found
+        if (error && error.code !== 'PGRST116') {
           console.error('Error fetching cart:', error);
           setErrorMessage('Failed to fetch cart.');
           setTimeout(() => setErrorMessage(''), 3000);
@@ -150,10 +169,7 @@ export default function CartPage() {
         cart = data?.store_carts || [];
       }
 
-      console.log('Cart items:', cart); // Debug log
       setCartItems(cart);
-
-      // Calculate total price
       const totalPrice = cart.reduce(
         (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
         0
@@ -164,26 +180,27 @@ export default function CartPage() {
       setErrorMessage('An error occurred while fetching cart.');
       setTimeout(() => setErrorMessage(''), 3000);
     } finally {
-      setLoading(false);
+      if (!skipLoading) setLoading(false); // Only reset if we set it
     }
-  }, [user]);
+  }, [user, authChecked]);
 
   useEffect(() => {
-    fetchCartItems();
-    // Listen for cart updates
-    const handleCartUpdate = () => fetchCartItems();
-    window.addEventListener('cartUpdated', handleCartUpdate);
-    return () => window.removeEventListener('cartUpdated', handleCartUpdate);
-  }, [fetchCartItems]);
+    if (authChecked) {
+      fetchCartItems(); // Initial fetch with loading UI
+      const handleCartUpdate = () => fetchCartItems({ skipLoading: true }); // Updates sync in background without loading UI
+      window.addEventListener('cartUpdated', handleCartUpdate);
+      return () => window.removeEventListener('cartUpdated', handleCartUpdate);
+    }
+  }, [fetchCartItems, authChecked]);
 
-  // Protect cart page: show modal if not authenticated
+  // Show auth modal only when auth check is complete and user is not authenticated
   useEffect(() => {
-    if (!loading && !user) {
+    if (authChecked && !user && !loading) {
       setShowAuthModal(true);
     } else {
       setShowAuthModal(false);
     }
-  }, [user, loading]);
+  }, [user, loading, authChecked]);
 
   const handleAddToCart = async (product) => {
     if (!product || !product.product_id || !product.itemId) {
@@ -203,11 +220,16 @@ export default function CartPage() {
         updatedCart.push({ ...product, quantity: 1 });
       }
 
+      setCartItems(updatedCart); // Optimistic UI update
+      const newTotal = updatedCart.reduce(
+        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        0
+      );
+      setTotal(newTotal);
+
       if (!user) {
-        // Update guest cart in localStorage
         localStorage.setItem('cart_guest', JSON.stringify(updatedCart));
       } else {
-        // Update authenticated user cart in DB
         const { error } = await supabase
           .from('carts')
           .upsert(
@@ -227,13 +249,7 @@ export default function CartPage() {
         }
       }
 
-      setCartItems(updatedCart);
-      const newTotal = updatedCart.reduce(
-        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-        0
-      );
-      setTotal(newTotal);
-      window.dispatchEvent(new Event('cartUpdated'));
+      window.dispatchEvent(new Event('cartUpdated')); // Dispatch after sync for background re-fetch
     } catch (error) {
       console.error('Error in handleAddToCart:', error);
       setErrorMessage('An error occurred while adding to cart.');
@@ -245,11 +261,16 @@ export default function CartPage() {
     try {
       let updatedCart = cartItems.filter((item) => item.itemId !== itemId);
 
+      setCartItems(updatedCart); // Optimistic UI update
+      const newTotal = updatedCart.reduce(
+        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        0
+      );
+      setTotal(newTotal);
+
       if (!user) {
-        // Update guest cart in localStorage
         localStorage.setItem('cart_guest', JSON.stringify(updatedCart));
       } else {
-        // Update authenticated user cart in DB
         const { error } = await supabase
           .from('carts')
           .upsert(
@@ -269,13 +290,7 @@ export default function CartPage() {
         }
       }
 
-      setCartItems(updatedCart);
-      const newTotal = updatedCart.reduce(
-        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-        0
-      );
-      setTotal(newTotal);
-      window.dispatchEvent(new Event('cartUpdated'));
+      window.dispatchEvent(new Event('cartUpdated')); // Dispatch after sync
     } catch (error) {
       console.error('Error in handleRemoveItem:', error);
       setErrorMessage('An error occurred while removing item.');
@@ -289,11 +304,16 @@ export default function CartPage() {
         item.itemId === itemId ? { ...item, quantity: item.quantity + 1 } : item
       );
 
+      setCartItems(updatedCart); // Optimistic UI update
+      const newTotal = updatedCart.reduce(
+        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        0
+      );
+      setTotal(newTotal);
+
       if (!user) {
-        // Update guest cart in localStorage
         localStorage.setItem('cart_guest', JSON.stringify(updatedCart));
       } else {
-        // Update authenticated user cart in DB
         const { error } = await supabase
           .from('carts')
           .upsert(
@@ -313,13 +333,7 @@ export default function CartPage() {
         }
       }
 
-      setCartItems(updatedCart);
-      const newTotal = updatedCart.reduce(
-        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-        0
-      );
-      setTotal(newTotal);
-      window.dispatchEvent(new Event('cartUpdated'));
+      window.dispatchEvent(new Event('cartUpdated')); // Dispatch after sync
     } catch (error) {
       console.error('Error in handleIncreaseQuantity:', error);
       setErrorMessage('An error occurred while updating quantity.');
@@ -335,11 +349,16 @@ export default function CartPage() {
           : item
       );
 
+      setCartItems(updatedCart); // Optimistic UI update
+      const newTotal = updatedCart.reduce(
+        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        0
+      );
+      setTotal(newTotal);
+
       if (!user) {
-        // Update guest cart in localStorage
         localStorage.setItem('cart_guest', JSON.stringify(updatedCart));
       } else {
-        // Update authenticated user cart in DB
         const { error } = await supabase
           .from('carts')
           .upsert(
@@ -359,13 +378,7 @@ export default function CartPage() {
         }
       }
 
-      setCartItems(updatedCart);
-      const newTotal = updatedCart.reduce(
-        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-        0
-      );
-      setTotal(newTotal);
-      window.dispatchEvent(new Event('cartUpdated'));
+      window.dispatchEvent(new Event('cartUpdated')); // Dispatch after sync
     } catch (error) {
       console.error('Error in handleDecreaseQuantity:', error);
       setErrorMessage('An error occurred while updating quantity.');
@@ -375,11 +388,12 @@ export default function CartPage() {
 
   const handleClearCart = async () => {
     try {
+      setCartItems([]); // Optimistic UI update
+      setTotal(0);
+
       if (!user) {
-        // Clear guest cart in localStorage
         localStorage.removeItem('cart_guest');
       } else {
-        // Clear authenticated user cart in DB
         const { error } = await supabase
           .from('carts')
           .upsert(
@@ -399,9 +413,7 @@ export default function CartPage() {
         }
       }
 
-      setCartItems([]);
-      setTotal(0);
-      window.dispatchEvent(new Event('cartUpdated'));
+      window.dispatchEvent(new Event('cartUpdated')); // Dispatch after sync
     } catch (error) {
       console.error('Error in handleClearCart:', error);
       setErrorMessage('An error occurred while clearing cart.');
@@ -410,24 +422,21 @@ export default function CartPage() {
   };
 
   const handleProceedToCheckout = (e) => {
-    if (!user) {
+    if (!user && authChecked) {
       e.preventDefault();
       setShowAuthModal(true);
     }
   };
 
-  if (loading) {
+  if (!authChecked || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         <div className="container mx-auto px-4 py-8 pt-24">
           <div className="max-w-6xl mx-auto">
-            {/* Loading Header */}
             <div className="mb-8">
               <div className="h-8 bg-gray-200 rounded-lg w-48 mb-2 animate-pulse"></div>
               <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
             </div>
-            
-            {/* Loading Content */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -464,10 +473,6 @@ export default function CartPage() {
     );
   }
 
-  if (!user) {
-    return <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />;
-  }
-
   if (cartItems.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -490,6 +495,7 @@ export default function CartPage() {
             </div>
           </div>
         </div>
+        <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
       </div>
     );
   }
@@ -498,7 +504,6 @@ export default function CartPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="container mx-auto px-4 py-8 pt-24">
         <div className="max-w-6xl mx-auto">
-          {/* Header */}
           <div className="mb-8">
             <div className="flex items-center gap-4 mb-2">
               <Link href="/" className="text-gray-500 hover:text-gray-700 transition-colors">
@@ -512,7 +517,6 @@ export default function CartPage() {
             <p className="text-gray-600 ml-8">{cartItems.length} item{cartItems.length !== 1 ? 's' : ''} in your cart</p>
           </div>
 
-          {/* Error Message */}
           {errorMessage && (
             <div className="mb-6 mx-auto max-w-4xl">
               <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl text-sm flex items-center gap-3">
@@ -524,9 +528,7 @@ export default function CartPage() {
             </div>
           )}
 
-          {/* Main Content */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Cart Items */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="divide-y divide-gray-100">
@@ -537,7 +539,6 @@ export default function CartPage() {
                     return (
                       <div key={item.itemId || index} className="p-6 hover:bg-gray-50 transition-colors">
                         <div className="flex flex-col sm:flex-row gap-6">
-                          {/* Product Image */}
                           <div className="flex-shrink-0">
                             <Link href={`/products/${item.product_id}`} className="block group">
                               <div className="w-24 h-24 sm:w-28 sm:h-28 bg-white rounded-xl border border-gray-200 overflow-hidden group-hover:shadow-md transition-shadow">
@@ -551,8 +552,6 @@ export default function CartPage() {
                               </div>
                             </Link>
                           </div>
-
-                          {/* Product Info */}
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-col sm:flex-row sm:justify-between gap-4">
                               <div className="flex-1">
@@ -561,7 +560,6 @@ export default function CartPage() {
                                     {item.name || 'Unnamed Product'}
                                   </h3>
                                 </Link>
-                                
                                 {item.variation && (
                                   <div className="mt-1 flex items-center gap-2">
                                     <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
@@ -571,9 +569,7 @@ export default function CartPage() {
                                     </span>
                                   </div>
                                 )}
-
                                 <div className="mt-3 flex items-center justify-between">
-                                  {/* Quantity Controls */}
                                   <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200">
                                     <button
                                       onClick={() => handleDecreaseQuantity(item.itemId)}
@@ -598,8 +594,6 @@ export default function CartPage() {
                                       </svg>
                                     </button>
                                   </div>
-
-                                  {/* Remove Button */}
                                   <button
                                     onClick={() => handleRemoveItem(item.itemId)}
                                     className="text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors group"
@@ -609,8 +603,6 @@ export default function CartPage() {
                                   </button>
                                 </div>
                               </div>
-
-                              {/* Price Info */}
                               <div className="text-right flex-shrink-0">
                                 <div className="text-xs text-gray-500 mb-1">Unit Price</div>
                                 <div className="text-sm font-medium text-gray-700 mb-2">${Number(item.price || 0).toFixed(2)}</div>
@@ -628,15 +620,12 @@ export default function CartPage() {
                 </div>
               </div>
             </div>
-
-            {/* Order Summary */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sticky top-24">
                 <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
                   <div className="w-2 h-6 bg-blue-600 rounded-full"></div>
                   Order Summary
                 </h2>
-
                 <div className="space-y-4 mb-6">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Subtotal ({cartItems.length} items)</span>
@@ -657,7 +646,6 @@ export default function CartPage() {
                     </div>
                   </div>
                 </div>
-
                 <div className="space-y-3">
                   <Link href="/checkout" onClick={handleProceedToCheckout} className="block">
                     <button className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-4 px-6 rounded-xl font-semibold shadow-lg transition-all duration-200 transform hover:scale-105 flex items-center justify-center gap-3">
@@ -665,7 +653,6 @@ export default function CartPage() {
                       Secure Checkout
                     </button>
                   </Link>
-                  
                   <button
                     onClick={handleClearCart}
                     className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 px-6 rounded-xl font-medium transition-colors border border-gray-200"
@@ -673,7 +660,6 @@ export default function CartPage() {
                     Clear Cart
                   </button>
                 </div>
-
                 <div className="mt-6 pt-6 border-t border-gray-200">
                   <div className="flex items-center gap-3 text-sm text-gray-600">
                     <FaShieldAlt className="text-green-500 flex-shrink-0" />
@@ -684,7 +670,6 @@ export default function CartPage() {
             </div>
           </div>
         </div>
-
         <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
       </div>
     </div>

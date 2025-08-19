@@ -221,7 +221,7 @@ const ShopContent = () => {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                               </svg>
                             </span>
-                            <p className="text-sm leading-tight">{store.address}</p>
+                            <p className="text-sm leading-tight">{store.location}</p>
                           </div>
                           
                           {/* Optional: Display price if available */}
