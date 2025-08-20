@@ -36,30 +36,30 @@ export function ProfileSidebar({ onClose }) {
     if (!user) return;
     setOrdersLoading(true);
     setError("");
-    try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select(`
-          id,
-          quantity,
-          total_amount,
-          payment_id,
-          status,
-          created_at,
-          products!inner(
-            name,
-            description
-          )
-        `)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
 
-      if (error) {
-        setError("Error fetching order history: " + error.message);
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        setError("User not authenticated");
         setOrdersLoading(false);
         return;
       }
-      setOrders(data || []);
+
+      const response = await fetch("/api/orders", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Error fetching order history");
+        setOrdersLoading(false);
+        return;
+      }
+
+      setOrders(data.orders || []);
       setOrdersLoading(false);
     } catch (err) {
       setError("Unexpected error: " + err.message);
@@ -69,14 +69,24 @@ export function ProfileSidebar({ onClose }) {
 
   const handleDeleteOrder = async (orderId) => {
     try {
-      const { error } = await supabase
-        .from("orders")
-        .delete()
-        .eq("id", orderId)
-        .eq("user_id", user.id);
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        setError("User not authenticated");
+        return;
+      }
 
-      if (error) {
-        setError("Error deleting order: " + error.message);
+      const response = await fetch("/api/orders", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ orderId }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Error deleting order");
         return;
       }
 

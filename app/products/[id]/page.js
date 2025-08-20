@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Star, ShoppingCart, Plus, Minus } from 'lucide-react';
 import Image from 'next/image';
 
-// Initialize Supabase client
+// Initialize Supabase client (for cart functionality only)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -63,43 +63,25 @@ export default function ProductDetailPage({ params }) {
       if (!id) return;
 
       try {
-        const { data, error } = await supabase
-          .from('products')
-          .select('id, name, price, image, description, quantity, categoryid, sku, variations')
-          .eq('id', id)
-          .single();
-
-        if (error) {
-          console.error('Supabase error:', error);
-          setProduct(null);
-        } else {
-          setProduct(data);
-          if (data.variations && data.variations.length > 0) {
-            setSelectedVariation(data.variations[0]);
-          }
-
-          try {
-            const { data: relatedData, error: relatedError } = await supabase
-              .from('products')
-              .select('id, name, price, image, description')
-              .eq('categoryid', data.categoryid)
-              .neq('id', id)
-              .limit(10);
-
-            if (relatedError) {
-              console.error('Error fetching related products:', relatedError);
-              setRelatedProducts([]);
-            } else {
-              setRelatedProducts(relatedData || []);
-            }
-          } catch (relatedErr) {
-            console.error('Exception fetching related products:', relatedErr);
-            setRelatedProducts([]);
-          }
+        // Use API route to fetch product data
+        const response = await fetch(`/api/products/${id}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch product');
+        }
+        
+        const data = await response.json();
+        
+        setProduct(data.product);
+        setRelatedProducts(data.relatedProducts || []);
+        
+        if (data.product.variations && data.product.variations.length > 0) {
+          setSelectedVariation(data.product.variations[0]);
         }
       } catch (err) {
         console.error('Error fetching product:', err);
         setProduct(null);
+        setRelatedProducts([]);
       } finally {
         setLoading(false);
       }
@@ -178,6 +160,7 @@ export default function ProductDetailPage({ params }) {
       price: variation ? variation.price : productToAdd.price,
       image: Array.isArray(productToAdd.image) ? productToAdd.image[0] : productToAdd.image,
       variation: variation || null,
+      supermarket_id: productToAdd.supermarket_id,
     };
 
     try {
