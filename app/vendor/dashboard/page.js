@@ -216,84 +216,60 @@ export default function VendorDashboard() {
   useEffect(() => {
     const fetchOrders = async () => {
       if (!store) return;
-      
       try {
         setOrdersLoading(true);
         setError('');
 
-        // First get all product IDs for this supermarket
-        const { data: productIds, error: productError } = await supabase
+        // Fetch all products for this supermarket
+        const { data: productsData, error: productsError } = await supabase
           .from('products')
-          .select('id')
+          .select('*')
           .eq('supermarket_id', store.id);
-
-        if (productError) {
-          setError('Error fetching products: ' + productError.message);
+        if (productsError) {
+          setError('Error fetching products: ' + productsError.message);
           setOrdersLoading(false);
           return;
         }
 
-        if (!productIds || productIds.length === 0) {
+        const productIds = (productsData || []).map(p => p.id);
+        if (productIds.length === 0) {
           setOrders([]);
-          setFilteredOrders([]); // Initialize filteredOrders
+          setFilteredOrders([]);
           setOrdersLoading(false);
           return;
         }
 
-        const productIdList = productIds.map(p => p.id);
-
-        // Fetch orders for these products with product details
+        // Fetch all orders for these products
         const { data: ordersData, error: ordersError } = await supabase
           .from('orders')
-          .select(`
-            id,
-            user_id,
-            product_id,
-            quantity,
-            total_amount,
-            payment_id,
-            status,
-            created_at,
-            vendor_decision,
-            products!inner(
-              id,
-              name,
-              price,
-              image,
-              description,
-              supermarket_id
-            )
-          `)
-          .in('product_id', productIdList)
+          .select('*')
+          .in('product_id', productIds)
           .order('created_at', { ascending: false });
-
         if (ordersError) {
           setError('Error fetching orders: ' + ordersError.message);
           setOrdersLoading(false);
           return;
         }
 
-        const normalizedOrders = (ordersData || []).map((order) => {
+        // Merge product info into each order
+        const mergedOrders = (ordersData || []).map(order => {
+          const product = productsData.find(p => p.id === order.product_id);
           let imageUrl = '';
-          if (order.products && Array.isArray(order.products.image)) {
-            imageUrl = order.products.image.length > 0 ? order.products.image[0] : '';
-          } else if (order.products && typeof order.products.image === 'string') {
-            imageUrl = order.products.image;
+          if (product && Array.isArray(product.image)) {
+            imageUrl = product.image.length > 0 ? product.image[0] : '';
+          } else if (product && typeof product.image === 'string') {
+            imageUrl = product.image;
           }
           return {
             ...order,
-            products: {
-              ...order.products,
-              image: normalizeImagePath(imageUrl),
-            },
+            products: product ? { ...product, image: normalizeImagePath(imageUrl) } : {},
           };
         });
 
-        setOrders(normalizedOrders);
-        setFilteredOrders(normalizedOrders); // Initialize filteredOrders
-        // Generate notifications from orders
+        setOrders(mergedOrders);
+        setFilteredOrders(mergedOrders);
         setNotifications(
-          normalizedOrders.map(order => ({
+          mergedOrders.map(order => ({
             id: order.id,
             message: `New order #${order.id.slice(0, 8)}... for ${order.products?.name || 'Product'}`,
             date: order.created_at,
@@ -302,11 +278,10 @@ export default function VendorDashboard() {
         );
         setOrdersLoading(false);
       } catch (err) {
-        setError('Unexpected error fetching orders: ' + err.message);
+        setError('Unexpected error fetching orders: ' + (err.message || err.toString()));
         setOrdersLoading(false);
       }
     };
-
     fetchOrders();
   }, [store]);
 
