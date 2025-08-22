@@ -6,7 +6,13 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Papa from 'papaparse';
 
+
+import DashboardSection from '../../../components/DashboardSection';
+import OrdersSection from '../../../components/OrdersSection';
+import VendorSidebar from '../../../components/VendorSidebar';
+
 export default function VendorDashboard() {
+  const [store, setStore] = useState(null);
   const router = useRouter();
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
@@ -20,7 +26,7 @@ export default function VendorDashboard() {
   const [userEmail, setUserEmail] = useState('');
   const [sidebarSection, setSidebarSection] = useState('Dashboard');
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [store, setStore] = useState(null);
+  // State declarations
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editUserName, setEditUserName] = useState('');
@@ -28,6 +34,19 @@ export default function VendorDashboard() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [uploading, setUploading] = useState(false);
+  // KYC state
+    const [kycStatus, setKycStatus] = useState('pending');
+    const [isKycModalOpen, setIsKycModalOpen] = useState(false);
+    const [kycForm, setKycForm] = useState({
+      businessName: '',
+      tin: '',
+      bank: '',
+      logoFile: null,
+      logoPreview: null,
+      kycDocs: [],
+      kycDocsPreview: [],
+    });
+    const [kycUploading, setKycUploading] = useState(false);
   
   // Orders state variables
   const [orders, setOrders] = useState([]);
@@ -44,7 +63,7 @@ export default function VendorDashboard() {
 
   // Store mapping of uploaded image names to their generated URLs
   const [uploadedImageMap, setUploadedImageMap] = useState(() => {
-    // Load from localStorage on component mount
+  // Load from localStorage on component mount
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('uploadedImageMap');
       return saved ? JSON.parse(saved) : {};
@@ -209,6 +228,28 @@ export default function VendorDashboard() {
       }
     };
 
+      // Fetch KYC status from Supabase profiles table
+      const fetchKyc = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('kyc_status, business_name, tin, bank, business_logo, kyc_docs')
+          .eq('id', user.id)
+          .single();
+        if (!error && data) {
+          setKycStatus(data.kyc_status || 'pending');
+          setKycForm(f => ({
+            ...f,
+            businessName: data.business_name || '',
+            tin: data.tin || '',
+            bank: data.bank || '',
+            logoPreview: data.business_logo || null,
+            kycDocsPreview: Array.isArray(data.kyc_docs) ? data.kyc_docs : [],
+          }));
+        }
+      };
+      fetchKyc();
     fetchData();
   }, [router, sortOrder]);
 
@@ -887,7 +928,7 @@ export default function VendorDashboard() {
     }
   };
 
-  // 1. Add a function to get near-expiry products (within 7 days)
+  // Helper: get near-expiry products (within 7 days)
   const getNearExpiryProducts = (days = 7) => {
     const today = new Date();
     return products.filter(product => {
@@ -947,126 +988,16 @@ export default function VendorDashboard() {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
-      {/* Sidebar: collapses to a top bar or drawer on mobile */}
-      <div className="w-full md:w-64 bg-white shadow-lg z-20 md:relative fixed md:static top-0 left-0 h-16 md:h-auto flex md:block items-center justify-between px-4 md:px-0 border-b md:border-b-0">
-        {/* Hamburger for mobile */}
-        <button className="md:hidden p-2" onClick={() => setDropdownOpen((prev) => !prev)}>
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-        </button>
-        {/* Sidebar content: show/hide on mobile */}
-        <div className={`absolute md:static top-16 left-0 w-full md:w-auto bg-white md:bg-transparent shadow-lg md:shadow-none transition-all duration-200 ${dropdownOpen ? 'block' : 'hidden'} md:block`}>
-          <div className="p-4 border-b md:border-b-0">
-            {store ? (
-              // Make the supermarket info clickable to open the edit modal
-              <button
-                type="button"
-                className="flex items-center space-x-3 w-full text-left focus:outline-none"
-                onClick={() => setEditSupermarketOpen(true)}
-                title="Edit Supermarket"
-              >
-                {store.main_image ? (
-                  <Image
-                    src={
-                      store.main_image.startsWith('http')
-                        ? store.main_image
-                        : store.main_image.startsWith('/')
-                          ? store.main_image
-                          : '/' + store.main_image.replace(/^(\.\.\/)+/, '')
-                    }
-                    alt={store.name}
-                    width={40}
-                    height={40}
-                    className="rounded-full object-cover"
-                    unoptimized
-                  />
-                ) : (
-                  <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                    <span className="text-gray-400 text-xl">🏬</span>
-                  </div>
-                )}
-                <div>
-                  <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
-                  <p className="text-sm text-pink-600 font-semibold">{store.name}</p>
-                </div>
-              </button>
-            ) : (
-              <>
-                <h1 className="text-2xl font-bold text-blue-600">LOCO</h1>
-                <p className="text-sm text-pink-600 font-semibold">Loading...</p>
-              </>
-            )}
-          </div>
-          {/* Orders Search Bar */}
-          <div className="p-4 border-b md:border-b-0">
-            <input
-              type="text"
-              placeholder="Search Orders..."
-              value={orderSearchQuery}
-              onChange={e => setOrderSearchQuery(e.target.value)}
-              className="border rounded px-3 py-2 w-full focus:ring-2 focus:ring-blue-400 focus:outline-none"
-            />
-          </div>
-          <nav className="mt-4">
-            <a
-              href="#"
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors duration-200 ${
-                sidebarSection === 'Dashboard' ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-              onClick={() => setSidebarSection('Dashboard')}
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7 a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-              </svg>
-              Dashboard
-            </a>
-            <div className="relative">
-              <button
-                onClick={() => setDropdownOpen((prev) => !prev)}
-                className="flex items-center w-full px-4 py-2 rounded-lg transition-colors duration-200 text-gray-600 hover:bg-gray-100 focus:outline-none"
-                aria-haspopup="true"
-                aria-expanded={dropdownOpen}
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h18M3 9h18M3 15h18M3 21h18"></path>
-                </svg>
-                <span className="flex-1 text-left">Manage Bookings</span>
-                <svg className={`w-4 h-4 ml-auto transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {dropdownOpen && (
-                <div className="ml-8 mt-1 bg-white border rounded shadow absolute z-10 w-40">
-                  <a
-                    href="#"
-                    className="flex items-center px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-gray-100 text-gray-700"
-                    onClick={() => setSidebarSection('Orders')}
-                  >
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
-                    </svg>
-                    Orders
-                  </a>
-                  <a
-                    href="#"
-                    className="flex items-center px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-gray-100 text-gray-700"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setSidebarSection('Inventory');
-                      setDropdownOpen(false);
-                      router.push('/vendor/dashboard?section=inventory');
-                    }}
-                  >
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    Inventory
-                  </a>
-                </div>
-              )}
-            </div>
-          </nav>
-        </div>
-      </div>
+      <VendorSidebar
+        store={store}
+        sidebarSection={sidebarSection}
+        setSidebarSection={setSidebarSection}
+        dropdownOpen={dropdownOpen}
+        setDropdownOpen={setDropdownOpen}
+        orderSearchQuery={orderSearchQuery}
+        setOrderSearchQuery={setOrderSearchQuery}
+        setEditSupermarketOpen={setEditSupermarketOpen}
+      />
       {/* Main content: responsive padding and scroll */}
       <div className="flex-1 p-2 sm:p-4 md:p-8 overflow-x-auto">
         <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
@@ -1122,7 +1053,7 @@ export default function VendorDashboard() {
               </div>
               <span className="text-gray-600">Welcome, {userName}</span>
             </div>
-            <button onClick={handleSignOut} className="bg-green-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-green-600">
+            <button onClick={handleSignOut} className="bg-green-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-green-600">
               Sign Out
             </button>
           </div>
@@ -1185,12 +1116,12 @@ export default function VendorDashboard() {
                   <div className="flex space-x-4">
                     <button
                       onClick={handleSaveProfile}
-                      className="w-full bg-blue-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-blue-600"
+                      className="w-full bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-blue-600"
                       disabled={!editUserName || !editStoreName}
                     >
                       Save
                     </button>
-                    <button onClick={() => setIsEditing(false)} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-gray-400">
+                    <button onClick={() => setIsEditing(false)} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-gray-400">
                       Cancel
                     </button>
                   </div>
@@ -1205,12 +1136,16 @@ export default function VendorDashboard() {
                       <h4 className="text-lg font-semibold">{userName}</h4>
                       <p className="text-gray-600">Email: {userEmail}</p>
                       <p className="text-gray-600">Store: {store?.name || 'N/A'}</p>
+                        <p className="text-gray-600">KYC Status: <span className={`font-bold ${kycStatus === 'approved' ? 'text-green-600' : kycStatus === 'rejected' ? 'text-red-600' : 'text-yellow-600'}`}>{kycStatus.charAt(0).toUpperCase() + kycStatus.slice(1)}</span></p>
                     </div>
                   </div>
-                  <button onClick={() => setIsEditing(true)} className="w-full bg-blue-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-blue-600">
+                  <button onClick={() => setIsEditing(true)} className="w-full bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-blue-600">
                     Edit Profile
                   </button>
-                  <button onClick={handleCloseModal} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-gray-400">
+                    {kycStatus !== 'approved' && (
+                      <button onClick={() => setIsKycModalOpen(true)} className="w-full bg-yellow-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-yellow-600 mt-2">Complete KYC</button>
+                    )}
+                  <button onClick={handleCloseModal} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-gray-400">
                     Close
                   </button>
                 </div>
@@ -1218,6 +1153,104 @@ export default function VendorDashboard() {
             </div>
           </div>
         )}
+          {/* KYC Modal */}
+          {isKycModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-lg w-full shadow-lg">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-bold">Complete KYC</h3>
+                  <button onClick={() => setIsKycModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <form className="space-y-4" onSubmit={async e => {
+                  e.preventDefault();
+                  setKycUploading(true);
+                  setError('');
+                  try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user) throw new Error('User not found');
+                    let logoUrl = kycForm.logoPreview;
+                    if (kycForm.logoFile) {
+                      const logoPath = `kyc-logos/${user.id}_${Date.now()}_${kycForm.logoFile.name}`;
+                      const { error: logoErr } = await supabase.storage.from('images').upload(logoPath, kycForm.logoFile);
+                      if (logoErr) throw new Error('Logo upload failed: ' + logoErr.message);
+                      const { data: logoUrlData } = supabase.storage.from('images').getPublicUrl(logoPath);
+                      logoUrl = logoUrlData.publicUrl;
+                    }
+                    let docsUrls = [];
+                    for (let i = 0; i < kycForm.kycDocs.length; i++) {
+                      const doc = kycForm.kycDocs[i];
+                      const docPath = `kyc-docs/${user.id}_${Date.now()}_${doc.name}`;
+                      const { error: docErr } = await supabase.storage.from('images').upload(docPath, doc);
+                      if (docErr) throw new Error('Document upload failed: ' + docErr.message);
+                      const { data: docUrlData } = supabase.storage.from('images').getPublicUrl(docPath);
+                      docsUrls.push(docUrlData.publicUrl);
+                    }
+                    // Save to profiles table
+                    const { error: upErr } = await supabase
+                      .from('profiles')
+                      .update({
+                        business_name: kycForm.businessName,
+                        tin: kycForm.tin,
+                        bank: kycForm.bank,
+                        business_logo: logoUrl,
+                        kyc_docs: docsUrls,
+                        kyc_status: 'pending',
+                      })
+                      .eq('id', user.id);
+                    if (upErr) throw new Error('KYC update failed: ' + upErr.message);
+                    setKycStatus('pending');
+                    setIsKycModalOpen(false);
+                    alert('KYC submitted!');
+                  } catch (err) {
+                    setError(err.message);
+                  } finally {
+                    setKycUploading(false);
+                  }
+                }}>
+                  <div>
+                    <label className="block text-gray-700">Business Name</label>
+                    <input type="text" value={kycForm.businessName} onChange={e => setKycForm(f => ({ ...f, businessName: e.target.value }))} className="w-full px-4 py-2 border rounded" required />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700">TIN</label>
+                    <input type="text" value={kycForm.tin} onChange={e => setKycForm(f => ({ ...f, tin: e.target.value }))} className="w-full px-4 py-2 border rounded" required />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700">Bank / Mobile Money</label>
+                    <input type="text" value={kycForm.bank} onChange={e => setKycForm(f => ({ ...f, bank: e.target.value }))} className="w-full px-4 py-2 border rounded" required />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700">Business Logo</label>
+                    <input type="file" accept="image/*" onChange={e => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        setKycForm(f => ({ ...f, logoFile: file, logoPreview: URL.createObjectURL(file) }));
+                      }
+                    }} />
+                    {kycForm.logoPreview && <img src={kycForm.logoPreview} alt="Logo Preview" className="mt-2 w-20 h-20 object-cover rounded" />}
+                  </div>
+                  <div>
+                    <label className="block text-gray-700">KYC Documents</label>
+                    <input type="file" multiple accept="image/*,.pdf" onChange={e => {
+                      const files = Array.from(e.target.files);
+                      setKycForm(f => ({ ...f, kycDocs: files, kycDocsPreview: files.map(file => URL.createObjectURL(file)) }));
+                    }} />
+                    {kycForm.kycDocsPreview.length > 0 && (
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        {kycForm.kycDocsPreview.map((url, idx) => (
+                          <img key={idx} src={url} alt={`Doc ${idx + 1}`} className="w-16 h-16 object-cover rounded" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {error && <p className="text-red-600 mt-2">{error}</p>}
+                  <button type="submit" className="w-full bg-yellow-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-yellow-600" disabled={kycUploading}>{kycUploading ? 'Submitting...' : 'Submit KYC'}</button>
+                </form>
+              </div>
+            </div>
+          )}
 
         {/* Supermarket Edit Modal */}
         {editSupermarketOpen && (
@@ -1289,69 +1322,7 @@ export default function VendorDashboard() {
         )}
 
         {sidebarSection === 'Dashboard' && (
-          <>
-            <div className="mb-8">
-              <input type="text" placeholder="Search..." className="border rounded px-3 py-1 mb-4 w-56" />
-              <div className="text-xl font-semibold mb-1">Welcome back, {userName}</div>
-              <div className="text-gray-500 mb-6">Track, manage and forecast your customers and orders.</div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
-                  <div className="text-gray-500">Total Revenue</div>
-                  <div className="text-3xl font-bold">2,420</div>
-                  <div className="text-green-500 text-sm mt-2">↑ 40% vs last month</div>
-                </div>
-                <div className="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
-                  <div className="text-gray-500">Total Product Sales</div>
-                  <div className="text-3xl font-bold">316</div>
-                  <div className="text-green-500 text-sm mt-2">↑ 20% vs last month</div>
-                </div>
-                <div className="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
-                  <div className="text-gray-500">Out for Delivery</div>
-                  <div className="text-3xl font-bold">23</div>
-                  <div className="text-green-500 text-sm mt-2">↑ 20%</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white rounded-xl shadow p-6 border-2 border-blue-400">
-                  <div className="text-gray-500">Pending</div>
-                  <div className="text-3xl font-bold">54</div>
-                  <div className="text-red-500 text-sm mt-2">↓ 20%</div>
-                </div>
-                <div className="bg-white rounded-xl shadow p-6">
-                  <div className="text-gray-500">Returned</div>
-                  <div className="text-3xl font-bold">4</div>
-                  <div className="text-red-500 text-sm mt-2">↓ 10%</div>
-                </div>
-                <div className="bg-white rounded-xl shadow p-6">
-                  <div className="text-gray-500">Failed Delivery</div>
-                  <div className="text-3xl font-bold">3</div>
-                  <div className="text-red-500 text-sm mt-2">↓ 10%</div>
-                </div>
-                <div className="bg-white rounded-xl shadow p-6">
-                  <div className="text-gray-500">Cancelled Orders</div>
-                  <div className="text-3xl font-bold">16</div>
-                  <div className="text-red-500 text-sm mt-2">↓ 30% vs last month</div>
-                </div>
-              </div>
-              <div className="mb-2 font-semibold">Recent Notifications</div>
-              <div className="space-y-2">
-                <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center justify-between">
-                  <div>
-                    You just got a new order <span className="text-green-600 font-semibold">#123456</span>
-                    <div className="text-xs text-gray-500">A new order has been placed.</div>
-                  </div>
-                  <button className="text-gray-400 hover:text-gray-600">×</button>
-                </div>
-                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center justify-between">
-                  <div>
-                    Order <span className="text-red-600 font-semibold">#124235</span> has been Canceled
-                    <div className="text-xs text-gray-500">An order has been canceled.</div>
-                  </div>
-                  <button className="text-gray-400 hover:text-gray-600">×</button>
-                </div>
-              </div>
-            </div>
-          </>
+          <DashboardSection userName={userName} />
         )}
         
 
@@ -1374,26 +1345,26 @@ export default function VendorDashboard() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="px-4 py-2 border rounded"
               />
-              <button onClick={handleEditInventory} className="bg-blue-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-blue-600">
+              <button onClick={handleEditInventory} className="bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-blue-600">
                 Add Inventory
               </button>
               <button
                 onClick={() => router.push('/vendor/edit-inventory')}
-                className="bg-yellow-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-yellow-600"
+                className="bg-yellow-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-yellow-600"
               >
                 Edit Inventory
               </button>
-              <button onClick={handleSortByNewest} className="bg-blue-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-blue-600">
+              <button onClick={handleSortByNewest} className="bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-blue-600">
                 Sort by {sortOrder === 'desc' ? 'Oldest' : 'Newest'}
               </button>
               <button
                 onClick={handleExportCSV}
-                className="bg-green-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-green-600"
+                className="bg-green-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-green-600"
                 disabled={products.length === 0}
               >
                 Export CSV
               </button>
-              <label className="bg-blue-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 cursor-pointer hover:bg-blue-600">
+              <label className="bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 cursor-pointer hover:bg-blue-600">
                 Import CSV
                 <input
                   type="file"
@@ -1402,7 +1373,7 @@ export default function VendorDashboard() {
                   className="hidden"
                 />
               </label>
-              <label className={`bg-purple-500 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 cursor-pointer hover:bg-purple-600 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <label className={`bg-purple-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 cursor-pointer hover:bg-purple-600 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 {uploading ? 'Uploading...' : 'Upload Images'}
                 <input
                   type="file"
@@ -1415,7 +1386,7 @@ export default function VendorDashboard() {
               </label>
               <button
                 onClick={() => setShowManageImages((prev) => !prev)}
-                className="bg-purple-600 text-white px-4 py-2 rounded rounded-lg transition-colors duration-200 hover:bg-purple-700"
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-purple-700"
               >
                 {showManageImages ? 'Hide' : 'Manage'} Images
               </button>
@@ -1621,152 +1592,19 @@ export default function VendorDashboard() {
         )}
 
         {sidebarSection === 'Orders' && (
-          <>
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold mb-2">Orders ({filteredOrders.length})</h3>
-            </div>
-            {ordersLoading ? (
-              <p>Loading orders...</p>
-            ) : error ? (
-              <p className="text-red-600">{error}</p>
-            ) : filteredOrders.length === 0 ? (
-              <div className="bg-white rounded-xl shadow flex flex-col items-center justify-center min-h-[350px]">
-                <h2 className="text-2xl font-bold text-blue-700 mb-2">No Orders Found</h2>
-                <p className="text-gray-500 text-center max-w-xs mb-4">
-                  There are currently no orders for your store.<br />
-                  Once customers place orders, they will appear here.
-                </p>
-                <svg
-                  className="w-16 h-16 text-gray-300 mb-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 48 48"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <rect x="8" y="16" width="32" height="20" rx="2" strokeWidth="2" stroke="currentColor" fill="none" />
-                  <path d="M16 16V12a8 8 0 0116 0v4" strokeWidth="2" stroke="currentColor" fill="none" />
-                </svg>
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl shadow divide-y divide-gray-100">
-                {paginatedOrders.map((order) => (
-                  <div key={order.id} className="flex items-center px-6 py-4 gap-4 hover:bg-blue-50 transition-all">
-                    {/* Product Image */}
-                    {order.products.image ? (
-                      <Image
-                        src={order.products.image.startsWith('http') ? order.products.image : order.products.image.startsWith('/') ? order.products.image : '/' + order.products.image.replace(/^(\.\.+\/)+/, '')}
-                        alt={order.products.name}
-                        width={48}
-                        height={48}
-                        className="w-12 h-12 rounded object-cover border"
-                        unoptimized
-                      />
-                    ) : (
-                      <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-2xl">🛒</div>
-                    )}
-                    {/* Product Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-gray-900 truncate">{order.products.name}</div>
-                      <div className="text-gray-500 text-xs">Qty: <span className="font-semibold">{order.quantity}</span> &bull; Total: <span className="font-semibold">${order.total_amount?.toFixed(2) || '0.00'}</span></div>
-                    </div>
-                    {/* Statuses */}
-                    <div className="flex flex-col items-start gap-1 min-w-[120px]">
-                      {/* Status Dropdown */}
-                      <select
-                        className={`px-3 py-1 rounded-full text-xs font-medium border ${order.status === 'completed' ? 'bg-green-100 text-green-600' : order.status === 'pending' ? 'bg-yellow-100 text-yellow-600' : order.status === 'returned' ? 'bg-blue-100 text-blue-600' : order.status === 'cancelled' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}
-                        value={order.status}
-                        onChange={e => handleOrderStatusChange(order.id, e.target.value)}
-                      >
-                        {ORDER_STATUS_OPTIONS.map(opt => (
-                          <option key={opt} value={opt}>{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
-                        ))}
-                      </select>
-                      <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleDateString()}</span>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${order.vendor_decision === 'accepted' ? 'bg-green-100 text-green-600' : order.vendor_decision === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'}`}>{order.vendor_decision?.charAt(0).toUpperCase() + order.vendor_decision?.slice(1) || 'Pending'}</span>
-                    </div>
-                    {/* Actions */}
-                    <div className="flex gap-2 ml-4">
-                      {order.vendor_decision === 'pending' && (
-                        <>
-                          <button
-                            className="bg-green-500 text-white px-3 py-1 rounded text-xs hover:bg-green-600"
-                            onClick={async () => {
-                              const { error } = await supabase
-                                .from('orders')
-                                .update({ vendor_decision: 'accepted' })
-                                .eq('id', order.id);
-                              if (!error) {
-                                setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'accepted' } : o));
-                                setFilteredOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'accepted' } : o));
-                              }
-                            }}
-                          >
-                            Accept
-                          </button>
-                          <button
-                            className="bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600"
-                            onClick={async () => {
-                              const { error } = await supabase
-                                .from('orders')
-                                .update({ vendor_decision: 'rejected' })
-                                .eq('id', order.id);
-                              if (!error) {
-                                setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'rejected' } : o));
-                                setFilteredOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, vendor_decision: 'rejected' } : o));
-                              }
-                            }}
-                          >
-                            Reject
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={() => handleDeleteOrder(order.id)}
-                        className="bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600"
-                      >
-                        Delete
-                      </button>
-                      {['completed', 'shipped'].includes(order.status) && order.status !== 'returned' && (
-                        <button
-                          className="bg-blue-500 text-white px-3 py-1 rounded text-xs hover:bg-blue-600"
-                          onClick={() => handleReturnOrder(order.id)}
-                        >
-                          Mark as Returned
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {filteredOrders.length > 0 && (
-              <div className="flex justify-center mt-8 space-x-2">
-                <button
-                  onClick={() => handleOrderPageChange(orderCurrentPage - 1)}
-                  disabled={orderCurrentPage === 1}
-                  className={`px-4 py-2 rounded-lg transition-colors duration-200 ${orderCurrentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
-                >
-                  Previous
-                </button>
-                {orderPageNumbers.map((number) => (
-                  <button
-                    key={number}
-                    onClick={() => handleOrderPageChange(number)}
-                    className={`px-4 py-2 rounded-lg transition-colors duration-200 ${orderCurrentPage === number ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
-                  >
-                    {number}
-                  </button>
-                ))}
-                <button
-                  onClick={() => handleOrderPageChange(orderCurrentPage + 1)}
-                  disabled={orderCurrentPage === totalOrderPages}
-                  className={`px-4 py-2 rounded-lg transition-colors duration-200 ${orderCurrentPage === totalOrderPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </>
+          <OrdersSection
+            filteredOrders={filteredOrders}
+            ordersLoading={ordersLoading}
+            error={error}
+            orderPageNumbers={orderPageNumbers}
+            orderCurrentPage={orderCurrentPage}
+            handleOrderPageChange={handleOrderPageChange}
+            paginatedOrders={paginatedOrders}
+            handleOrderStatusChange={handleOrderStatusChange}
+            ORDER_STATUS_OPTIONS={ORDER_STATUS_OPTIONS}
+            handleDeleteOrder={handleDeleteOrder}
+            handleReturnOrder={handleReturnOrder}
+          />
         )}
       </div>
     </div>
