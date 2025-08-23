@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -5,14 +6,14 @@ import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Papa from 'papaparse';
-
-
 import DashboardSection from '../../../components/DashboardSection';
 import OrdersSection from '../../../components/OrdersSection';
 import VendorSidebar from '../../../components/VendorSidebar';
+import VendorProfile from '@/components/vendorProfile';
 
 export default function VendorDashboard() {
   const [store, setStore] = useState(null);
+  const [profile, setProfile] = useState(null); // Separate state for KYC profile
   const router = useRouter();
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
@@ -26,52 +27,25 @@ export default function VendorDashboard() {
   const [userEmail, setUserEmail] = useState('');
   const [sidebarSection, setSidebarSection] = useState('Dashboard');
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  // State declarations
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editUserName, setEditUserName] = useState('');
-  const [editStoreName, setEditStoreName] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [uploading, setUploading] = useState(false);
-  // KYC state
-    const [kycStatus, setKycStatus] = useState('pending');
-    const [isKycModalOpen, setIsKycModalOpen] = useState(false);
-    const [kycForm, setKycForm] = useState({
-      businessName: '',
-      tin: '',
-      bank: '',
-      logoFile: null,
-      logoPreview: null,
-      kycDocs: [],
-      kycDocsPreview: [],
-    });
-    const [kycUploading, setKycUploading] = useState(false);
-  
-  // Orders state variables
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [orderCurrentPage, setOrderCurrentPage] = useState(1);
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [filteredOrders, setFilteredOrders] = useState([]);
-  // Notification state
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  
+  const [showManageImages, setShowManageImages] = useState(false);
   const productsPerPage = 10;
   const ordersPerPage = 10;
 
-  // Store mapping of uploaded image names to their generated URLs
   const [uploadedImageMap, setUploadedImageMap] = useState(() => {
-  // Load from localStorage on component mount
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('uploadedImageMap');
       return saved ? JSON.parse(saved) : {};
     }
     return {};
   });
-
-  const [showManageImages, setShowManageImages] = useState(false);
 
   const normalizeImagePath = (path) => {
     if (!path) return '/default-vendor.png';
@@ -87,17 +61,13 @@ export default function VendorDashboard() {
       setError('');
 
       const uploadPromises = Array.from(files).map(async (file) => {
-        // Validate file type
         const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
         const extension = file.name.split('.').pop().toLowerCase();
         if (!validExtensions.includes(extension)) {
           throw new Error(`Invalid file type for ${file.name}. Only ${validExtensions.join(', ')} are allowed.`);
         }
 
-        // Generate unique file name
         const fileName = `public/${Date.now()}_${file.name}`;
-
-        // Upload to Supabase storage
         const { data, error } = await supabase.storage
           .from('images')
           .upload(fileName, file);
@@ -106,7 +76,6 @@ export default function VendorDashboard() {
           throw new Error(`Error uploading ${file.name}: ${error.message}`);
         }
 
-        // Get public URL
         const { data: publicUrlData } = supabase.storage
           .from('images')
           .getPublicUrl(fileName);
@@ -127,14 +96,12 @@ export default function VendorDashboard() {
         .filter((result) => result.status === 'rejected')
         .map((result) => result.reason.message);
 
-      // Build mapping of image name to URL
       const imageMap = {};
       successfulUploads.forEach(({ fileName, publicUrl }) => {
         imageMap[fileName] = publicUrl;
       });
       setUploadedImageMap((prev) => {
         const newMap = { ...prev, ...imageMap };
-        // Save to localStorage
         if (typeof window !== 'undefined') {
           localStorage.setItem('uploadedImageMap', JSON.stringify(newMap));
         }
@@ -152,7 +119,7 @@ export default function VendorDashboard() {
       setError(`Upload error: ${err.message}`);
     } finally {
       setUploading(false);
-      e.target.value = null; // Reset input field
+      e.target.value = null;
     }
   };
 
@@ -171,42 +138,39 @@ export default function VendorDashboard() {
 
         setUserName(user.user_metadata?.name || user.email.split('@')[0]);
         setUserEmail(user.email);
-        setEditUserName(user.user_metadata?.name || user.email.split('@')[0]);
 
         const { data: stores, error: storeError } = await supabase
-        .from('supermarkets')
-        .select('id, name, main_image, vendor_id, created_at, location, gallery_images') // Removed trailing comma
-        .eq('vendor_id', user.id)
-        .limit(1);
+          .from('supermarkets')
+          .select('id, name, main_image, vendor_id, created_at, location, gallery_images')
+          .eq('vendor_id', user.id)
+          .single();
 
         if (storeError) {
           setError('Error fetching store: ' + storeError.message);
-          setLoading(false);
-          return;
-        }
-        if (!stores || stores.length === 0) {
           router.push('/vendor/create-store');
-          setLoading(false);
           return;
         }
-        const supermarket = stores[0];
-        setStore(supermarket);
-        setEditStoreName(supermarket.name);
+
+        if (!stores) {
+          setError('No store found. Please create a store.');
+          router.push('/vendor/create-store');
+          return;
+        }
+
+        setStore(stores);
 
         const { data: productsData, error: productsError } = await supabase
           .from('products')
           .select('id, name, price, image, quantity, date_added, supermarket_id, description, categoryid, expiry_date')
-          .eq('supermarket_id', supermarket.id)
+          .eq('supermarket_id', stores.id)
           .order('date_added', { ascending: sortOrder === 'asc' });
 
         if (productsError) {
           setError('Error fetching products: ' + productsError.message);
-          setLoading(false);
           return;
         }
 
         const normalizedProducts = (productsData || []).map((product) => {
-          // If image is an array, use the first image or empty string
           let imageUrl = '';
           if (Array.isArray(product.image)) {
             imageUrl = product.image.length > 0 ? product.image[0] : '';
@@ -221,47 +185,23 @@ export default function VendorDashboard() {
 
         setProducts(normalizedProducts);
         setFilteredProducts(normalizedProducts);
-        setLoading(false);
       } catch (err) {
         setError('Unexpected error: ' + err.message);
+      } finally {
         setLoading(false);
       }
     };
 
-      // Fetch KYC status from Supabase profiles table
-      const fetchKyc = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('kyc_status, business_name, tin, bank, business_logo, kyc_docs')
-          .eq('id', user.id)
-          .single();
-        if (!error && data) {
-          setKycStatus(data.kyc_status || 'pending');
-          setKycForm(f => ({
-            ...f,
-            businessName: data.business_name || '',
-            tin: data.tin || '',
-            bank: data.bank || '',
-            logoPreview: data.business_logo || null,
-            kycDocsPreview: Array.isArray(data.kyc_docs) ? data.kyc_docs : [],
-          }));
-        }
-      };
-      fetchKyc();
     fetchData();
   }, [router, sortOrder]);
 
-  // Fetch orders for the vendor's supermarket
   useEffect(() => {
     const fetchOrders = async () => {
-      if (!store) return;
+      if (!store?.id) return;
       try {
         setOrdersLoading(true);
         setError('');
 
-        // Fetch all products for this supermarket
         const { data: productsData, error: productsError } = await supabase
           .from('products')
           .select('*')
@@ -280,7 +220,6 @@ export default function VendorDashboard() {
           return;
         }
 
-        // Fetch all orders for these products
         const { data: ordersData, error: ordersError } = await supabase
           .from('orders')
           .select('*')
@@ -292,7 +231,6 @@ export default function VendorDashboard() {
           return;
         }
 
-        // Merge product info into each order
         const mergedOrders = (ordersData || []).map(order => {
           const product = productsData.find(p => p.id === order.product_id);
           let imageUrl = '';
@@ -317,9 +255,9 @@ export default function VendorDashboard() {
             read: false,
           }))
         );
-        setOrdersLoading(false);
       } catch (err) {
         setError('Unexpected error fetching orders: ' + (err.message || err.toString()));
+      } finally {
         setOrdersLoading(false);
       }
     };
@@ -354,7 +292,6 @@ export default function VendorDashboard() {
     setCurrentPage(1);
   }, [searchQuery, filter, products]);
 
-  // Filter orders based on search query
   useEffect(() => {
     if (!orderSearchQuery) {
       setFilteredOrders(orders);
@@ -368,7 +305,7 @@ export default function VendorDashboard() {
         (order.products?.name?.toLowerCase().includes(query))
       )
     );
-    setOrderCurrentPage(1); // Reset to first page on search
+    setOrderCurrentPage(1);
   }, [orders, orderSearchQuery]);
 
   const handleSignOut = async () => {
@@ -405,7 +342,6 @@ export default function VendorDashboard() {
     pageNumbers.push(i);
   }
 
-  // Orders pagination
   const totalOrderPages = Math.ceil(filteredOrders.length / ordersPerPage);
   const orderStartIndex = (orderCurrentPage - 1) * ordersPerPage;
   const paginatedOrders = filteredOrders.slice(orderStartIndex, orderStartIndex + ordersPerPage);
@@ -421,7 +357,6 @@ export default function VendorDashboard() {
     orderPageNumbers.push(i);
   }
 
-  // Delete order functionality
   const handleDeleteOrder = async (orderId) => {
     if (!confirm('Are you sure you want to delete this order? This action cannot be undone.')) {
       return;
@@ -438,9 +373,8 @@ export default function VendorDashboard() {
         return;
       }
 
-      // Remove the order from local state
       setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
-      setFilteredOrders(prevFilteredOrders => prevFilteredOrders.filter(order => order.id !== orderId)); // Update filteredOrders
+      setFilteredOrders(prevFilteredOrders => prevFilteredOrders.filter(order => order.id !== orderId));
     } catch (err) {
       setError('Unexpected error deleting order: ' + err.message);
     }
@@ -463,95 +397,6 @@ export default function VendorDashboard() {
       setSidebarSection('Inventory');
     }
   }, []);
-
-  useEffect(() => {
-    const checkStore = async () => {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        router.push('/vendor');
-        return;
-      }
-      const { data: stores, error: storeError } = await supabase
-        .from('supermarkets')
-        .select('id, name, main_image')
-        .eq('vendor_id', user.id)
-        .limit(1);
-
-      if (storeError) {
-        setError('Error fetching store: ' + storeError.message);
-        return;
-      }
-      if (!stores || stores.length === 0) {
-        router.push('/vendor/create-store');
-        return;
-      }
-      setStore(stores[0]);
-    };
-    checkStore();
-  }, [router]);
-
-  const handleProfileClick = () => {
-    setIsProfileModalOpen(true);
-    setIsEditing(false);
-    setEditUserName(userName);
-    setEditStoreName(store?.name || '');
-    setNewPassword('');
-    setConfirmPassword('');
-  };
-
-  const handleCloseModal = () => {
-    setIsProfileModalOpen(false);
-    setIsEditing(false);
-    setError('');
-  };
-
-  const handleSaveProfile = async () => {
-    try {
-      setError('');
-
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        setError('User not found.');
-        return;
-      }
-
-      const updates = { name: editUserName };
-
-      const { error: userUpdateError } = await supabase.auth.updateUser({
-        data: updates,
-        ...(newPassword && newPassword === confirmPassword ? { password: newPassword } : {}),
-      });
-
-      if (userUpdateError) {
-        setError('Error updating profile: ' + userUpdateError.message);
-        return;
-      }
-
-      if (newPassword && newPassword !== confirmPassword) {
-        setError('Passwords do not match.');
-        return;
-      }
-
-      const { error: storeUpdateError } = await supabase
-        .from('supermarkets')
-        .update({ name: editStoreName })
-        .eq('id', store.id);
-
-      if (storeUpdateError) {
-        setError('Error updating store name: ' + storeUpdateError.message);
-        return;
-      }
-
-      setUserName(editUserName);
-      setStore({ ...store, name: editStoreName });
-      setIsEditing(false);
-      setIsProfileModalOpen(false);
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (err) {
-      setError('Unexpected error: ' + err.message);
-    }
-  };
 
   const getCategoryNameById = (id) => {
     const categories = [
@@ -659,7 +504,6 @@ export default function VendorDashboard() {
       category: getCategoryNameById(product.categoryid),
       supermarket_id: product.supermarket_id,
       date_added: product.date_added,
-      // Export only the first image (or empty string)
       image: Array.isArray(product.image) ? (product.image[0] || '') : (product.image || ''),
     }));
     const csv = Papa.unparse(exportData);
@@ -683,12 +527,10 @@ export default function VendorDashboard() {
       complete: async (results) => {
         try {
           const productsToInsert = results.data.map((row) => {
-            // If image name matches uploaded image, use the generated URL
             let imageUrl = row.image || null;
             if (imageUrl && uploadedImageMap[imageUrl]) {
               imageUrl = uploadedImageMap[imageUrl];
             }
-            // Always wrap image as array for DB
             return {
               name: row.name,
               price: parseFloat(row.price),
@@ -717,26 +559,21 @@ export default function VendorDashboard() {
     });
   };
 
-  // Supermarket edit state
   const [editSupermarketOpen, setEditSupermarketOpen] = useState(false);
   const [supermarketForm, setSupermarketForm] = useState({
     name: '',
-   
     main_image: '',
     gallery_images: [],
   });
-  // New state for image files and previews
   const [editMainImageFile, setEditMainImageFile] = useState(null);
   const [editMainImagePreview, setEditMainImagePreview] = useState(null);
-  const [editGalleryImages, setEditGalleryImages] = useState([]); // [{ url, file, isNew }]
+  const [editGalleryImages, setEditGalleryImages] = useState([]);
+  const [supermarketLoading, setSupermarketLoading] = useState(false);
 
-  // On store load, initialize gallery images
   useEffect(() => {
     if (store) {
       setSupermarketForm({
         name: store.name || '',
-        
-        
         main_image: store.main_image || '',
         gallery_images: Array.isArray(store.gallery_images) ? store.gallery_images : [],
       });
@@ -750,7 +587,6 @@ export default function VendorDashboard() {
     }
   }, [store]);
 
-  // Image validation (reuse from create-store)
   const validateImage = (file) => {
     const validExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
     const extension = file.name.split('.').pop().toLowerCase();
@@ -786,7 +622,6 @@ export default function VendorDashboard() {
     return publicUrl;
   };
 
-  // Handlers for image selection
   const handleEditMainImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -801,7 +636,6 @@ export default function VendorDashboard() {
     setError('');
   };
 
-  // Gallery image upload handler
   const handleEditGalleryImagesUpload = (e) => {
     const files = Array.from(e.target.files);
     if (files.length + editGalleryImages.length > 3) {
@@ -835,14 +669,17 @@ export default function VendorDashboard() {
   };
 
   const handleUpdateSupermarket = async () => {
+    if (!store?.id) {
+      setError('No store found. Please create a store first.');
+      return;
+    }
+    setSupermarketLoading(true);
     setError('');
     try {
       let mainImageUrl = supermarketForm.main_image;
-      // Upload new main image if selected
       if (editMainImageFile) {
         mainImageUrl = await uploadImage(editMainImageFile, 'main');
       }
-      // Upload new gallery images if any
       const galleryImageUrls = [];
       for (const img of editGalleryImages) {
         if (img.isNew && img.file) {
@@ -852,12 +689,10 @@ export default function VendorDashboard() {
           galleryImageUrls.push(img.url);
         }
       }
-      // Update supermarket
       const { error: updateError } = await supabase
         .from('supermarkets')
         .update({
           name: supermarketForm.name,
-         
           main_image: mainImageUrl,
           gallery_images: galleryImageUrls,
         })
@@ -868,7 +703,7 @@ export default function VendorDashboard() {
       }
       setStore((prev) => ({
         ...prev,
-        ...supermarketForm,
+        name: supermarketForm.name,
         main_image: mainImageUrl,
         gallery_images: galleryImageUrls,
       }));
@@ -876,6 +711,8 @@ export default function VendorDashboard() {
       alert('Supermarket updated successfully!');
     } catch (err) {
       setError('Unexpected error: ' + err.message);
+    } finally {
+      setSupermarketLoading(false);
     }
   };
 
@@ -887,14 +724,6 @@ export default function VendorDashboard() {
     }));
   };
 
-  const handleGalleryImagesChange = (e) => {
-    setSupermarketForm((prev) => ({
-      ...prev,
-      gallery_images: e.target.value.split(',').map((url) => url.trim()).filter(Boolean),
-    }));
-  };
-
-  // Add order status options
   const ORDER_STATUS_OPTIONS = [
     'pending',
     'processing',
@@ -904,7 +733,6 @@ export default function VendorDashboard() {
     'cancelled',
   ];
 
-  // Handler to update order status
   const handleOrderStatusChange = async (orderId, newStatus) => {
     const { error } = await supabase
       .from('orders')
@@ -916,7 +744,6 @@ export default function VendorDashboard() {
     }
   };
 
-  // Handler to mark as returned
   const handleReturnOrder = async (orderId) => {
     const { error } = await supabase
       .from('orders')
@@ -928,7 +755,6 @@ export default function VendorDashboard() {
     }
   };
 
-  // Helper: get near-expiry products (within 7 days)
   const getNearExpiryProducts = (days = 7) => {
     const today = new Date();
     return products.filter(product => {
@@ -940,7 +766,6 @@ export default function VendorDashboard() {
     });
   };
 
-  // Add state for dismissed alerts
   const [dismissedNearExpiry, setDismissedNearExpiry] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('dismissedNearExpiry');
@@ -956,7 +781,6 @@ export default function VendorDashboard() {
     return [];
   });
 
-  // Helper: get expired products
   const getExpiredProducts = () => {
     const today = new Date();
     return products.filter(product => {
@@ -966,7 +790,6 @@ export default function VendorDashboard() {
     });
   };
 
-  // Helper: handle dismiss
   const handleDismissNearExpiry = (ids) => {
     setDismissedNearExpiry(prev => {
       const updated = [...prev, ...ids];
@@ -976,6 +799,7 @@ export default function VendorDashboard() {
       return updated;
     });
   };
+
   const handleDismissExpired = (ids) => {
     setDismissedExpired(prev => {
       const updated = [...prev, ...ids];
@@ -998,29 +822,24 @@ export default function VendorDashboard() {
         setOrderSearchQuery={setOrderSearchQuery}
         setEditSupermarketOpen={setEditSupermarketOpen}
       />
-      {/* Main content: responsive padding and scroll */}
       <div className="flex-1 p-2 sm:p-4 md:p-8 overflow-x-auto">
         <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-800">{sidebarSection === 'Inventory' ? 'Inventory' : sidebarSection === 'Orders' ? 'Orders' : 'Dashboard'}</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-800">{sidebarSection}</h2>
           <div className="flex items-center space-x-4">
-            {/* Notification Bell Icon */}
             <div className="relative">
               <button
                 className="relative"
                 onClick={() => setShowNotifications((prev) => !prev)}
               >
-                {/* Bell Icon */}
                 <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
-                {/* Badge for unread notifications (show count) */}
                 {notifications.filter(n => !n.read).length > 0 && (
                   <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">
                     {notifications.filter(n => !n.read).length}
                   </span>
                 )}
               </button>
-              {/* Notification Dropdown */}
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-80 bg-white border rounded shadow-lg z-50 max-h-96 overflow-y-auto">
                   <div className="p-4 font-bold border-b">Notifications</div>
@@ -1047,276 +866,130 @@ export default function VendorDashboard() {
                 </div>
               )}
             </div>
-            <div className="flex items-center space-x-2 cursor-pointer hover:text-blue-600" onClick={handleProfileClick}>
-              <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                <span className="text-gray-400 text-lg">👤</span>
-              </div>
-              <span className="text-gray-600">Welcome, {userName}</span>
-            </div>
+            <VendorProfile
+              userName={userName}
+              userEmail={userEmail}
+              setUserName={setUserName}
+              setProfile={setProfile}
+              setError={setError}
+            />
             <button onClick={handleSignOut} className="bg-green-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-green-600">
               Sign Out
             </button>
           </div>
         </div>
 
-        {isProfileModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-lg">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold">Vendor Profile</h3>
-                <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
+        {editSupermarketOpen && (
+          <div className="fixed top-0 right-0 h-full w-full sm:w-96 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out translate-x-0">
+            <div className="p-6 sm:p-8 h-full flex flex-col bg-gray-50">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-800">Edit Supermarket</h3>
+                <button
+                  onClick={() => setEditSupermarketOpen(false)}
+                  className="text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
-              {error && <p className="text-red-600 mb-4">{error}</p>}
-              {isEditing ? (
-                <div className="space-y-4">
+              {supermarketLoading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-gray-600">Loading...</p>
+                </div>
+              ) : error ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-red-500 text-sm">{error}</p>
+                </div>
+              ) : (
+                <div className="flex-1 space-y-4 overflow-y-auto">
                   <div>
-                    <label className="block text-gray-700">Vendor Name</label>
+                    <label className="block text-sm font-medium text-gray-700">Name</label>
                     <input
                       type="text"
-                      value={editUserName}
-                      onChange={(e) => setEditUserName(e.target.value)}
-                      className="w-full px-4 py-2 border rounded"
-                      placeholder="Enter your name"
+                      name="name"
+                      value={supermarketForm.name}
+                      onChange={handleSupermarketFormChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                      placeholder="Enter supermarket name"
+                      disabled={supermarketLoading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700">Store Name</label>
+                    <label className="block text-sm font-medium text-gray-700">Main Image</label>
+                    {editMainImagePreview ? (
+                      <div className="relative mb-2">
+                        <Image src={editMainImagePreview} alt="Main Image" width={80} height={80} className="rounded object-cover" unoptimized />
+                        <button
+                          type="button"
+                          onClick={removeEditMainImage}
+                          className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 text-xs"
+                          disabled={supermarketLoading}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm mb-2">No main image uploaded</p>
+                    )}
                     <input
-                      type="text"
-                      value={editStoreName}
-                      onChange={(e) => setEditStoreName(e.target.value)}
-                      className="w-full px-4 py-2 border rounded"
-                      placeholder="Enter store name"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      onChange={handleEditMainImageUpload}
+                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      disabled={supermarketLoading}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700">New Password</label>
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full px-4 py-2 border rounded"
-                      placeholder="Enter new password"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700">Confirm Password</label>
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full px-4 py-2 border rounded"
-                      placeholder="Confirm new password"
-                    />
+                    <label className="block text-sm font-medium text-gray-700">Gallery Images (up to 3)</label>
+                    {editGalleryImages.length > 0 ? (
+                      <div className="flex gap-2 mb-2 flex-wrap">
+                        {editGalleryImages.map((img, idx) => (
+                          <div key={idx} className="relative">
+                            <Image src={img.url} alt={`Gallery ${idx + 1}`} width={60} height={60} className="rounded object-cover" unoptimized />
+                            <button
+                              type="button"
+                              onClick={() => removeEditGalleryImage(idx)}
+                              className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 text-xs"
+                              disabled={supermarketLoading}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm mb-2">No gallery images uploaded</p>
+                    )}
+                    {editGalleryImages.length < 3 && (
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        multiple
+                        onChange={handleEditGalleryImagesUpload}
+                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        disabled={supermarketLoading}
+                      />
+                    )}
                   </div>
                   <div className="flex space-x-4">
                     <button
-                      onClick={handleSaveProfile}
-                      className="w-full bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-blue-600"
-                      disabled={!editUserName || !editStoreName}
+                      onClick={handleUpdateSupermarket}
+                      className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors duration-200 disabled:bg-blue-300 disabled:cursor-not-allowed"
+                      disabled={supermarketLoading || !supermarketForm.name}
                     >
-                      Save
+                      {supermarketLoading ? 'Saving...' : 'Save Changes'}
                     </button>
-                    <button onClick={() => setIsEditing(false)} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-gray-400">
+                    <button
+                      onClick={() => setEditSupermarketOpen(false)}
+                      className="w-full bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-300 transition-all duration-200"
+                      disabled={supermarketLoading}
+                    >
                       Cancel
                     </button>
                   </div>
                 </div>
-              ) : (
-                <div>
-                  <div className="flex items-center space-x-4 mb-4">
-                    <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center">
-                      <span className="text-gray-400 text-2xl">👤</span>
-                    </div>
-                    <div>
-                      <h4 className="text-lg font-semibold">{userName}</h4>
-                      <p className="text-gray-600">Email: {userEmail}</p>
-                      <p className="text-gray-600">Store: {store?.name || 'N/A'}</p>
-                        <p className="text-gray-600">KYC Status: <span className={`font-bold ${kycStatus === 'approved' ? 'text-green-600' : kycStatus === 'rejected' ? 'text-red-600' : 'text-yellow-600'}`}>{kycStatus.charAt(0).toUpperCase() + kycStatus.slice(1)}</span></p>
-                    </div>
-                  </div>
-                  <button onClick={() => setIsEditing(true)} className="w-full bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-blue-600">
-                    Edit Profile
-                  </button>
-                    {kycStatus !== 'approved' && (
-                      <button onClick={() => setIsKycModalOpen(true)} className="w-full bg-yellow-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-yellow-600 mt-2">Complete KYC</button>
-                    )}
-                  <button onClick={handleCloseModal} className="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-gray-400">
-                    Close
-                  </button>
-                </div>
               )}
-            </div>
-          </div>
-        )}
-          {/* KYC Modal */}
-          {isKycModalOpen && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 max-w-lg w-full shadow-lg">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-bold">Complete KYC</h3>
-                  <button onClick={() => setIsKycModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                </div>
-                <form className="space-y-4" onSubmit={async e => {
-                  e.preventDefault();
-                  setKycUploading(true);
-                  setError('');
-                  try {
-                    const { data: { user } } = await supabase.auth.getUser();
-                    if (!user) throw new Error('User not found');
-                    let logoUrl = kycForm.logoPreview;
-                    if (kycForm.logoFile) {
-                      const logoPath = `kyc-logos/${user.id}_${Date.now()}_${kycForm.logoFile.name}`;
-                      const { error: logoErr } = await supabase.storage.from('images').upload(logoPath, kycForm.logoFile);
-                      if (logoErr) throw new Error('Logo upload failed: ' + logoErr.message);
-                      const { data: logoUrlData } = supabase.storage.from('images').getPublicUrl(logoPath);
-                      logoUrl = logoUrlData.publicUrl;
-                    }
-                    let docsUrls = [];
-                    for (let i = 0; i < kycForm.kycDocs.length; i++) {
-                      const doc = kycForm.kycDocs[i];
-                      const docPath = `kyc-docs/${user.id}_${Date.now()}_${doc.name}`;
-                      const { error: docErr } = await supabase.storage.from('images').upload(docPath, doc);
-                      if (docErr) throw new Error('Document upload failed: ' + docErr.message);
-                      const { data: docUrlData } = supabase.storage.from('images').getPublicUrl(docPath);
-                      docsUrls.push(docUrlData.publicUrl);
-                    }
-                    // Save to profiles table
-                    const { error: upErr } = await supabase
-                      .from('profiles')
-                      .update({
-                        business_name: kycForm.businessName,
-                        tin: kycForm.tin,
-                        bank: kycForm.bank,
-                        business_logo: logoUrl,
-                        kyc_docs: docsUrls,
-                        kyc_status: 'pending',
-                      })
-                      .eq('id', user.id);
-                    if (upErr) throw new Error('KYC update failed: ' + upErr.message);
-                    setKycStatus('pending');
-                    setIsKycModalOpen(false);
-                    alert('KYC submitted!');
-                  } catch (err) {
-                    setError(err.message);
-                  } finally {
-                    setKycUploading(false);
-                  }
-                }}>
-                  <div>
-                    <label className="block text-gray-700">Business Name</label>
-                    <input type="text" value={kycForm.businessName} onChange={e => setKycForm(f => ({ ...f, businessName: e.target.value }))} className="w-full px-4 py-2 border rounded" required />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700">TIN</label>
-                    <input type="text" value={kycForm.tin} onChange={e => setKycForm(f => ({ ...f, tin: e.target.value }))} className="w-full px-4 py-2 border rounded" required />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700">Bank / Mobile Money</label>
-                    <input type="text" value={kycForm.bank} onChange={e => setKycForm(f => ({ ...f, bank: e.target.value }))} className="w-full px-4 py-2 border rounded" required />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700">Business Logo</label>
-                    <input type="file" accept="image/*" onChange={e => {
-                      const file = e.target.files[0];
-                      if (file) {
-                        setKycForm(f => ({ ...f, logoFile: file, logoPreview: URL.createObjectURL(file) }));
-                      }
-                    }} />
-                    {kycForm.logoPreview && <img src={kycForm.logoPreview} alt="Logo Preview" className="mt-2 w-20 h-20 object-cover rounded" />}
-                  </div>
-                  <div>
-                    <label className="block text-gray-700">KYC Documents</label>
-                    <input type="file" multiple accept="image/*,.pdf" onChange={e => {
-                      const files = Array.from(e.target.files);
-                      setKycForm(f => ({ ...f, kycDocs: files, kycDocsPreview: files.map(file => URL.createObjectURL(file)) }));
-                    }} />
-                    {kycForm.kycDocsPreview.length > 0 && (
-                      <div className="flex gap-2 mt-2 flex-wrap">
-                        {kycForm.kycDocsPreview.map((url, idx) => (
-                          <img key={idx} src={url} alt={`Doc ${idx + 1}`} className="w-16 h-16 object-cover rounded" />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {error && <p className="text-red-600 mt-2">{error}</p>}
-                  <button type="submit" className="w-full bg-yellow-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-yellow-600" disabled={kycUploading}>{kycUploading ? 'Submitting...' : 'Submit KYC'}</button>
-                </form>
-              </div>
-            </div>
-          )}
-
-        {/* Supermarket Edit Modal */}
-        {editSupermarketOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-lg w-full shadow-lg">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold">Edit Supermarket</h3>
-                <button onClick={() => setEditSupermarketOpen(false)} className="text-gray-400 hover:text-gray-600">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              {error && <p className="text-red-600 mb-2">{error}</p>}
-              <div className="mb-3">
-                <label className="block text-gray-700">Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={supermarketForm.name}
-                  onChange={handleSupermarketFormChange}
-                  className="w-full px-4 py-2 border rounded"
-                />
-              </div>
-             
-              
-              {/* Main Image Preview and Upload */}
-              <div className="mb-3">
-                <label className="block text-gray-700">Main Image</label>
-                {editMainImagePreview ? (
-                  <div className="relative mb-2">
-                    <Image src={editMainImagePreview} alt="Main" width={80} height={80} className="rounded object-cover" unoptimized />
-                    <button type="button" onClick={removeEditMainImage} className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 text-xs">✕</button>
-                  </div>
-                ) : null}
-                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleEditMainImageUpload} />
-              </div>
-              {/* Gallery Images Preview and Upload */}
-              <div className="mb-3">
-                <label className="block text-gray-700">Gallery Images (up to 3)</label>
-                <div className="flex gap-2 mb-2 flex-wrap">
-                  {editGalleryImages.map((img, idx) => (
-                    <div key={idx} className="relative">
-                      <Image src={img.url} alt={`Gallery ${idx + 1}`} width={60} height={60} className="rounded object-cover" unoptimized />
-                      <button type="button" onClick={() => removeEditGalleryImage(idx)} className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 text-xs">✕</button>
-                    </div>
-                  ))}
-                </div>
-                {editGalleryImages.length < 3 && (
-                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple onChange={handleEditGalleryImagesUpload} />
-                )}
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button
-                  className="bg-green-500 text-white px-4 py-2 rounded-lg"
-                  onClick={handleUpdateSupermarket}
-                >
-                  Save Changes
-                </button>
-                <button
-                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg"
-                  onClick={() => setEditSupermarketOpen(false)}
-                >
-                  Cancel
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -1324,7 +997,6 @@ export default function VendorDashboard() {
         {sidebarSection === 'Dashboard' && (
           <DashboardSection userName={userName} />
         )}
-        
 
         {sidebarSection === 'Inventory' && (
           <>
@@ -1391,7 +1063,7 @@ export default function VendorDashboard() {
                 {showManageImages ? 'Hide' : 'Manage'} Images
               </button>
             </div>
-            
+
             {showManageImages && (
               <div className="mb-6 p-6 bg-white rounded-lg shadow border border-purple-200">
                 <h3 className="text-xl font-bold mb-4 text-purple-700">Manage Uploaded Images</h3>
@@ -1400,7 +1072,6 @@ export default function VendorDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {Object.entries(uploadedImageMap).map(([originalName, url]) => {
-                      // Find products using this image
                       const usedInProducts = products.filter(p => (p.image === url || p.image?.endsWith(originalName)));
                       return (
                         <div key={originalName} className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col items-center shadow hover:shadow-lg transition-all">
@@ -1423,18 +1094,15 @@ export default function VendorDashboard() {
                             className="mt-2 bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600 w-full"
                             onClick={async () => {
                               if (!window.confirm('Delete this image from storage? Products using it will be set to default image.')) return;
-                              // Delete from Supabase Storage
-                              const filePath = url.split('/').slice(-2).join('/'); // e.g. public/12345_filename.jpg
+                              const filePath = url.split('/').slice(-2).join('/');
                               const { error } = await supabase.storage.from('images').remove([filePath]);
                               if (error) {
                                 alert('Failed to delete image: ' + error.message);
                                 return;
                               }
-                              // Update products using this image
                               for (const prod of usedInProducts) {
                                 await supabase.from('products').update({ image: null }).eq('id', prod.id);
                               }
-                              // Remove from uploadedImageMap
                               setUploadedImageMap(prev => {
                                 const newMap = { ...prev };
                                 delete newMap[originalName];
@@ -1521,7 +1189,7 @@ export default function VendorDashboard() {
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className={`px-4 py-2 mb-8 rounded-lg transition-colors duration-200 ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+                className={`px-4 py-2 rounded-lg transition-colors duration-200 ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
               >
                 Previous
               </button>
@@ -1529,7 +1197,7 @@ export default function VendorDashboard() {
                 <button
                   key={number}
                   onClick={() => handlePageChange(number)}
-                  className={`px-4 py-2 mb-8 rounded-lg transition-colors duration-200 ${currentPage === number ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                  className={`px-4 py-2 rounded-lg transition-colors duration-200 ${currentPage === number ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
                 >
                   {number}
                 </button>
@@ -1537,7 +1205,7 @@ export default function VendorDashboard() {
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className={`px-4 py-2 mb-8 rounded-lg transition-colors duration-200 ${currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200'}`}
+                className={`px-4 py-2 rounded-lg transition-colors duration-200 ${currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
               >
                 Next
               </button>
@@ -1545,48 +1213,50 @@ export default function VendorDashboard() {
             {sidebarSection === 'Inventory' && (() => {
               const nearExpiry = getNearExpiryProducts().filter(p => !dismissedNearExpiry.includes(p.id));
               const expired = getExpiredProducts().filter(p => !dismissedExpired.includes(p.id));
-              return <>
-                {expired.length > 0 && (
-                  <div className="mb-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded flex items-start justify-between">
-                    <div>
-                      <strong>Alert:</strong> The following products have expired:
-                      <ul className="list-disc ml-6">
-                        {expired.map(product => (
-                          <li key={product.id}>
-                            <span className="font-semibold">{product.name}</span> (expired on {new Date(product.expiry_date).toLocaleDateString()})
-                          </li>
-                        ))}
-                      </ul>
+              return (
+                <>
+                  {expired.length > 0 && (
+                    <div className="mb-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded flex items-start justify-between">
+                      <div>
+                        <strong>Alert:</strong> The following products have expired:
+                        <ul className="list-disc ml-6">
+                          {expired.map(product => (
+                            <li key={product.id}>
+                              <span className="font-semibold">{product.name}</span> (expired on {new Date(product.expiry_date).toLocaleDateString()})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <button
+                        className="ml-4 bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+                        onClick={() => handleDismissExpired(expired.map(p => p.id))}
+                      >
+                        Close
+                      </button>
                     </div>
-                    <button
-                      className="ml-4 bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
-                      onClick={() => handleDismissExpired(expired.map(p => p.id))}
-                    >
-                      Close
-                    </button>
-                  </div>
-                )}
-                {nearExpiry.length > 0 && (
-                  <div className="mb-4 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded flex items-start justify-between">
-                    <div>
-                      <strong>Alert:</strong> The following products are expiring soon:
-                      <ul className="list-disc ml-6">
-                        {nearExpiry.map(product => (
-                          <li key={product.id}>
-                            <span className="font-semibold">{product.name}</span> (expires on {new Date(product.expiry_date).toLocaleDateString()})
-                          </li>
-                        ))}
-                      </ul>
+                  )}
+                  {nearExpiry.length > 0 && (
+                    <div className="mb-4 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded flex items-start justify-between">
+                      <div>
+                        <strong>Alert:</strong> The following products are expiring soon:
+                        <ul className="list-disc ml-6">
+                          {nearExpiry.map(product => (
+                            <li key={product.id}>
+                              <span className="font-semibold">{product.name}</span> (expires on {new Date(product.expiry_date).toLocaleDateString()})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <button
+                        className="ml-4 bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600"
+                        onClick={() => handleDismissNearExpiry(nearExpiry.map(p => p.id))}
+                      >
+                        Close
+                      </button>
                     </div>
-                    <button
-                      className="ml-4 bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600"
-                      onClick={() => handleDismissNearExpiry(nearExpiry.map(p => p.id))}
-                    >
-                      Close
-                    </button>
-                  </div>
-                )}
-              </>;
+                  )}
+                </>
+              );
             })()}
           </>
         )}
