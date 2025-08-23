@@ -24,9 +24,9 @@ const TABS = [
 // Utility function to normalize image path
 const normalizeImagePath = (image) => {
   if (Array.isArray(image) && image.length > 0) {
-    return image[0] || '/file.svg'; // Use the first image in the array
+    return image[0] || '/file.svg';
   }
-  return typeof image === 'string' && image ? image : '/file.svg'; // Fallback for single string or invalid
+  return typeof image === 'string' && image ? image : '/file.svg';
 };
 
 export default function AdminDashboard() {
@@ -69,8 +69,7 @@ export default function AdminDashboard() {
   const [searchOrders, setSearchOrders] = useState('');
   const router = useRouter();
   const [showEditVendorModal, setShowEditVendorModal] = useState(false);
-  const [editVendorForm, setEditVendorForm] = useState({ id: '', full_name: '', email: '', newPassword: '' });
-  const [editedVendorPassword, setEditedVendorPassword] = useState('');
+  const [editVendorForm, setEditVendorForm] = useState({ id: '', full_name: '', email: '' });
 
   useEffect(() => {
     const getUser = async () => {
@@ -99,11 +98,9 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (activeTab === 'vendors') {
-      supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url, email, role')
-        .eq('role', 'vendor')
-        .then(({ data }) => setVendors(data || []));
+      fetch('/api/vendors')
+        .then(res => res.json())
+        .then(data => setVendors(data || []));
     } else if (activeTab === 'agents') {
       fetchAgents();
     } else if (activeTab === 'orders') {
@@ -111,7 +108,6 @@ export default function AdminDashboard() {
     }
   }, [activeTab, ordersPage]);
 
-  // Reset to page 1 when search changes
   useEffect(() => {
     setOrdersPage(1);
   }, [searchOrders]);
@@ -188,6 +184,7 @@ export default function AdminDashboard() {
       setVendors((prev) => prev.filter((v) => v.id !== vendorToDisable.id));
       setShowDisableVendorModal(false);
       setVendorToDisable(null);
+      alert('Vendor disabled successfully!');
     } else {
       alert('Error disabling vendor: ' + error.message);
     }
@@ -221,6 +218,7 @@ export default function AdminDashboard() {
         license: '',
       });
       fetchAgents();
+      alert('Agent added successfully!');
     } else {
       alert('Error adding agent: ' + error.message);
     }
@@ -253,6 +251,7 @@ export default function AdminDashboard() {
         license: '',
       });
       fetchAgents();
+      alert('Agent updated successfully!');
     } else {
       alert('Error updating agent: ' + error.message);
     }
@@ -261,8 +260,12 @@ export default function AdminDashboard() {
   const handleDeleteAgent = async (id) => {
     if (!window.confirm('Are you sure you want to delete this agent?')) return;
     const { error } = await supabase.from('agents').delete().eq('id', id);
-    if (!error) fetchAgents();
-    else alert('Error deleting agent: ' + error.message);
+    if (!error) {
+      fetchAgents();
+      alert('Agent deleted successfully!');
+    } else {
+      alert('Error deleting agent: ' + error.message);
+    }
   };
 
   const handleExportAgents = () => {
@@ -289,7 +292,6 @@ export default function AdminDashboard() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-
     alert('Agents exported successfully!');
   };
 
@@ -387,7 +389,6 @@ export default function AdminDashboard() {
     .slice(indexOfFirstAgent, indexOfLastAgent);
   const totalPages = Math.ceil(agents.length / agentsPerPage);
 
-  // Filtered orders for search
   const filteredOrders = orders.filter((order) => {
     const search = searchOrders.toLowerCase();
     return (
@@ -737,11 +738,9 @@ export default function AdminDashboard() {
                   }
                   setShowEditVendorModal(false);
                   alert('Vendor updated successfully!');
-                  supabase
-                    .from('profiles')
-                    .select('id, full_name, email, role')
-                    .eq('role', 'vendor')
-                    .then(({ data }) => setVendors(data || []));
+                  fetch('/api/vendors')
+                    .then(res => res.json())
+                    .then(data => setVendors(data || []));
                 }}
               >
                 Save
@@ -896,85 +895,205 @@ export default function AdminDashboard() {
           )}
           {activeTab === 'vendors' && (
             <div className="bg-white rounded-xl shadow p-6">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-2">
                 <span className="text-xl font-bold text-gray-800">Vendors</span>
-                <button
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded shadow transition"
-                  onClick={() => router.push('/admin/add-vendor')}
-                >
-                  + Add Vendor
-                </button>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    placeholder="Search vendors..."
+                    className="border px-3 py-2 rounded w-full md:w-64"
+                    onChange={(e) => {
+                      const search = e.target.value.toLowerCase();
+                      setVendors((prev) =>
+                        prev.map((v) => ({
+                          ...v,
+                          _visible: Object.values(v)
+                            .join(' ')
+                            .toLowerCase()
+                            .includes(search),
+                        }))
+                      );
+                    }}
+                  />
+                  <button
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded shadow transition"
+                    onClick={() => router.push('/admin/add-vendor')}
+                  >
+                    + Add Vendor
+                  </button>
+                </div>
               </div>
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead>
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">
-                      Avatar
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">
-                      Full Name
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">
-                      Email
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">
-                      ID
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {vendors.length === 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="sticky top-0 bg-white z-10 shadow">
                     <tr>
-                      <td colSpan={5} className="text-center text-gray-400 py-8">
-                        No vendors found.
-                      </td>
+                      <th className="px-4 py-2 text-left font-bold text-gray-600 uppercase">Avatar</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-600 uppercase">Full Name</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-600 uppercase">Email</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-600 uppercase">Business Name</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-600 uppercase">Business Logo</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-600 uppercase">TIN</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-600 uppercase">Bank Account</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-600 uppercase">Mobile Money</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-600 uppercase">KYC Docs</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-600 uppercase">KYC Status</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-600 uppercase">Actions</th>
                     </tr>
-                  ) : (
-                    vendors.map((vendor) => (
-                      <tr key={vendor.id} className="hover:bg-blue-50">
-                        <td className="px-4 py-2">
-                          <div className="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-bold">
-                            {vendor.full_name ? vendor.full_name[0] : 'V'}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 font-semibold text-gray-800">
-                          {vendor.full_name}
-                        </td>
-                        <td className="px-4 py-2 text-gray-700">
-                          {vendor.email}
-                        </td>
-                        <td className="px-4 py-2 text-gray-500 text-xs">
-                          {vendor.id}
-                        </td>
-                        <td className="px-4 py-2 flex gap-2">
-                          <button
-                            className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold px-3 py-1 rounded shadow text-xs"
-                            onClick={() => {
-                              setEditVendorForm({ id: vendor.id, full_name: vendor.full_name, email: vendor.email, newPassword: '' });
-                              setEditedVendorPassword('');
-                              setShowEditVendorModal(true);
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-1 rounded shadow text-xs"
-                            onClick={() => {
-                              setVendorToDisable(vendor);
-                              setShowDisableVendorModal(true);
-                            }}
-                          >
-                            Disable
-                          </button>
-                        </td>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {vendors.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="text-center text-gray-400 py-8">No vendors found.</td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      vendors
+                        .filter((v) => v._visible !== false)
+                        .map((vendor) => (
+                          <tr key={vendor.id} className="hover:bg-blue-50 transition-all group">
+                            <td className="px-4 py-2">
+                              {vendor.avatar_url ? (
+                                <Image
+                                  src={vendor.avatar_url}
+                                  alt="Avatar"
+                                  width={40}
+                                  height={40}
+                                  className="rounded-full object-cover border"
+                                  unoptimized
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-bold">
+                                  {vendor.full_name ? vendor.full_name[0] : 'V'}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-2 font-semibold text-gray-800">{vendor.full_name}</td>
+                            <td className="px-4 py-2 text-gray-700">{vendor.email}</td>
+                            <td className="px-4 py-2 text-gray-700">{vendor.business_name}</td>
+                            <td className="px-4 py-2">
+                              {vendor.business_logo ? (
+                                <Image
+                                  src={vendor.business_logo}
+                                  alt="Business Logo"
+                                  width={40}
+                                  height={40}
+                                  className="rounded object-cover border"
+                                  unoptimized
+                                />
+                              ) : 'N/A'}
+                            </td>
+                            <td className="px-4 py-2 text-gray-700">{vendor.tin}</td>
+                            <td className="px-4 py-2 text-gray-700">{vendor.bank_account}</td>
+                            <td className="px-4 py-2 text-gray-700">{vendor.mobile_money}</td>
+                            <td className="px-4 py-2">
+                              {Array.isArray(vendor.kyc_documents) && vendor.kyc_documents.length > 0 ? (
+                                <ul className="list-disc pl-4">
+                                  {vendor.kyc_documents.map((doc, idx) => (
+                                    <li key={idx}>
+                                      <a
+                                        href={doc}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 underline"
+                                      >
+                                        KYC Doc {idx + 1}
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : 'N/A'}
+                            </td>
+                            <td className="px-4 py-2 text-gray-700">
+                              <span
+                                className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                  vendor.kyc_status === 'approved'
+                                    ? 'bg-green-100 text-green-700'
+                                    : vendor.kyc_status === 'submitted'
+                                    ? 'bg-yellow-100 text-yellow-700'
+                                    : vendor.kyc_status === 'rejected'
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-gray-100 text-gray-700'
+                                }`}
+                              >
+                                {vendor.kyc_status || 'Pending'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 flex gap-2">
+                              {vendor.kyc_status !== 'approved' && (
+                                <button
+                                  className="bg-green-100 hover:bg-green-200 text-green-700 font-bold px-3 py-1 rounded shadow text-xs flex items-center gap-1"
+                                  title="Approve KYC"
+                                  onClick={async () => {
+                                    try {
+                                      // Get the current user's session and access token
+                                      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                                      if (sessionError || !session) {
+                                        console.error('Failed to get session:', sessionError?.message);
+                                        alert('Error: Please log in again');
+                                        router.push('/admin');
+                                        return;
+                                      }
+
+                                      const res = await fetch('/api/vendors/approve', {
+                                        method: 'POST',
+                                        headers: {
+                                          'Content-Type': 'application/json',
+                                          'Authorization': `Bearer ${session.access_token}`,
+                                        },
+                                        body: JSON.stringify({ id: vendor.id }),
+                                      });
+                                      const result = await res.json();
+                                      console.log('Approve KYC response:', result);
+
+                                      if (res.ok) {
+                                        setVendors((prev) =>
+                                          prev.map((v) =>
+                                            v.id === vendor.id ? { ...v, kyc_status: 'approved' } : v
+                                          )
+                                        );
+                                        alert('KYC approved successfully!');
+                                      } else {
+                                        alert(`Failed to approve KYC: ${result.error || 'Unknown error'}`);
+                                      }
+                                    } catch (err) {
+                                      console.error('Error approving KYC:', err);
+                                      alert('Error approving KYC: Network error');
+                                    }
+                                  }}
+                                >
+                                  <span>✔</span> <span>Approve</span>
+                                </button>
+                              )}
+                              <button
+                                className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold px-3 py-1 rounded shadow text-xs flex items-center gap-1"
+                                title="Edit Vendor"
+                                onClick={() => {
+                                  setEditVendorForm({
+                                    id: vendor.id,
+                                    full_name: vendor.full_name,
+                                    email: vendor.email,
+                                  });
+                                  setShowEditVendorModal(true);
+                                }}
+                              >
+                                <span>✏️</span> <span>Edit</span>
+                              </button>
+                              <button
+                                className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-1 rounded shadow text-xs flex items-center gap-1"
+                                title="Disable Vendor"
+                                onClick={() => {
+                                  setVendorToDisable(vendor);
+                                  setShowDisableVendorModal(true);
+                                }}
+                              >
+                                <span>🚫</span> <span>Disable</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
           {activeTab === 'agents' && (
@@ -1150,6 +1269,9 @@ export default function AdminDashboard() {
                                     setOrders((prev) =>
                                       prev.map((o) => (o.id === order.id ? { ...o, agent_id: agentId } : o))
                                     );
+                                    alert('Agent assigned successfully!');
+                                  } else {
+                                    alert('Error assigning agent: ' + error.message);
                                   }
                                 }}
                               >

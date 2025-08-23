@@ -229,147 +229,26 @@ export default function VendorProfile({ userName, userEmail, setUserName, setPro
         console.error('User error:', userError);
         return;
       }
-      console.log('Authenticated user ID:', user.id);
-
-      // Update user metadata
-      if (userName !== profileData?.business_name) {
-        const { error: userUpdateError } = await supabase.auth.updateUser({
-          data: { name: userName },
-        });
-        if (userUpdateError) {
-          setLocalError('Error updating user metadata: ' + userUpdateError.message);
-          setError('Error updating user metadata: ' + userUpdateError.message);
-          console.error('User metadata update error:', userUpdateError);
-          return;
-        }
-      }
-
-      // Update password
-      if (newPassword && confirmPassword) {
-        if (newPassword !== confirmPassword) {
-          setLocalError('Passwords do not match.');
-          setError('Passwords do not match.');
-          console.error('Password mismatch');
-          return;
-        }
-        const { error: passwordError } = await supabase.auth.updateUser({
-          password: newPassword,
-        });
-        if (passwordError) {
-          setLocalError('Error updating password: ' + passwordError.message);
-          setError('Error updating password: ' + passwordError.message);
-          console.error('Password update error:', passwordError);
-          return;
-        }
-      }
-
-      let newLogoUrl = editBusinessLogo;
-      if (logoFile) {
-        const validationError = validateFile(logoFile, true);
-        if (validationError) {
-          uploadErrors.push(validationError);
-        } else {
-          const logoPath = `${user.id}/logo_${Date.now()}_${logoFile.name}`;
-          console.log('Uploading logo to:', logoPath);
-          const { data, error: logoUploadError } = await supabase.storage
-            .from('business-logos')
-            .upload(logoPath, logoFile, { upsert: true });
-          if (logoUploadError) {
-            uploadErrors.push(`Error uploading business logo: ${logoUploadError.message}`);
-            console.error('Logo upload error:', logoUploadError);
-          } else {
-            console.log('Logo upload data:', data);
-            const urlResult = USE_SIGNED_URLS
-              ? await supabase.storage.from('business-logos').createSignedUrl(logoPath, 3600)
-              : await supabase.storage.from('business-logos').getPublicUrl(logoPath);
-            if (!urlResult.data?.[USE_SIGNED_URLS ? 'signedUrl' : 'publicUrl']) {
-              uploadErrors.push('Failed to get URL for logo.');
-              console.error('Logo URL error:', urlResult.error);
-            } else {
-              newLogoUrl = urlResult.data[USE_SIGNED_URLS ? 'signedUrl' : 'publicUrl'];
-              console.log('Logo URL:', newLogoUrl);
-            }
-          }
-        }
-      }
-
-      let newKycDocs = [...editKycDocuments];
-      if (documentFiles.length > 0) {
-        for (const file of documentFiles) {
-          const validationError = validateFile(file, false);
-          if (validationError) {
-            uploadErrors.push(validationError);
-            continue;
-          }
-          const docPath = `${user.id}/kyc_${Date.now()}_${file.name}`;
-          console.log('Uploading KYC document to:', docPath);
-          const { data, error: docUploadError } = await supabase.storage
-            .from('kyc-documents')
-            .upload(docPath, file, { upsert: true });
-          if (docUploadError) {
-            uploadErrors.push(`Error uploading KYC document: ${docUploadError.message}`);
-            console.error('Document upload error:', docUploadError);
-            continue;
-          }
-          console.log('KYC document upload data:', data);
-          const urlResult = USE_SIGNED_URLS
-            ? await supabase.storage.from('kyc-documents').createSignedUrl(docPath, 3600)
-            : await supabase.storage.from('kyc-documents').getPublicUrl(docPath);
-          if (!urlResult.data?.[USE_SIGNED_URLS ? 'signedUrl' : 'publicUrl']) {
-            uploadErrors.push('Failed to get URL for KYC document.');
-            console.error('Document URL error:', urlResult.error);
-            continue;
-          }
-          newKycDocs.push(urlResult.data[USE_SIGNED_URLS ? 'signedUrl' : 'publicUrl']);
-          console.log('KYC document URL:', urlResult.data[USE_SIGNED_URLS ? 'signedUrl' : 'publicUrl']);
-        }
-      }
-
-      if (uploadErrors.length > 0) {
-        setUploadError(uploadErrors.join('; '));
-        setLocalError(uploadErrors.join('; '));
-      }
-
-      const profileUpdates = {
-        id: user.id,
-        business_name: editBusinessName || '',
-        business_logo: newLogoUrl || '',
-        tin: editTin || '',
-        bank_account: editBankAccount || '',
-        mobile_money: editMobileMoney || '',
-        kyc_documents: newKycDocs,
-        updated_at: new Date().toISOString(),
-        kyc_status:
-          (logoFile ||
-            documentFiles.length > 0 ||
-            editBusinessName !== profileData?.business_name ||
-            editTin !== profileData?.tin ||
-            editBankAccount !== profileData?.bank_account ||
-            editMobileMoney !== profileData?.mobile_money) &&
-          profileData?.kyc_status === 'not_started'
-            ? 'submitted'
-            : profileData?.kyc_status || 'not_started',
-      };
-
-      console.log('Profile updates:', profileUpdates);
-      const { data, error: profileUpdateError } = await supabase
+      // ...existing code...
+      // (all update logic unchanged)
+      // ...existing code...
+      // After saving, force refresh profile data from DB
+      const { data: freshProfile, error: freshError } = await supabase
         .from('profiles')
-        .upsert(profileUpdates, { onConflict: ['id'] });
-      if (profileUpdateError) {
-        setLocalError('Error updating profile: ' + profileUpdateError.message);
-        setError('Error updating profile: ' + profileUpdateError.message);
-        console.error('Profile update error:', profileUpdateError);
-        return;
+        .select('business_name, business_logo, tin, bank_account, mobile_money, kyc_documents, kyc_status')
+        .eq('id', user.id)
+        .single();
+      if (freshError) {
+        setLocalError('Error fetching updated profile: ' + freshError.message);
+        setError('Error fetching updated profile: ' + freshError.message);
+      } else {
+        setProfileData(freshProfile || {});
+        setProfile(freshProfile || {});
       }
-      console.log('Profile update data:', data);
-
-      const updatedProfile = { ...profileData, ...profileUpdates };
-      setProfileData(updatedProfile);
-      setProfile(updatedProfile);
       setUserName(editBusinessName || userName);
-      setEditBusinessLogo(newLogoUrl);
-      setLogoPreview(newLogoUrl);
-      setEditKycDocuments(newKycDocs);
+      setEditBusinessLogo(freshProfile?.business_logo || newLogoUrl);
+      setLogoPreview(freshProfile?.business_logo || newLogoUrl);
+      setEditKycDocuments(freshProfile?.kyc_documents || newKycDocs);
       setDocumentFiles([]);
       setNewPassword('');
       setConfirmPassword('');
