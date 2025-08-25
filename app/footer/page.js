@@ -8,7 +8,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <div className="flex flex-col items-center sm:items-start">
             <Image
-              src="/logo.jpg"
+              src="/mylogo.jpg"
               alt="Logo Ipsum"
               width={80}
               height={80}
