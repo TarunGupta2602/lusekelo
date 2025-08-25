@@ -36,21 +36,19 @@ const normalizeImageUrl = (url) => {
 };
 
 export default function CheckoutPage() {
-  // State for user address from addresses table
-  const [userAddress, setUserAddress] = useState(null);
   // Initialize cartItems with localStorage data for guests to avoid flicker
   const initialCart = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('cart_guest') || '[]') : [];
   const [cartItems, setCartItems] = useState(initialCart);
   const [total, setTotal] = useState(0);
   const [user, setUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isCartConfirmedEmpty, setIsCartConfirmedEmpty] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Renamed to avoid confusion
+  const [isCartConfirmedEmpty, setIsCartConfirmedEmpty] = useState(false); // New state to confirm empty cart
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const router = useRouter();
 
-  // Fetch user, address, and cart data
-  const fetchUserAddressAndCart = useCallback(async () => {
+  // Fetch user and cart data
+  const fetchUserAndCart = useCallback(async () => {
     try {
       setIsLoading(true);
 
@@ -60,16 +58,6 @@ export default function CheckoutPage() {
 
       if (!userError && userData?.user) {
         setUser(userData.user);
-
-        // Fetch address from addresses table
-        const { data: addresses, error: addressError } = await supabase
-          .from('addresses')
-          .select('full_address, is_last_used')
-          .eq('user_id', userData.user.id);
-        if (addressError) throw addressError;
-        const lastUsedAddress = addresses.find((addr) => addr.is_last_used) || addresses[0];
-        setUserAddress(lastUsedAddress ? lastUsedAddress.full_address : null);
-
         // Fetch cart for authenticated user
         const { data: cartData, error: cartError } = await supabase
           .from('carts')
@@ -77,7 +65,7 @@ export default function CheckoutPage() {
           .eq('user_id', userData.user.id)
           .single();
 
-        if (cartError && cartError.code !== 'PGRST116') {
+        if (cartError && cartError.code !== 'PGRST116') { // PGRST116: No rows found
           console.error('Error fetching cart:', cartError);
           setErrorMessage('Failed to fetch cart.');
           setTimeout(() => setErrorMessage(''), 3000);
@@ -90,7 +78,7 @@ export default function CheckoutPage() {
         cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
       }
 
-      console.log('Cart items:', cart);
+      console.log('Cart items:', cart); // Debug log
       setCartItems(cart);
       setIsCartConfirmedEmpty(cart.length === 0);
 
@@ -101,22 +89,22 @@ export default function CheckoutPage() {
       );
       setTotal(totalPrice);
     } catch (error) {
-      console.error('Error fetching user, address, or cart:', error);
+      console.error('Error fetching user or cart:', error);
       setErrorMessage('An error occurred while loading the checkout.');
       setTimeout(() => setErrorMessage(''), 3000);
-      setIsCartConfirmedEmpty(true);
+      setIsCartConfirmedEmpty(true); // Assume empty on error to avoid stuck loading
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchUserAddressAndCart();
+    fetchUserAndCart();
     // Listen for cart updates
-    const handleCartUpdate = () => fetchUserAddressAndCart();
+    const handleCartUpdate = () => fetchUserAndCart();
     window.addEventListener('cartUpdated', handleCartUpdate);
     return () => window.removeEventListener('cartUpdated', handleCartUpdate);
-  }, [fetchUserAddressAndCart]);
+  }, [fetchUserAndCart]);
 
   // Protect checkout page: show modal if not authenticated and cart is not empty
   useEffect(() => {
@@ -142,13 +130,6 @@ export default function CheckoutPage() {
       return;
     }
 
-    // Check if address is available
-    if (!userAddress) {
-      setErrorMessage('Please set a delivery address before proceeding.');
-      setTimeout(() => setErrorMessage(''), 3000);
-      return;
-    }
-
     const res = await loadRazorpayScript();
     if (!res) {
       setErrorMessage('Razorpay SDK failed to load.');
@@ -165,9 +146,10 @@ export default function CheckoutPage() {
       return;
     }
 
-    // Create order records in Supabase for each cart item, including address
+    // Create order records in Supabase for each cart item
     const orderPromises = cartItems.map(async (item) => {
-      const productId = item.product_id || item.itemId;
+      const productId = item.product_id || item.itemId; // Use product_id if available, fallback to itemId
+      console.log('Creating order for item:', { ...item, product_id: productId }); // Debug: Log item data
       const { data, error } = await supabase
         .from('orders')
         .insert({
@@ -176,11 +158,12 @@ export default function CheckoutPage() {
           quantity: item.quantity || 1,
           total_amount: (Number(item.price) || 0) * (Number(item.quantity) || 1),
           status: 'pending',
-          address: userAddress,
         })
         .select('id')
         .single();
+
       if (error) {
+        console.error('Error creating order:', error);
         throw new Error(`Failed to create order for product ${productId}: ${error.message}`);
       }
       return data.id;
@@ -190,6 +173,7 @@ export default function CheckoutPage() {
     try {
       orderIds = await Promise.all(orderPromises);
     } catch (error) {
+      console.error('Order creation failed:', error);
       setErrorMessage('Failed to create orders. Please try again.');
       setTimeout(() => setErrorMessage(''), 3000);
       return;
@@ -204,6 +188,7 @@ export default function CheckoutPage() {
 
     const order = await orderRes.json();
     if (!order.id) {
+      console.error('Razorpay order creation failed:', order);
       setErrorMessage('Failed to create Razorpay order.');
       setTimeout(() => setErrorMessage(''), 3000);
       return;
@@ -218,15 +203,13 @@ export default function CheckoutPage() {
       order_id: order.id,
       handler: async function (response) {
         try {
-          // Update order status to 'completed' and set payment details
+          // Update order status to 'completed' in Supabase
           const updatePromises = orderIds.map((orderId) =>
             supabase
               .from('orders')
               .update({
                 payment_id: response.razorpay_payment_id,
-                razorpay_order_id: order.id,
                 status: 'completed',
-                address: userAddress, // Ensure address is saved
               })
               .eq('id', orderId)
           );
@@ -251,6 +234,7 @@ export default function CheckoutPage() {
               );
 
             if (error) {
+              console.error('Error clearing cart:', error);
               setErrorMessage('Failed to clear cart after payment.');
               setTimeout(() => setErrorMessage(''), 3000);
             } else {
@@ -259,12 +243,15 @@ export default function CheckoutPage() {
             }
           }
 
+          // Dispatch cart update event
           window.dispatchEvent(new Event('cartUpdated'));
 
+          // Redirect to success page
           setTimeout(() => {
             router.push('/checkout/success?payment_id=' + response.razorpay_payment_id);
           }, 300);
         } catch (error) {
+          console.error('Error in payment handler:', error);
           setErrorMessage('Payment successful but there was an error updating your order. Please contact support.');
           setTimeout(() => setErrorMessage(''), 3000);
         }
@@ -404,24 +391,6 @@ export default function CheckoutPage() {
               </div>
             </div>
           )}
-
-          {/* Delivery Address Section */}
-          <div className="mb-8">
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-4">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <div>
-                <div className="font-semibold text-green-900">Delivery Address</div>
-                <div className="text-green-700 text-base">
-                  {userAddress
-                    ? userAddress
-                    : <span className="text-gray-400">No address set. Please add an address.</span>}
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* Main Content */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

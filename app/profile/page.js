@@ -1,9 +1,7 @@
-
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
-import { FaUserEdit, FaHistory, FaMapMarkerAlt, FaHeadset, FaHeart, FaSignOutAlt, FaArrowLeft, FaTrashAlt, FaTimes } from "react-icons/fa";
 
 export function ProfileSidebar({ onClose }) {
   const [user, setUser] = useState(null);
@@ -13,13 +11,9 @@ export function ProfileSidebar({ onClose }) {
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
-  const [addresses, setAddresses] = useState([]);
-  const [addressesLoading, setAddressesLoading] = useState(false);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
-  const [showAddresses, setShowAddresses] = useState(false);
   const [error, setError] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [deleteType, setDeleteType] = useState(null); // 'order' or 'address'
   const avatarFileRef = useRef(null);
 
   useEffect(() => {
@@ -73,66 +67,6 @@ export function ProfileSidebar({ onClose }) {
     }
   };
 
-  const fetchAddresses = async () => {
-    if (!user) return;
-    setAddressesLoading(true);
-    setError("");
-
-    try {
-      const { data, error } = await supabase
-        .from("addresses")
-        .select("id, full_address, is_last_used, created_at")
-        .eq("user_id", user.id)
-        .order("is_last_used", { ascending: false })
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      setAddresses(data || []);
-      setAddressesLoading(false);
-    } catch (err) {
-      setError("Error fetching addresses: " + err.message);
-      setAddressesLoading(false);
-    }
-  };
-
-  const handleSetLastUsed = async (addressId) => {
-    try {
-      const { error: updateError } = await supabase
-        .from("addresses")
-        .update({ is_last_used: false })
-        .eq("user_id", user.id);
-      if (updateError) throw updateError;
-
-      const { error: setError } = await supabase
-        .from("addresses")
-        .update({ is_last_used: true })
-        .eq("id", addressId);
-      if (setError) throw setError;
-
-      fetchAddresses();
-    } catch (err) {
-      setError("Error updating address: " + err.message);
-    }
-  };
-
-  const handleDeleteAddress = async (addressId) => {
-    try {
-      const { error } = await supabase
-        .from("addresses")
-        .delete()
-        .eq("id", addressId)
-        .eq("user_id", user.id);
-      if (error) throw error;
-
-      setAddresses(addresses.filter((addr) => addr.id !== addressId));
-      setDeleteConfirmId(null);
-      setDeleteType(null);
-    } catch (err) {
-      setError("Error deleting address: " + err.message);
-    }
-  };
-
   const handleDeleteOrder = async (orderId) => {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -158,17 +92,8 @@ export function ProfileSidebar({ onClose }) {
 
       setOrders(orders.filter((order) => order.id !== orderId));
       setDeleteConfirmId(null);
-      setDeleteType(null);
     } catch (err) {
       setError("Unexpected error: " + err.message);
-    }
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (deleteType === 'order') {
-      await handleDeleteOrder(deleteConfirmId);
-    } else if (deleteType === 'address') {
-      await handleDeleteAddress(deleteConfirmId);
     }
   };
 
@@ -255,238 +180,118 @@ export function ProfileSidebar({ onClose }) {
 
   const handleOrderHistoryClick = () => {
     setShowOrderHistory(true);
-    setShowAddresses(false);
     fetchOrders();
-  };
-
-  const handleAddressesClick = () => {
-    setShowAddresses(true);
-    setShowOrderHistory(false);
-    fetchAddresses();
   };
 
   if (loading || !user) return null;
 
   return (
-    <div className="fixed top-0 right-0 w-full mt-18 sm:w-96 md:w-[420px] lg:w-[450px] bg-gradient-to-b from-gray-900 to-black text-white h-full shadow-2xl z-50 overflow-y-auto transition-all duration-300 font-sans rounded-l-3xl">
-      {/* Close button for all views */}
+    <div className="fixed top-0 right-0 w-full mt-15 sm:w-80 md:w-96 lg:w-[400px] bg-gray-900 text-white h-full shadow-2xl z-50 overflow-y-auto transition-all duration-300 font-sans">
       <button
         onClick={onClose}
-        className="absolute top-6 right-6 text-white text-2xl bg-gray-800/80 rounded-full w-12 h-12 flex items-center justify-center hover:bg-red-500/90 transition-all duration-300 shadow-lg hover:shadow-xl backdrop-blur-md z-50"
+        className="absolute top-4 right-4 text-white text-xl bg-gray-700 rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 transition-all duration-200"
         aria-label="Close profile sidebar"
-        data-testid="close-button"
       >
-        <FaTimes className="w-7 h-7" />
+        ×
       </button>
+
       {showOrderHistory ? (
-        <div className="p-6 flex flex-col min-h-full">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-3xl font-bold text-white tracking-tight">Order History</h2>
+        <div className="p-4 sm:p-6 flex flex-col min-h-full">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl sm:text-2xl font-semibold text-white">Order History</h2>
             <button
               onClick={() => setShowOrderHistory(false)}
-              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-5 py-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm"
+              className="text-gray-300 hover:text-white font-medium px-3 py-1 rounded bg-gray-800 hover:bg-gray-700 transition-all duration-200"
             >
-              <FaArrowLeft className="text-lg" />
               Back
             </button>
           </div>
           {error && (
-            <p className="text-red-400 bg-red-900/20 p-4 rounded-xl mb-8 text-sm shadow-md">
+            <p className="text-red-400 bg-red-900/20 p-3 rounded-lg mb-6 text-sm">
               {error}
             </p>
           )}
           {ordersLoading ? (
-            <div className="flex justify-center items-center h-40">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-3 border-b-3 border-blue-500"></div>
+            <div className="flex justify-center items-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
             </div>
           ) : orders.length === 0 ? (
-            <p className="text-gray-400 text-center py-16 text-lg">No orders found.</p>
+            <p className="text-gray-400 text-center py-8 text-sm sm:text-base">No orders found.</p>
           ) : (
-            <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+            <div className="flex-1 overflow-y-auto space-y-4">
               {orders.map((order) => (
                 <div
                   key={order.id}
-                  className="bg-gray-800/50 backdrop-blur-md rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/50"
+                  className="bg-gray-800 rounded-lg p-4 shadow-md hover:shadow-lg transition-all duration-200 relative"
                 >
-                  <div className="flex items-start gap-5">
-                    {order.products?.image && (
-                      <div className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-gray-600/50 shadow-sm">
-                        <Image
-                          src={order.products.image}
-                          alt={order.products.name || "Product"}
-                          width={80}
-                          height={80}
-                          className="object-cover w-full h-full scale-105 transition-transform duration-300 hover:scale-110"
-                        />
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <div className="pr-10">
-                          <h3 className="text-xl font-semibold text-white line-clamp-1">
-                            {order.products?.name || "Unknown Product"}
-                          </h3>
-                          <p className="text-sm text-gray-300 mt-1 line-clamp-2">
-                            {order.products?.description || "No description available"}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-2">
-                            Order ID: {order.id.slice(0, 8)}
-                          </p>
-                        </div>
-                        <span
-                          className={`px-4 py-1.5 rounded-full text-sm font-medium tracking-wide ${
-                            order.status === "completed"
-                              ? "bg-green-600/20 text-green-400 border border-green-500/30"
-                              : order.status === "pending"
-                              ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
-                              : "bg-red-600/20 text-red-400 border border-red-500/30"
-                          }`}
-                        >
-                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                        </span>
-                      </div>
-                      <div className="mt-5 grid grid-cols-2 gap-5 text-sm text-gray-200">
-                        <div className="bg-gray-700/30 p-3 rounded-lg">
-                          <span className="text-gray-400 font-medium block mb-1">Quantity</span>
-                          {order.quantity}
-                        </div>
-                        <div className="bg-gray-700/30 p-3 rounded-lg">
-                          <span className="text-gray-400 font-medium block mb-1">Total</span>
-                          ₹{order.total_amount.toFixed(2)}
-                        </div>
-                        <div className="bg-gray-700/30 p-3 rounded-lg">
-                          <span className="text-gray-400 font-medium block mb-1">Date</span>
-                          {new Date(order.created_at).toLocaleDateString()}
-                        </div>
-                        <div className="bg-gray-700/30 p-3 rounded-lg">
-                          <span className="text-gray-400 font-medium block mb-1">Payment ID</span>
-                          {order.payment_id?.slice(0, 8) || "N/A"}
-                        </div>
-                      </div>
+                  <div className="flex justify-between items-start">
+                    <div className="pr-8">
+                      <h3 className="text-base sm:text-lg font-semibold text-white">
+                        {order.products?.name || "Unknown Product"}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-gray-400 mt-1 line-clamp-2">
+                        {order.products?.description || "No description available"}
+                      </p>
+                      <p className="text-xs text-gray-300 mt-1">
+                        Order ID: {order.id.slice(0, 8)}
+                      </p>
+                    </div>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        order.status === "completed"
+                          ? "bg-green-600 text-white"
+                          : order.status === "pending"
+                          ? "bg-yellow-500 text-gray-900"
+                          : "bg-red-600 text-white"
+                      }`}
+                    >
+                      {order.status}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:text-sm">
+                    <div>
+                      <span className="text-gray-400">Quantity:</span> {order.quantity}
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Total:</span> ₹{order.total_amount.toFixed(2)}
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Date:</span>{" "}
+                      {new Date(order.created_at).toLocaleDateString()}
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Payment ID:</span>{" "}
+                      {order.payment_id?.slice(0, 8) || "N/A"}
                     </div>
                   </div>
                   <button
-                    onClick={() => {
-                      setDeleteConfirmId(order.id);
-                      setDeleteType('order');
-                    }}
-                    className="absolute top-4 right-4 text-red-400 hover:text-red-600 transition-all duration-200"
+                    onClick={() => setDeleteConfirmId(order.id)}
+                    className="absolute top-2 right-2 text-red-400 hover:text-red-600 transition-all duration-200"
                     aria-label="Delete order"
                   >
-                    <FaTrashAlt className="w-5 h-5" />
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
                   </button>
-                  {deleteConfirmId === order.id && deleteType === 'order' && (
-                    <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded-2xl backdrop-blur-sm">
-                      <div className="bg-gray-800 p-6 rounded-xl text-center max-w-[90%] shadow-2xl border border-gray-700">
-                        <p className="text-base text-gray-200 mb-6">Are you sure you want to delete this order?</p>
-                        <div className="flex justify-center space-x-6">
+                  {deleteConfirmId === order.id && (
+                    <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded-lg">
+                      <div className="bg-gray-900 p-4 rounded-lg text-center max-w-[90%]">
+                        <p className="text-sm mb-4">Are you sure you want to delete this order?</p>
+                        <div className="flex justify-center space-x-4">
                           <button
-                            onClick={handleDeleteConfirm}
-                            className="bg-red-600 px-6 py-3 rounded-lg hover:bg-red-700 text-sm font-medium transition-all duration-200 shadow-md"
+                            onClick={() => handleDeleteOrder(order.id)}
+                            className="bg-red-600 px-4 py-2 rounded hover:bg-red-700 text-sm transition-all duration-200"
                           >
                             Delete
                           </button>
                           <button
-                            onClick={() => {
-                              setDeleteConfirmId(null);
-                              setDeleteType(null);
-                            }}
-                            className="bg-gray-700 px-6 py-3 rounded-lg hover:bg-gray-600 text-sm font-medium transition-all duration-200 shadow-md"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : showAddresses ? (
-        <div className="p-6 flex flex-col min-h-full">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-3xl font-bold text-white tracking-tight">Saved Addresses</h2>
-            <button
-              onClick={() => setShowAddresses(false)}
-              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-5 py-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm"
-            >
-              <FaArrowLeft className="text-lg" />
-              Back
-            </button>
-          </div>
-          {error && (
-            <p className="text-red-400 bg-red-900/20 p-4 rounded-xl mb-8 text-sm shadow-md">
-              {error}
-            </p>
-          )}
-          {addressesLoading ? (
-            <div className="flex justify-center items-center h-40">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-3 border-b-3 border-blue-500"></div>
-            </div>
-          ) : addresses.length === 0 ? (
-            <p className="text-gray-400 text-center py-16 text-lg">No addresses saved.</p>
-          ) : (
-            <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-              {addresses.map((address) => (
-                <div
-                  key={address.id}
-                  className="bg-gray-800/50 backdrop-blur-md rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/50"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="pr-10">
-                      <p className="text-xl font-semibold text-white line-clamp-2">
-                        {address.full_address}
-                      </p>
-                      <p className="text-sm text-gray-300 mt-2">
-                        Added: {new Date(address.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    {address.is_last_used && (
-                      <span className="px-4 py-1.5 rounded-full text-sm font-medium bg-green-600/20 text-green-400 border border-green-500/30">
-                        Default
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-5 flex justify-between items-center">
-                    {!address.is_last_used && (
-                      <button
-                        onClick={() => handleSetLastUsed(address.id)}
-                        className="text-blue-400 hover:text-blue-300 text-sm font-medium underline transition-all duration-200"
-                      >
-                        Set as Default
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setDeleteConfirmId(address.id);
-                        setDeleteType('address');
-                      }}
-                      className="text-red-400 hover:text-red-600 text-sm font-medium transition-all duration-200 flex items-center gap-2"
-                      aria-label="Delete address"
-                    >
-                      <FaTrashAlt className="w-4 h-4" />
-                      Delete
-                    </button>
-                  </div>
-                  {deleteConfirmId === address.id && deleteType === 'address' && (
-                    <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded-2xl backdrop-blur-sm">
-                      <div className="bg-gray-800 p-6 rounded-xl text-center max-w-[90%] shadow-2xl border border-gray-700">
-                        <p className="text-base text-gray-200 mb-6">Are you sure you want to delete this address?</p>
-                        <div className="flex justify-center space-x-6">
-                          <button
-                            onClick={handleDeleteConfirm}
-                            className="bg-red-600 px-6 py-3 rounded-lg hover:bg-red-700 text-sm font-medium transition-all duration-200 shadow-md"
-                          >
-                            Delete
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDeleteConfirmId(null);
-                              setDeleteType(null);
-                            }}
-                            className="bg-gray-700 px-6 py-3 rounded-lg hover:bg-gray-600 text-sm font-medium transition-all duration-200 shadow-md"
+                            onClick={() => setDeleteConfirmId(null)}
+                            className="bg-gray-600 px-4 py-2 rounded hover:bg-gray-700 text-sm transition-all duration-200"
                           >
                             Cancel
                           </button>
@@ -501,49 +306,49 @@ export function ProfileSidebar({ onClose }) {
         </div>
       ) : (
         <>
-          <div className="flex flex-col items-center py-8 px-6 bg-gradient-to-b from-gray-900 to-black relative">
-            <div className="relative w-28 h-28 rounded-full overflow-hidden border-4 border-blue-500 shadow-xl">
+          <div className="flex flex-col items-center py-6 px-4 sm:px-6 bg-gradient-to-b from-gray-800 to-gray-900">
+            <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-4 border-blue-500 shadow-lg">
               {avatarPreview ? (
                 <Image
                   src={avatarPreview}
                   alt="Preview"
                   fill
-                  className="object-cover scale-105"
+                  className="object-cover"
                 />
               ) : user.user_metadata?.avatar_url ? (
                 <Image
                   src={user.user_metadata.avatar_url}
                   alt="Profile"
                   fill
-                  className="object-cover scale-105"
+                  className="object-cover"
                 />
               ) : (
-                <div className="w-full h-full bg-blue-600 flex items-center justify-center text-4xl text-white font-bold">
+                <div className="w-full h-full bg-blue-600 flex items-center justify-center text-2xl sm:text-3xl text-white font-bold">
                   {user.user_metadata?.full_name?.[0].toUpperCase() || "?"}
                 </div>
               )}
             </div>
 
             {editMode ? (
-              <div className="w-full max-w-sm mt-6">
+              <div className="w-full max-w-[250px] mt-4">
                 <input
                   type="file"
                   accept="image/*"
                   ref={avatarFileRef}
                   onChange={handleAvatarChange}
-                  className="mt-2 text-sm text-gray-200 w-full bg-gray-800 rounded-xl p-3 border border-gray-700 focus:border-blue-500 transition-all duration-200 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                  className="mt-2 text-sm text-gray-200 w-full bg-gray-800 rounded-lg p-2 border border-gray-700 focus:border-blue-500 transition-all duration-200"
                 />
                 <input
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="mt-4 w-full px-4 py-3 rounded-xl bg-gray-800 text-white border border-gray-700 focus:border-blue-500 focus:outline-none transition-all duration-200"
+                  className="mt-2 w-full px-3 py-2 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-blue-500 focus:outline-none transition-all duration-200"
                   placeholder="Enter full name"
                 />
-                <div className="flex justify-center space-x-6 mt-6">
+                <div className="flex justify-center space-x-4 mt-4">
                   <button
                     onClick={handleSave}
-                    className="bg-blue-600 px-6 py-3 rounded-xl hover:bg-blue-700 text-sm font-medium transition-all duration-200 shadow-md"
+                    className="bg-blue-600 px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium transition-all duration-200"
                   >
                     Save
                   </button>
@@ -552,60 +357,62 @@ export function ProfileSidebar({ onClose }) {
                       setEditMode(false);
                       setAvatarPreview(null);
                     }}
-                    className="bg-gray-700 px-6 py-3 rounded-xl hover:bg-gray-600 text-sm font-medium transition-all duration-200 shadow-md"
+                    className="bg-gray-600 px-4 py-2 rounded-lg hover:bg-gray-700 text-sm font-medium transition-all duration-200"
                   >
                     Cancel
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="text-center mt-6">
-                <p className="font-bold text-xl text-white">
+              <div className="text-center mt-4">
+                <p className="font-semibold text-base sm:text-lg text-white">
                   {user.user_metadata?.full_name || "No Name"}
                 </p>
-                <p className="text-sm text-gray-400 mt-2">{user.email}</p>
+                <p className="text-xs sm:text-sm text-gray-400 mt-1">{user.email}</p>
                 <button
                   onClick={handleEditToggle}
-                  className="mt-4 text-sm text-blue-400 hover:text-blue-300 underline transition-all duration-200 flex items-center justify-center gap-2"
+                  className="mt-3 text-xs sm:text-sm text-blue-400 hover:text-blue-300 underline transition-all duration-200"
                 >
-                  <FaUserEdit className="text-lg" />
                   Edit Profile
                 </button>
               </div>
             )}
           </div>
 
-          <div className="space-y-1 px-6 pb-8">
+          <div className="space-y-2 px-4 sm:px-6 pb-6">
             {[
               {
                 label: "Order History",
-                icon: <FaHistory />,
+                icon: "🔄",
                 onClick: handleOrderHistoryClick,
               },
-              {
-                label: "Saved Addresses",
-                icon: <FaMapMarkerAlt />,
-                onClick: handleAddressesClick,
-              },
-              { label: "Customer Support", icon: <FaHeadset /> },
-              { label: "Wishlist", icon: <FaHeart /> },
+              { label: "Customer Support", icon: "💬" },
+              { label: "Saved Addresses", icon: "📍" },
+              { label: "Wishlist", icon: "❤️" },
             ].map((item) => (
               <div
                 key={item.label}
                 onClick={item.onClick}
-                className="flex items-center space-x-4 py-4 cursor-pointer text-gray-200 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-300 px-4 backdrop-blur-sm"
+                className="flex items-center space-x-3 border-b border-gray-800 py-3 cursor-pointer text-gray-200 hover:text-blue-400 hover:bg-gray-800 rounded-lg transition-all duration-200 px-2"
               >
-                <span className="text-xl">{item.icon}</span>
-                <span className="text-base font-medium">{item.label}</span>
+                <span className="text-lg">{item.icon}</span>
+                <span className="text-sm sm:text-base font-medium">{item.label}</span>
               </div>
             ))}
 
             <button
               onClick={handleLogout}
-              className="w-full flex items-center space-x-4 mt-8 py-4 text-red-400 hover:text-red-500 hover:bg-gray-800/50 rounded-xl transition-all duration-300 px-4 backdrop-blur-sm"
+              className="w-full flex items-center space-x-3 text-left mt-6 py-3 text-red-400 hover:text-red-500 hover:bg-gray-800 rounded-lg px-2 transition-all duration-200"
             >
-              <FaSignOutAlt className="text-xl" />
-              <span className="text-base font-medium">Logout</span>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
+              <span className="text-sm sm:text-base font-medium">Logout</span>
             </button>
           </div>
         </>

@@ -358,7 +358,7 @@ export default function Navbar() {
         
         {/* Logo */}
         <Link href="/" className="flex items-center mx-auto lg:mx-0">
-          <Image src="/mylogo.jpg" alt="Logo" width={40} height={40} className="rounded-lg" />
+          <Image src="/logo.jpg" alt="Logo" width={40} height={40} className="rounded-lg" />
         </Link>
 
         {/* Mobile Search Button */}
