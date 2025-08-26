@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 export default function DashboardSection({ userName, orders }) {
   const [notifications, setNotifications] = useState([]);
@@ -37,47 +37,81 @@ export default function DashboardSection({ userName, orders }) {
     });
   };
 
+  const stats = useMemo(() => {
+    if (!orders || orders.length === 0) {
+      return {
+        totalRevenue: 0,
+        totalProductSales: 0,
+        outForDelivery: 0,
+        pending: 0,
+        returned: 0,
+        failedDelivery: 0,
+        cancelled: 0,
+      };
+    }
+
+    const revenueAndSalesOrders = orders.filter(order => ['completed', 'shipped'].includes(order.status));
+
+    const totalRevenue = revenueAndSalesOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+    const totalProductSales = revenueAndSalesOrders.reduce((sum, order) => sum + (order.quantity || 0), 0);
+    const outForDelivery = orders.filter(order => order.status === 'shipped').length;
+    const pending = orders.filter(order => order.status === 'pending').length;
+    const returned = orders.filter(order => order.status === 'returned').length;
+    const failedDelivery = orders.filter(order => order.status === 'failed_delivery').length;
+    const cancelled = orders.filter(order => order.status === 'cancelled').length;
+
+    return {
+      totalRevenue,
+      totalProductSales,
+      outForDelivery,
+      pending,
+      returned,
+      failedDelivery,
+      cancelled,
+    };
+  }, [orders]);
+
   return (
     <div className="mb-8">
-      <input type="text" placeholder="Search..." className="border rounded px-3 py-1 mb-4 w-56" />
+      <input type="text" placeholder="Search..." className="border rounded px-3 py-1 mb-4 w-full max-w-xs" />
       <div className="text-xl font-semibold mb-1">Welcome back, {userName}</div>
       <div className="text-gray-500 mb-6">Track, manage and forecast your customers and orders.</div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div className="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
           <div className="text-gray-500">Total Revenue</div>
-          <div className="text-3xl font-bold">2,420</div>
+          <div className="text-3xl font-bold">{stats.totalRevenue.toLocaleString()}</div>
           <div className="text-green-500 text-sm mt-2">↑ 40% vs last month</div>
         </div>
         <div className="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
           <div className="text-gray-500">Total Product Sales</div>
-          <div className="text-3xl font-bold">316</div>
+          <div className="text-3xl font-bold">{stats.totalProductSales.toLocaleString()}</div>
           <div className="text-green-500 text-sm mt-2">↑ 20% vs last month</div>
         </div>
         <div className="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
           <div className="text-gray-500">Out for Delivery</div>
-          <div className="text-3xl font-bold">23</div>
+          <div className="text-3xl font-bold">{stats.outForDelivery.toLocaleString()}</div>
           <div className="text-green-500 text-sm mt-2">↑ 20%</div>
         </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl shadow p-6 border-2 border-blue-400">
           <div className="text-gray-500">Pending</div>
-          <div className="text-3xl font-bold">54</div>
+          <div className="text-3xl font-bold">{stats.pending.toLocaleString()}</div>
           <div className="text-red-500 text-sm mt-2">↓ 20%</div>
         </div>
         <div className="bg-white rounded-xl shadow p-6">
           <div className="text-gray-500">Returned</div>
-          <div className="text-3xl font-bold">4</div>
+          <div className="text-3xl font-bold">{stats.returned.toLocaleString()}</div>
           <div className="text-red-500 text-sm mt-2">↓ 10%</div>
         </div>
         <div className="bg-white rounded-xl shadow p-6">
           <div className="text-gray-500">Failed Delivery</div>
-          <div className="text-3xl font-bold">3</div>
+          <div className="text-3xl font-bold">{stats.failedDelivery.toLocaleString()}</div>
           <div className="text-red-500 text-sm mt-2">↓ 10%</div>
         </div>
         <div className="bg-white rounded-xl shadow p-6">
           <div className="text-gray-500">Cancelled Orders</div>
-          <div className="text-3xl font-bold">16</div>
+          <div className="text-3xl font-bold">{stats.cancelled.toLocaleString()}</div>
           <div className="text-red-500 text-sm mt-2">↓ 30% vs last month</div>
         </div>
       </div>
