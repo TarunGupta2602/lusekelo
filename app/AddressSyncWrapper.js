@@ -97,10 +97,10 @@ export default function AddressSyncWrapper() {
         // Check if the address already exists for this user
         const { data: existing, error: checkError } = await supabase
           .from("addresses")
-          .select("id")
+          .select("id, is_last_used")
           .eq("user_id", userId)
           .eq("full_address", fullAddress)
-          .single();
+          .maybeSingle(); // Use maybeSingle to handle no results gracefully
 
         if (checkError && checkError.code !== "PGRST116") {
           console.error("❌ Error checking existing address:", checkError.message, checkError.details, checkError.hint);
@@ -108,21 +108,27 @@ export default function AddressSyncWrapper() {
         }
 
         if (existing) {
-          // Update existing address
-          const { data, error } = await supabase
-            .from("addresses")
-            .update({ is_last_used: true, created_at: new Date().toISOString() })
-            .eq("id", existing.id)
-            .select();
-          if (error) {
-            console.error("❌ Address update error:", error.message, error.details, error.hint);
+          // Address exists, update only if not already marked as last used
+          if (!existing.is_last_used) {
+            const { data, error } = await supabase
+              .from("addresses")
+              .update({ is_last_used: true, created_at: new Date().toISOString() })
+              .eq("id", existing.id)
+              .select();
+            if (error) {
+              console.error("❌ Address update error:", error.message, error.details, error.hint);
+            } else {
+              console.log("✅ Updated existing address:", data);
+              localStorage.removeItem("userLocation");
+              setLastSyncedAddress(fullAddress);
+            }
           } else {
-            console.log("✅ Updated existing address:", data);
+            console.log("📍 Address already marked as last used, no update needed");
             localStorage.removeItem("userLocation");
             setLastSyncedAddress(fullAddress);
           }
         } else {
-          // Insert new address
+          // No existing address, insert new one
           const { data, error } = await supabase
             .from("addresses")
             .insert([

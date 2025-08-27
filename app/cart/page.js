@@ -44,8 +44,6 @@ export default function CartPage() {
   const [newAddress, setNewAddress] = useState("");
   const [addressLoading, setAddressLoading] = useState(false);
   const [addressError, setAddressError] = useState("");
-  const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -54,6 +52,8 @@ export default function CartPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [authChecked, setAuthChecked] = useState(false);
   const [storeOptions, setStoreOptions] = useState({});
+  const [storeDurations, setStoreDurations] = useState({});
+  const [durationsLoading, setDurationsLoading] = useState(false);
   const router = useRouter();
 
   // Fetch user and address
@@ -190,15 +190,16 @@ export default function CartPage() {
         }
 
         const updatedGuestCart = await Promise.all(guestCart.map(async (item) => {
-          if (!item.storeName || item.storeName === 'Unknown Store') {
+          if (!item.storeName || item.storeName === 'Unknown Store' || !item.address) {
             const { data: supermarket, error } = await supabase
               .from('supermarkets')
-              .select('name')
+              .select('name, address')
               .eq('id', item.supermarket_id)
               .single();
             return {
               ...item,
-              storeName: error || !supermarket ? 'N/A' : supermarket.name
+              storeName: error || !supermarket ? 'N/A' : supermarket.name,
+              address: error || !supermarket ? null : supermarket.address
             };
           }
           return item;
@@ -255,16 +256,17 @@ export default function CartPage() {
         cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
         console.log('Guest cart before processing:', cart);
         cart = await Promise.all(cart.map(async (item) => {
-          if (!item.storeName || item.storeName === 'Unknown Store') {
+          if (!item.storeName || item.storeName === 'Unknown Store' || !item.address) {
             const { data: supermarket, error } = await supabase
               .from('supermarkets')
-              .select('name')
+              .select('name, address')
               .eq('id', item.supermarket_id)
               .single();
             console.log('Supermarket query for item:', item.itemId, 'Result:', supermarket, 'Error:', error);
             return {
               ...item,
-              storeName: error || !supermarket ? 'N/A' : supermarket.name
+              storeName: error || !supermarket ? 'N/A' : supermarket.name,
+              address: error || !supermarket ? null : supermarket.address
             };
           }
           return item;
@@ -287,16 +289,17 @@ export default function CartPage() {
         cart = data?.store_carts || [];
         console.log('Cart before processing:', cart);
         cart = await Promise.all(cart.map(async (item) => {
-          if (!item.storeName || item.storeName === 'Unknown Store') {
+          if (!item.storeName || item.storeName === 'Unknown Store' || !item.address) {
             const { data: supermarket, error } = await supabase
               .from('supermarkets')
-              .select('name')
+              .select('name, address')
               .eq('id', item.supermarket_id)
               .single();
             console.log('Supermarket query for item:', item.itemId, 'Result:', supermarket, 'Error:', error);
             return {
               ...item,
-              storeName: error || !supermarket ? 'N/A' : supermarket.name
+              storeName: error || !supermarket ? 'N/A' : supermarket.name,
+              address: error || !supermarket ? null : supermarket.address
             };
           }
           return item;
@@ -342,7 +345,7 @@ export default function CartPage() {
             image,
             supermarket_id,
             variations,
-            supermarkets!supermarket_id (name)
+            supermarkets!supermarket_id (name, address)
           `)
           .ilike('name', `%${productName}%`);
 
@@ -353,9 +356,11 @@ export default function CartPage() {
           continue;
         }
 
+        console.log(`Store options for "${productName}":`, data);
+
         if (data && data.length) {
           options[productName] = data
-            .filter(p => !excludedSupermarketIds.includes(p.supermarket_id))
+            .filter(p => !excludedSupermarketIds.includes(p.supermarket_id) && p.supermarkets?.address)
             .sort((a, b) => a.price - b.price)
             .map(p => ({
               itemId: p.id,
@@ -364,13 +369,18 @@ export default function CartPage() {
               storeName: p.supermarkets?.name || 'N/A',
               image: p.image,
               variations: p.variations,
-              supermarket_id: p.supermarket_id
+              supermarket_id: p.supermarket_id,
+              address: p.supermarkets?.address || null
             }))
-            .filter(p => p.storeName !== 'N/A');
+            .filter(p => p.storeName !== 'N/A' && p.address);
+          if (options[productName].length === 0) {
+            console.warn(`No valid store options with addresses for "${productName}"`);
+          }
         } else {
           console.warn(`No store options found for name "${productName}"`);
         }
       }
+      console.log('Final store options:', options);
       setStoreOptions(options);
     } catch (err) {
       console.error('Error fetching store options:', err);
@@ -394,6 +404,102 @@ export default function CartPage() {
     }
   }, [cartItems, fetchStoreOptions]);
 
+  // Fetch delivery durations for store options
+  useEffect(() => {
+    const fetchDurations = async () => {
+      if (!userAddress?.address) {
+        console.warn('Missing user address');
+        setStoreDurations({});
+        setErrorMessage('Please set a delivery address to calculate delivery times.');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
+
+      const allOptions = Object.values(storeOptions).flat();
+      const uniqueStores = new Map();
+      allOptions.forEach(opt => {
+        if (opt.address && !uniqueStores.has(opt.supermarket_id)) {
+          uniqueStores.set(opt.supermarket_id, opt.address);
+        }
+      });
+
+      // Include cart item addresses for duration calculation
+      cartItems.forEach(item => {
+        if (item.address && !uniqueStores.has(item.supermarket_id)) {
+          uniqueStores.set(item.supermarket_id, item.address);
+        }
+      });
+
+      if (uniqueStores.size === 0) {
+        console.log('No valid store addresses found');
+        setStoreDurations({});
+        setErrorMessage('No valid store addresses available to calculate delivery times.');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
+
+      const destinations = Array.from(uniqueStores.values());
+      console.log('Fetching durations for:', { origin: userAddress.address, destinations });
+      try {
+        setDurationsLoading(true);
+        const res = await fetch('/api/distance-matrix', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            origin: userAddress.address,
+            destinations
+          })
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          console.error('Distance Matrix API error:', errorData);
+          throw new Error(`HTTP error! Status: ${res.status}, Details: ${errorData.error || 'Unknown error'}`);
+        }
+
+        const data = await res.json();
+        console.log('Distance Matrix API Response:', data);
+
+        if (data.status === 'OK' && data.rows[0]) {
+          const newDurations = {};
+          data.rows[0].elements.forEach((element, idx) => {
+            if (element.status === 'OK') {
+              const address = destinations[idx];
+              newDurations[address] = {
+                text: element.duration.text,
+                value: element.duration.value // Duration in seconds for sorting
+              };
+            } else {
+              console.warn(`No duration available for address: ${destinations[idx]}`);
+              newDurations[destinations[idx]] = { text: 'N/A', value: Infinity };
+            }
+          });
+          setStoreDurations(newDurations);
+        } else {
+          console.error('Distance Matrix API error:', data.error, data.details || 'Unknown error');
+          setStoreDurations(
+            Object.fromEntries(destinations.map(dest => [dest, { text: 'N/A', value: Infinity }]))
+          );
+          setErrorMessage('Failed to fetch delivery times. Please try again later.');
+          setTimeout(() => setErrorMessage(''), 3000);
+        }
+      } catch (err) {
+        console.error('Error fetching durations:', err.message);
+        setStoreDurations(
+          Object.fromEntries(destinations.map(dest => [dest, { text: 'N/A', value: Infinity }]))
+        );
+        setErrorMessage('Failed to fetch delivery times. Please try again later.');
+        setTimeout(() => setErrorMessage(''), 3000);
+      } finally {
+        setDurationsLoading(false);
+      }
+    };
+
+    fetchDurations();
+  }, [storeOptions, userAddress, cartItems]);
+
   // Show auth modal only when auth check is complete and user is not authenticated
   useEffect(() => {
     if (authChecked && !user && !loading) {
@@ -413,16 +519,18 @@ export default function CartPage() {
 
     try {
       let storeName = 'N/A';
+      let address = null;
       if (product.supermarket_id) {
         const { data: supermarket, error: supermarketError } = await supabase
           .from('supermarkets')
-          .select('name')
+          .select('name, address')
           .eq('id', product.supermarket_id)
           .single();
         if (supermarketError || !supermarket) {
           console.warn('Supermarket not found for product:', product.itemId, 'Error:', supermarketError);
         } else {
           storeName = supermarket.name;
+          address = supermarket.address;
         }
       }
 
@@ -432,7 +540,7 @@ export default function CartPage() {
       if (existingItem) {
         existingItem.quantity += 1;
       } else {
-        updatedCart.push({ ...product, quantity: 1, storeName });
+        updatedCart.push({ ...product, quantity: 1, storeName, address });
       }
 
       setCartItems(updatedCart);
@@ -648,7 +756,8 @@ export default function CartPage() {
             supermarket_id: newProduct.supermarket_id,
             image: newProduct.image,
             storeName: newProduct.storeName,
-            variations: newProduct.variations
+            variations: newProduct.variations,
+            address: newProduct.address
           };
         }
         return item;
@@ -829,7 +938,7 @@ export default function CartPage() {
                         setAddressLoading(true);
                         setAddressError("");
                         try {
-                          const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(newAddress)}&key=${GOOGLE_MAPS_API_KEY}`);
+                          const res = await fetch(`/api/geocode?address=${encodeURIComponent(newAddress)}`);
                           const data = await res.json();
                           if (data.status === "OK" && data.results.length > 0) {
                             const address = data.results[0].formatted_address;
@@ -956,6 +1065,19 @@ export default function CartPage() {
                                     </span>
                                   </div>
                                 )}
+                                {item.address && (
+                                  <div className="mt-1 flex items-center gap-2">
+                                    <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                                      {durationsLoading ? (
+                                        'Calculating...'
+                                      ) : storeDurations[item.address] ? (
+                                        `Est. delivery: ${storeDurations[item.address].text}`
+                                      ) : (
+                                        'Delivery: N/A'
+                                      )}
+                                    </span>
+                                  </div>
+                                )}
                                 <div className="mt-3 flex items-center justify-between">
                                   <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200">
                                     <button
@@ -1019,6 +1141,12 @@ export default function CartPage() {
                       const options = storeOptions[item.name?.trim()] || [];
                       if (!options.length) return null;
 
+                      const sortedOptions = [...options].sort((a, b) => {
+                        const durA = storeDurations[a.address]?.value || Infinity;
+                        const durB = storeDurations[b.address]?.value || Infinity;
+                        return durA - durB;
+                      });
+
                       const normalizedImages = normalizeImagePath(item.image);
                       const imageUrl = normalizeImageUrl(normalizedImages[0] || '/placeholder-product.jpg');
 
@@ -1037,7 +1165,7 @@ export default function CartPage() {
                             <h3 className="text-lg font-semibold text-gray-900">{item.name}</h3>
                           </div>
                           <div className="space-y-3">
-                            {options.map((opt) => {
+                            {sortedOptions.map((opt) => {
                               const optImages = normalizeImagePath(opt.image);
                               const optImageUrl = normalizeImageUrl(optImages[0] || '/placeholder-product.jpg');
 
@@ -1067,6 +1195,19 @@ export default function CartPage() {
                                   </div>
                                   <div className="flex items-center gap-4">
                                     <span className="text-gray-900">${opt.price.toFixed(2)}</span>
+                                    {durationsLoading ? (
+                                      <span className="text-gray-600 text-sm bg-gray-100 px-3 py-1 rounded-full">
+                                        Calculating...
+                                      </span>
+                                    ) : storeDurations[opt.address] ? (
+                                      <span className="text-gray-600 text-sm bg-gray-100 px-3 py-1 rounded-full">
+                                        Est. delivery: {storeDurations[opt.address].text}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-600 text-sm bg-gray-100 px-3 py-1 rounded-full">
+                                        N/A
+                                      </span>
+                                    )}
                                     <button
                                       onClick={() => handleSwitchStore(item.itemId, opt)}
                                       className="px-4 py-2 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
@@ -1083,7 +1224,7 @@ export default function CartPage() {
                       );
                     })}
                   {Object.keys(storeOptions).every((name) => storeOptions[name].length === 0) && (
-                    <p className="text-gray-600 text-center">No alternative stores available for your items.</p>
+                    <p className="text-gray-600 text-center">No alternative stores available for your items. Please ensure stores have valid addresses.</p>
                   )}
                 </div>
               )}
