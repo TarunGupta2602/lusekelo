@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -1065,19 +1064,17 @@ export default function CartPage() {
                                     </span>
                                   </div>
                                 )}
-                                {item.address && (
-                                  <div className="mt-1 flex items-center gap-2">
-                                    <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
-                                      {durationsLoading ? (
-                                        'Calculating...'
-                                      ) : storeDurations[item.address] ? (
-                                        `Est. delivery: ${storeDurations[item.address].text}`
-                                      ) : (
-                                        'Delivery: N/A'
-                                      )}
-                                    </span>
-                                  </div>
-                                )}
+                                <div className="mt-1 flex items-center gap-2">
+                                  <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                                    {durationsLoading ? (
+                                      'Calculating...'
+                                    ) : storeDurations[item.address]?.text ? (
+                                      `Est. delivery: ${storeDurations[item.address].text}`
+                                    ) : (
+                                      'Delivery: N/A'
+                                    )}
+                                  </span>
+                                </div>
                                 <div className="mt-3 flex items-center justify-between">
                                   <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200">
                                     <button

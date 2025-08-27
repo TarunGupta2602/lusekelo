@@ -1,9 +1,19 @@
-
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
 import { FaUserEdit, FaHistory, FaMapMarkerAlt, FaHeadset, FaHeart, FaSignOutAlt, FaArrowLeft, FaTrashAlt, FaTimes } from "react-icons/fa";
+
+const normalizeImagePath = (path) => {
+  if (!path) return ['/placeholder-product.jpg'];
+  if (Array.isArray(path)) {
+    const normalized = path
+      .map((p) => (p ? p.replace(/^(\.\.\/)+assets\//, '/') : null))
+      .filter((p) => p);
+    return normalized.length > 0 ? normalized : ['/placeholder-product.jpg'];
+  }
+  return [path.replace(/^(\.\.\/)+assets\//, '/')];
+};
 
 export function ProfileSidebar({ onClose }) {
   const [user, setUser] = useState(null);
@@ -15,8 +25,11 @@ export function ProfileSidebar({ onClose }) {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [addresses, setAddresses] = useState([]);
   const [addressesLoading, setAddressesLoading] = useState(false);
+  const [wishlist, setWishlist] = useState([]);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
   const [showAddresses, setShowAddresses] = useState(false);
+  const [showWishlist, setShowWishlist] = useState(false);
   const [error, setError] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [deleteType, setDeleteType] = useState(null); // 'order' or 'address'
@@ -93,6 +106,43 @@ export function ProfileSidebar({ onClose }) {
     } catch (err) {
       setError("Error fetching addresses: " + err.message);
       setAddressesLoading(false);
+    }
+  };
+
+  const fetchWishlist = async () => {
+    if (!user) return;
+    setWishlistLoading(true);
+    setError("");
+
+    try {
+      const { data: wishlistData, error: wishlistError } = await supabase
+        .from("wishlists")
+        .select("items")
+        .eq("user_id", user.id)
+        .single();
+
+      if (wishlistError) throw wishlistError;
+
+      const productIds = wishlistData?.items || [];
+
+      if (productIds.length === 0) {
+        setWishlist([]);
+        setWishlistLoading(false);
+        return;
+      }
+
+      const { data: productsData, error: productsError } = await supabase
+        .from("products")
+        .select("id, name, price, image, description")
+        .in("id", productIds);
+
+      if (productsError) throw productsError;
+
+      setWishlist(productsData || []);
+      setWishlistLoading(false);
+    } catch (err) {
+      setError("Error fetching wishlist: " + err.message);
+      setWishlistLoading(false);
     }
   };
 
@@ -256,13 +306,22 @@ export function ProfileSidebar({ onClose }) {
   const handleOrderHistoryClick = () => {
     setShowOrderHistory(true);
     setShowAddresses(false);
+    setShowWishlist(false);
     fetchOrders();
   };
 
   const handleAddressesClick = () => {
     setShowAddresses(true);
     setShowOrderHistory(false);
+    setShowWishlist(false);
     fetchAddresses();
+  };
+
+  const handleWishlistClick = () => {
+    setShowWishlist(true);
+    setShowOrderHistory(false);
+    setShowAddresses(false);
+    fetchWishlist();
   };
 
   if (loading || !user) return null;
@@ -312,7 +371,7 @@ export function ProfileSidebar({ onClose }) {
                     {order.products?.image && (
                       <div className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-gray-600/50 shadow-sm">
                         <Image
-                          src={order.products.image}
+                          src={normalizeImagePath(order.products.image)[0]}
                           alt={order.products.name || "Product"}
                           width={80}
                           height={80}
@@ -499,6 +558,67 @@ export function ProfileSidebar({ onClose }) {
             </div>
           )}
         </div>
+      ) : showWishlist ? (
+        <div className="p-6 flex flex-col min-h-full">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-3xl font-bold text-white tracking-tight">Wishlist</h2>
+            <button
+              onClick={() => setShowWishlist(false)}
+              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-5 py-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm"
+            >
+              <FaArrowLeft className="text-lg" />
+              Back
+            </button>
+          </div>
+          {error && (
+            <p className="text-red-400 bg-red-900/20 p-4 rounded-xl mb-8 text-sm shadow-md">
+              {error}
+            </p>
+          )}
+          {wishlistLoading ? (
+            <div className="flex justify-center items-center h-40">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-3 border-b-3 border-blue-500"></div>
+            </div>
+          ) : wishlist.length === 0 ? (
+            <p className="text-gray-400 text-center py-16 text-lg">No items in your wishlist.</p>
+          ) : (
+            <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+              {wishlist.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-gray-800/50 backdrop-blur-md rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/50"
+                >
+                  <div className="flex items-start gap-5">
+                    {item.image && item.image.length > 0 && (
+                      <div className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-gray-600/50 shadow-sm">
+                        <Image
+                          src={normalizeImagePath(item.image)[0]}
+                          alt={item.name || "Product"}
+                          width={80}
+                          height={80}
+                          className="object-cover w-full h-full scale-105 transition-transform duration-300 hover:scale-110"
+                        />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <h3 className="text-xl font-semibold text-white line-clamp-1">
+                        {item.name || "Unknown Product"}
+                      </h3>
+                      <p className="text-sm text-gray-300 mt-1 line-clamp-2">
+                        {item.description || "No description available"}
+                      </p>
+                      {item.price && (
+                        <p className="text-sm text-gray-200 mt-2">
+                          Price: ₹{item.price.toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
         <>
           <div className="flex flex-col items-center py-8 px-6 bg-gradient-to-b from-gray-900 to-black relative">
@@ -587,8 +707,12 @@ export function ProfileSidebar({ onClose }) {
                 icon: <FaMapMarkerAlt />,
                 onClick: handleAddressesClick,
               },
+              {
+                label: "Wishlist",
+                icon: <FaHeart />,
+                onClick: handleWishlistClick,
+              },
               { label: "Customer Support", icon: <FaHeadset /> },
-              { label: "Wishlist", icon: <FaHeart /> },
             ].map((item) => (
               <div
                 key={item.label}

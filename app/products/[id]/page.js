@@ -2,10 +2,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Star, ShoppingCart, Plus, Minus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Star, ShoppingCart, Plus, Minus, Heart } from 'lucide-react';
 import Image from 'next/image';
 
-// Initialize Supabase client (for cart functionality only)
+// Initialize Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -31,7 +31,9 @@ export default function ProductDetailPage({ params }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedVariation, setSelectedVariation] = useState(null);
   const [cartMessage, setCartMessage] = useState('');
+  const [wishlistMessage, setWishlistMessage] = useState('');
   const [user, setUser] = useState(null);
+  const [isInWishlist, setIsInWishlist] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const scrollContainerRef = useRef(null);
 
@@ -56,27 +58,38 @@ export default function ProductDetailPage({ params }) {
   }, []);
 
   useEffect(() => {
-    const fetchProduct = async () => {
+    const fetchProductAndWishlist = async () => {
       if (!resolvedParams) return;
 
       const { id } = resolvedParams;
       if (!id) return;
 
       try {
-        // Use API route to fetch product data
+        // Fetch product data
         const response = await fetch(`/api/products/${id}`);
-        
         if (!response.ok) {
           throw new Error('Failed to fetch product');
         }
-        
         const data = await response.json();
-        
         setProduct(data.product);
         setRelatedProducts(data.relatedProducts || []);
-        
         if (data.product.variations && data.product.variations.length > 0) {
           setSelectedVariation(data.product.variations[0]);
+        }
+
+        // Check if product is in user's wishlist
+        if (user) {
+          const { data: wishlistData, error: wishlistError } = await supabase
+            .from('wishlists')
+            .select('items')
+            .eq('user_id', user.id)
+            .single();
+
+          if (wishlistError && wishlistError.code !== 'PGRST116') {
+            console.error('Error fetching wishlist:', wishlistError);
+          } else if (wishlistData && wishlistData.items) {
+            setIsInWishlist(wishlistData.items.includes(data.product.id));
+          }
         }
       } catch (err) {
         console.error('Error fetching product:', err);
@@ -87,8 +100,8 @@ export default function ProductDetailPage({ params }) {
       }
     };
 
-    fetchProduct();
-  }, [resolvedParams]);
+    fetchProductAndWishlist();
+  }, [resolvedParams, user]);
 
   // Migrate guest cart to DB when user logs in
   useEffect(() => {
@@ -224,6 +237,70 @@ export default function ProductDetailPage({ params }) {
       console.error('Error in handleAddToCart:', err);
       setCartMessage('An error occurred while adding to cart.');
       setTimeout(() => setCartMessage(''), 3000);
+    }
+  };
+
+  const handleToggleWishlist = async () => {
+    if (!user) {
+      setWishlistMessage('Please sign in to add to wishlist.');
+      setTimeout(() => setWishlistMessage(''), 3000);
+      return;
+    }
+
+    if (!product) return;
+
+    try {
+      const { data: wishlistData, error: fetchError } = await supabase
+        .from('wishlists')
+        .select('items')
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Error fetching wishlist:', fetchError);
+        setWishlistMessage('Error accessing wishlist.');
+        setTimeout(() => setWishlistMessage(''), 3000);
+        return;
+      }
+
+      let items = wishlistData?.items || [];
+      const isCurrentlyInWishlist = items.includes(product.id);
+
+      if (isCurrentlyInWishlist) {
+        // Remove from wishlist
+        items = items.filter((id) => id !== product.id);
+        setIsInWishlist(false);
+        setWishlistMessage('Removed from wishlist!');
+      } else {
+        // Add to wishlist
+        items.push(product.id);
+        setIsInWishlist(true);
+        setWishlistMessage('Added to wishlist!');
+      }
+
+      const { error: upsertError } = await supabase
+        .from('wishlists')
+        .upsert(
+          {
+            user_id: user.id,
+            items,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
+
+      if (upsertError) {
+        console.error('Error updating wishlist:', upsertError);
+        setWishlistMessage('Error updating wishlist.');
+      } else {
+        window.dispatchEvent(new Event('wishlistUpdated'));
+      }
+
+      setTimeout(() => setWishlistMessage(''), 3000);
+    } catch (err) {
+      console.error('Error in handleToggleWishlist:', err);
+      setWishlistMessage('An error occurred while updating wishlist.');
+      setTimeout(() => setWishlistMessage(''), 3000);
     }
   };
 
@@ -419,11 +496,22 @@ export default function ProductDetailPage({ params }) {
                 <ShoppingCart className="w-5 h-5" />
                 <span>Add to cart</span>
               </button>
+              <button
+                onClick={handleToggleWishlist}
+                className={`flex items-center justify-center px-6 py-3 rounded-lg font-medium transition-colors space-x-2 ${
+                  isInWishlist
+                    ? 'bg-red-100 hover:bg-red-200 text-red-700'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
+              >
+                <Heart className={`w-5 h-5 ${isInWishlist ? 'fill-red-700' : ''}`} />
+                <span>{isInWishlist ? 'Remove from Wishlist' : 'Add to Wishlist'}</span>
+              </button>
             </div>
 
-            {cartMessage && (
+            {(cartMessage || wishlistMessage) && (
               <div className="bg-green-100 border border-green-300 text-green-700 px-4 py-3 rounded-lg text-sm">
-                {cartMessage}
+                {cartMessage || wishlistMessage}
               </div>
             )}
           </div>
