@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -12,7 +11,7 @@ export default function CreateStore() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     name: '',
-    location: '',
+    address: '',
     main_image: '',
     gallery_images: [],
   });
@@ -150,7 +149,7 @@ export default function CreateStore() {
       setLoading(true);
 
       // Validate required fields
-      if (!formData.name || !formData.location) {
+      if (!formData.name || !formData.address) {
         toast.error('Please fill in all required fields.');
         setLoading(false);
         return;
@@ -178,7 +177,7 @@ export default function CreateStore() {
         .from('supermarkets')
         .insert({
           name: formData.name,
-          location: formData.location,
+          address: formData.address,
           main_image: mainImageUrl || null,
           gallery_images: galleryImageUrls,
           vendor_id: user.id,
@@ -220,14 +219,14 @@ export default function CreateStore() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
             <input
               type="text"
-              name="location"
-              value={formData.location}
+              name="address"
+              value={formData.address}
               onChange={handleInputChange}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 text-gray-800 placeholder-gray-400"
-              placeholder="Enter store location (e.g., city)"
+              placeholder="Enter store address (e.g., 123 Main St, City, Country)"
               required
             />
           </div>

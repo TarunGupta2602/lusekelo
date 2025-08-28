@@ -18,7 +18,7 @@ export async function GET(request) {
         main_image,
         gallery_images,
         vendor_id,
-        location,
+        address,
         created_at,
         price
       `);

@@ -37,7 +37,6 @@ const normalizeImageUrl = (url) => {
 };
 
 export default function CartPage() {
-  // Address from Supabase
   const [userAddress, setUserAddress] = useState(null);
   const [editingAddress, setEditingAddress] = useState(false);
   const [newAddress, setNewAddress] = useState("");
@@ -61,7 +60,6 @@ export default function CartPage() {
       try {
         const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError || !userData?.user) {
-          console.error('Error fetching user:', userError);
           setUser(null);
           setUserAddress(null);
           setAuthChecked(true);
@@ -69,29 +67,16 @@ export default function CartPage() {
         }
 
         setUser(userData.user);
-        console.log('Logged-in user ID:', userData.user.id);
 
-        // Fetch the last used address for the user
-        let { data: addressData, error: addressError } = await supabase
+        // Fetch the user's address, prioritizing is_last_used
+        const { data: addressData, error: addressError } = await supabase
           .from('addresses')
           .select('id, full_address, is_last_used, created_at')
           .eq('user_id', userData.user.id)
-          .eq('is_last_used', true)
+          .order('is_last_used', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(1)
           .single();
-
-        console.log('Address query (is_last_used):', { addressData, addressError });
-
-        // If no address with is_last_used: true, fetch any address
-        if (!addressData || addressError?.code === 'PGRST116') {
-          ({ data: addressData, error: addressError } = await supabase
-            .from('addresses')
-            .select('id, full_address, is_last_used, created_at')
-            .eq('user_id', userData.user.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single());
-          console.log('Fallback address query:', { addressData, addressError });
-        }
 
         if (addressError && addressError.code !== 'PGRST116') {
           console.error('Error fetching address:', addressError);
@@ -100,7 +85,6 @@ export default function CartPage() {
         } else if (addressData) {
           setUserAddress({ id: addressData.id, address: addressData.full_address });
         } else {
-          console.log('No address found for user:', userData.user.id);
           setUserAddress(null);
         }
       } catch (err) {
@@ -121,26 +105,14 @@ export default function CartPage() {
         setAuthChecked(true);
         // Fetch address for newly signed-in user
         const fetchAddress = async () => {
-          console.log('Fetching address for signed-in user ID:', session.user.id);
-          let { data: addressData, error: addressError } = await supabase
+          const { data: addressData, error: addressError } = await supabase
             .from('addresses')
             .select('id, full_address, is_last_used, created_at')
             .eq('user_id', session.user.id)
-            .eq('is_last_used', true)
+            .order('is_last_used', { ascending: false })
+            .order('created_at', { ascending: false })
+            .limit(1)
             .single();
-
-          console.log('Address query (is_last_used, signed-in):', { addressData, addressError });
-
-          if (!addressData || addressError?.code === 'PGRST116') {
-            ({ data: addressData, error: addressError } = await supabase
-              .from('addresses')
-              .select('id, full_address, is_last_used, created_at')
-              .eq('user_id', session.user.id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single());
-            console.log('Fallback address query (signed-in):', { addressData, addressError });
-          }
 
           if (addressError && addressError.code !== 'PGRST116') {
             console.error('Error fetching address:', addressError);
@@ -149,7 +121,6 @@ export default function CartPage() {
           } else if (addressData) {
             setUserAddress({ id: addressData.id, address: addressData.full_address });
           } else {
-            console.log('No address found for user:', session.user.id);
             setUserAddress(null);
           }
         };
@@ -253,7 +224,6 @@ export default function CartPage() {
 
       if (!user) {
         cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
-        console.log('Guest cart before processing:', cart);
         cart = await Promise.all(cart.map(async (item) => {
           if (!item.storeName || item.storeName === 'Unknown Store' || !item.address) {
             const { data: supermarket, error } = await supabase
@@ -261,7 +231,6 @@ export default function CartPage() {
               .select('name, address')
               .eq('id', item.supermarket_id)
               .single();
-            console.log('Supermarket query for item:', item.itemId, 'Result:', supermarket, 'Error:', error);
             return {
               ...item,
               storeName: error || !supermarket ? 'N/A' : supermarket.name,
@@ -270,7 +239,6 @@ export default function CartPage() {
           }
           return item;
         }));
-        console.log('Guest cart after processing:', cart);
       } else {
         const { data, error } = await supabase
           .from('carts')
@@ -278,7 +246,6 @@ export default function CartPage() {
           .eq('user_id', user.id)
           .single();
 
-        console.log('Supabase cart data:', data, 'Error:', error);
         if (error && error.code !== 'PGRST116') {
           console.error('Error fetching cart:', error);
           setErrorMessage('Failed to fetch cart.');
@@ -286,7 +253,6 @@ export default function CartPage() {
           return;
         }
         cart = data?.store_carts || [];
-        console.log('Cart before processing:', cart);
         cart = await Promise.all(cart.map(async (item) => {
           if (!item.storeName || item.storeName === 'Unknown Store' || !item.address) {
             const { data: supermarket, error } = await supabase
@@ -294,7 +260,6 @@ export default function CartPage() {
               .select('name, address')
               .eq('id', item.supermarket_id)
               .single();
-            console.log('Supermarket query for item:', item.itemId, 'Result:', supermarket, 'Error:', error);
             return {
               ...item,
               storeName: error || !supermarket ? 'N/A' : supermarket.name,
@@ -303,7 +268,6 @@ export default function CartPage() {
           }
           return item;
         }));
-        console.log('Cart after processing:', cart);
       }
 
       setCartItems(cart);
@@ -355,8 +319,6 @@ export default function CartPage() {
           continue;
         }
 
-        console.log(`Store options for "${productName}":`, data);
-
         if (data && data.length) {
           options[productName] = data
             .filter(p => !excludedSupermarketIds.includes(p.supermarket_id) && p.supermarkets?.address)
@@ -379,7 +341,6 @@ export default function CartPage() {
           console.warn(`No store options found for name "${productName}"`);
         }
       }
-      console.log('Final store options:', options);
       setStoreOptions(options);
     } catch (err) {
       console.error('Error fetching store options:', err);
@@ -407,10 +368,7 @@ export default function CartPage() {
   useEffect(() => {
     const fetchDurations = async () => {
       if (!userAddress?.address) {
-        console.warn('Missing user address');
         setStoreDurations({});
-        setErrorMessage('Please set a delivery address to calculate delivery times.');
-        setTimeout(() => setErrorMessage(''), 3000);
         return;
       }
 
@@ -422,7 +380,6 @@ export default function CartPage() {
         }
       });
 
-      // Include cart item addresses for duration calculation
       cartItems.forEach(item => {
         if (item.address && !uniqueStores.has(item.supermarket_id)) {
           uniqueStores.set(item.supermarket_id, item.address);
@@ -430,15 +387,11 @@ export default function CartPage() {
       });
 
       if (uniqueStores.size === 0) {
-        console.log('No valid store addresses found');
         setStoreDurations({});
-        setErrorMessage('No valid store addresses available to calculate delivery times.');
-        setTimeout(() => setErrorMessage(''), 3000);
         return;
       }
 
       const destinations = Array.from(uniqueStores.values());
-      console.log('Fetching durations for:', { origin: userAddress.address, destinations });
       try {
         setDurationsLoading(true);
         const res = await fetch('/api/distance-matrix', {
@@ -454,13 +407,10 @@ export default function CartPage() {
 
         if (!res.ok) {
           const errorData = await res.json();
-          console.error('Distance Matrix API error:', errorData);
           throw new Error(`HTTP error! Status: ${res.status}, Details: ${errorData.error || 'Unknown error'}`);
         }
 
         const data = await res.json();
-        console.log('Distance Matrix API Response:', data);
-
         if (data.status === 'OK' && data.rows[0]) {
           const newDurations = {};
           data.rows[0].elements.forEach((element, idx) => {
@@ -468,29 +418,24 @@ export default function CartPage() {
               const address = destinations[idx];
               newDurations[address] = {
                 text: element.duration.text,
-                value: element.duration.value // Duration in seconds for sorting
+                value: element.duration.value
               };
             } else {
-              console.warn(`No duration available for address: ${destinations[idx]}`);
-              newDurations[destinations[idx]] = { text: 'N/A', value: Infinity };
+              const address = destinations[idx];
+              newDurations[address] = { text: 'N/A', value: Infinity };
             }
           });
           setStoreDurations(newDurations);
         } else {
-          console.error('Distance Matrix API error:', data.error, data.details || 'Unknown error');
           setStoreDurations(
             Object.fromEntries(destinations.map(dest => [dest, { text: 'N/A', value: Infinity }]))
           );
-          setErrorMessage('Failed to fetch delivery times. Please try again later.');
-          setTimeout(() => setErrorMessage(''), 3000);
         }
       } catch (err) {
         console.error('Error fetching durations:', err.message);
         setStoreDurations(
           Object.fromEntries(destinations.map(dest => [dest, { text: 'N/A', value: Infinity }]))
         );
-        setErrorMessage('Failed to fetch delivery times. Please try again later.');
-        setTimeout(() => setErrorMessage(''), 3000);
       } finally {
         setDurationsLoading(false);
       }
@@ -510,7 +455,6 @@ export default function CartPage() {
 
   const handleAddToCart = async (product) => {
     if (!product || !product.product_id || !product.itemId) {
-      console.error('Invalid product data:', product);
       setErrorMessage('Invalid product data.');
       setTimeout(() => setErrorMessage(''), 3000);
       return;
@@ -526,7 +470,7 @@ export default function CartPage() {
           .eq('id', product.supermarket_id)
           .single();
         if (supermarketError || !supermarket) {
-          console.warn('Supermarket not found for product:', product.itemId, 'Error:', supermarketError);
+          console.warn('Supermarket not found for product:', product.itemId);
         } else {
           storeName = supermarket.name;
           address = supermarket.address;
@@ -806,6 +750,7 @@ export default function CartPage() {
     }
   };
 
+  // Show loading state while authentication or cart items are being fetched
   if (!authChecked || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -851,430 +796,429 @@ export default function CartPage() {
     );
   }
 
-  if (cartItems.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className="container mx-auto px-4 sm:px-6 py-8 pt-20 sm:pt-24">
-          <div className="max-w-lg mx-auto text-center">
-            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8 sm:p-12">
-              <div className="w-24 h-24 sm:w-32 sm:h-32 mx-auto mb-6 sm:mb-8 bg-gradient-to-br from-blue-100 to-blue-50 rounded-full flex items-center justify-center">
-                <HiOutlineShoppingBag className="text-4xl sm:text-6xl text-blue-400" />
-              </div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Your cart is empty</h1>
-              <p className="text-gray-600 mb-6 sm:mb-8 text-sm sm:text-base leading-relaxed">
-                Discover amazing products and start building your perfect collection.
-              </p>
-              <Link href="/">
-                <button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold shadow-lg transition-all duration-200 transform hover:scale-105 flex items-center gap-2 sm:gap-3 mx-auto text-sm sm:text-base">
-                  <FaShoppingBag className="text-base sm:text-lg" />
-                  Start Shopping
-                </button>
-              </Link>
-            </div>
-          </div>
-        </div>
-        <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
-      </div>
-    );
-  }
-
+  // Main render: only show empty cart UI if cartItems is empty
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="container mx-auto px-4 sm:px-6 py-8 pt-20 sm:pt-24">
         <div className="max-w-6xl mx-auto">
-          <div className="mb-6 sm:mb-8">
-            <div className="flex items-center gap-3 sm:gap-4 mb-2">
-              <Link href="/" className="text-gray-500 hover:text-gray-700 transition-colors">
-                <FaArrowLeft className="text-base sm:text-lg" />
-              </Link>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
-                <MdOutlineShoppingCart className="text-blue-600 text-2xl sm:text-3xl" />
-                Shopping Cart
-              </h1>
+          {cartItems.length === 0 ? (
+            <div className="max-w-lg mx-auto text-center">
+              <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8 sm:p-12">
+                <div className="w-24 h-24 sm:w-32 sm:h-32 mx-auto mb-6 sm:mb-8 bg-gradient-to-br from-blue-100 to-blue-50 rounded-full flex items-center justify-center">
+                  <HiOutlineShoppingBag className="text-4xl sm:text-6xl text-blue-400" />
+                </div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Your cart is empty</h1>
+                <p className="text-gray-600 mb-6 sm:mb-8 text-sm sm:text-base leading-relaxed">
+                  Discover amazing products and start building your perfect collection.
+                </p>
+                <Link href="/">
+                  <button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold shadow-lg transition-all duration-200 transform hover:scale-105 flex items-center gap-2 sm:gap-3 mx-auto text-sm sm:text-base">
+                    <FaShoppingBag className="text-base sm:text-lg" />
+                    Start Shopping
+                  </button>
+                </Link>
+              </div>
             </div>
-            <p className="text-gray-600 ml-8 sm:ml-10 text-sm sm:text-base">{cartItems.length} item{cartItems.length !== 1 ? 's' : ''} in your cart</p>
-          </div>
-          {/* Address Section with Enhanced UI */}
-          <div className="mb-6 sm:mb-8">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
-              <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                <svg className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Delivery Address</h2>
-                    {!editingAddress && user && (
-                      <button
-                        className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                        onClick={() => {
-                          setEditingAddress(true);
-                          setNewAddress(userAddress?.address || "");
-                          setAddressError("");
-                        }}
-                      >
-                        {userAddress ? 'Change' : 'Add Address'}
-                      </button>
-                    )}
-                  </div>
-                  {!editingAddress ? (
-                    <div className="mt-2">
-                      {userAddress?.address ? (
-                        <p className="text-gray-700 text-sm sm:text-base leading-relaxed">{userAddress.address}</p>
-                      ) : user ? (
-                        <p className="text-gray-500 italic text-sm sm:text-base">No address set. Please add a delivery address.</p>
+          ) : (
+            <>
+              <div className="mb-6 sm:mb-8">
+                <div className="flex items-center gap-3 sm:gap-4 mb-2">
+                  <Link href="/" className="text-gray-500 hover:text-gray-700 transition-colors">
+                    <FaArrowLeft className="text-base sm:text-lg" />
+                  </Link>
+                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
+                    <MdOutlineShoppingCart className="text-blue-600 text-2xl sm:text-3xl" />
+                    Shopping Cart
+                  </h1>
+                </div>
+                <p className="text-gray-600 ml-8 sm:ml-10 text-sm sm:text-base">{cartItems.length} item{cartItems.length !== 1 ? 's' : ''} in your cart</p>
+              </div>
+              {/* Address Section with Enhanced UI */}
+              <div className="mb-6 sm:mb-8">
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
+                  <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+                    <svg className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Delivery Address</h2>
+                        {!editingAddress && user && (
+                          <button
+                            className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                            onClick={() => {
+                              setEditingAddress(true);
+                              setNewAddress(userAddress?.address || "");
+                              setAddressError("");
+                            }}
+                          >
+                            {userAddress ? 'Change' : 'Add Address'}
+                          </button>
+                        )}
+                      </div>
+                      {!editingAddress ? (
+                        <div className="mt-2">
+                          {userAddress?.address ? (
+                            <p className="text-gray-700 text-sm sm:text-base leading-relaxed">{userAddress.address}</p>
+                          ) : user ? (
+                            <p className="text-gray-500 italic text-sm sm:text-base">No address set. Please add a delivery address.</p>
+                          ) : (
+                            <p className="text-gray-500 italic text-sm sm:text-base">Please sign in to set a delivery address.</p>
+                          )}
+                        </div>
                       ) : (
-                        <p className="text-gray-500 italic text-sm sm:text-base">Please sign in to set a delivery address.</p>
+                        <form
+                          className="mt-3 sm:mt-4 space-y-3 sm:space-y-4"
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            if (!newAddress || !user) return;
+                            setAddressLoading(true);
+                            setAddressError("");
+                            try {
+                              const res = await fetch(`/api/geocode?address=${encodeURIComponent(newAddress)}`);
+                              const data = await res.json();
+                              if (data.status === "OK" && data.results.length > 0) {
+                                const address = data.results[0].formatted_address;
+                                const newAddressId = crypto.randomUUID();
+                                // Update is_last_used to false for all existing addresses
+                                await supabase
+                                  .from('addresses')
+                                  .update({ is_last_used: false })
+                                  .eq('user_id', user.id);
+                                // Insert new address
+                                const { error: insertError } = await supabase
+                                  .from('addresses')
+                                  .insert({
+                                    id: newAddressId,
+                                    user_id: user.id,
+                                    full_address: address,
+                                    is_last_used: true,
+                                    created_at: new Date().toISOString(),
+                                  });
+                                if (insertError) {
+                                  console.error('Error saving address:', insertError);
+                                  setAddressError('Failed to save address.');
+                                  setTimeout(() => setAddressError(''), 3000);
+                                } else {
+                                  setUserAddress({ id: newAddressId, address });
+                                  setEditingAddress(false);
+                                }
+                              } else {
+                                setAddressError("Could not find location. Please try a more specific address.");
+                                setTimeout(() => setAddressError(''), 3000);
+                              }
+                            } catch (err) {
+                              console.error('Error updating address:', err);
+                              setAddressError("Failed to fetch location.");
+                              setTimeout(() => setAddressError(''), 3000);
+                            }
+                            setAddressLoading(false);
+                          }}
+                        >
+                          <input
+                            type="text"
+                            className="w-full py-2 sm:py-3 px-3 sm:px-4 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm sm:text-base"
+                            value={newAddress}
+                            onChange={e => setNewAddress(e.target.value)}
+                            placeholder="Enter your delivery address..."
+                            disabled={addressLoading}
+                          />
+                          <div className="flex gap-2 sm:gap-3">
+                            <button
+                              type="submit"
+                              className="bg-blue-600 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm sm:text-base"
+                              disabled={addressLoading || !newAddress}
+                            >
+                              {addressLoading ? "Saving..." : "Save Address"}
+                            </button>
+                            <button
+                              type="button"
+                              className="bg-gray-200 text-gray-700 px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50 text-sm sm:text-base"
+                              onClick={() => { setEditingAddress(false); setAddressError(""); }}
+                              disabled={addressLoading}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                          {addressError && (
+                            <div className="text-red-500 text-xs sm:text-sm mt-2">{addressError}</div>
+                          )}
+                        </form>
                       )}
                     </div>
-                  ) : (
-                    <form
-                      className="mt-3 sm:mt-4 space-y-3 sm:space-y-4"
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        if (!newAddress || !user) return;
-                        setAddressLoading(true);
-                        setAddressError("");
-                        try {
-                          const res = await fetch(`/api/geocode?address=${encodeURIComponent(newAddress)}`);
-                          const data = await res.json();
-                          if (data.status === "OK" && data.results.length > 0) {
-                            const address = data.results[0].formatted_address;
-                            // Update is_last_used to false for all existing addresses
-                            await supabase
-                              .from('addresses')
-                              .update({ is_last_used: false })
-                              .eq('user_id', user.id);
-                            // Insert or update the new address
-                            const { error: upsertError } = await supabase
-                              .from('addresses')
-                              .upsert({
-                                id: userAddress?.id || crypto.randomUUID(),
-                                user_id: user.id,
-                                full_address: address,
-                                is_last_used: true,
-                                created_at: new Date().toISOString(),
-                              });
-                            if (upsertError) {
-                              console.error('Error saving address:', upsertError);
-                              setAddressError('Failed to save address.');
-                              setTimeout(() => setAddressError(''), 3000);
-                            } else {
-                              setUserAddress({ id: userAddress?.id || crypto.randomUUID(), address });
-                              setEditingAddress(false);
-                            }
-                          } else {
-                            setAddressError("Could not find location. Please try a more specific address.");
-                          }
-                        } catch (err) {
-                          console.error('Error updating address:', err);
-                          setAddressError("Failed to fetch location.");
-                        }
-                        setAddressLoading(false);
-                      }}
-                    >
-                      <input
-                        type="text"
-                        className="w-full py-2 sm:py-3 px-3 sm:px-4 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm sm:text-base"
-                        value={newAddress}
-                        onChange={e => setNewAddress(e.target.value)}
-                        placeholder="Enter your delivery address..."
-                        disabled={addressLoading}
-                      />
-                      <div className="flex gap-2 sm:gap-3">
-                        <button
-                          type="submit"
-                          className="bg-blue-600 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm sm:text-base"
-                          disabled={addressLoading || !newAddress}
-                        >
-                          {addressLoading ? "Saving..." : "Save Address"}
-                        </button>
-                        <button
-                          type="button"
-                          className="bg-gray-200 text-gray-700 px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50 text-sm sm:text-base"
-                          onClick={() => { setEditingAddress(false); setAddressError(""); }}
-                          disabled={addressLoading}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                      {addressError && (
-                        <div className="text-red-500 text-xs sm:text-sm mt-2">{addressError}</div>
-                      )}
-                    </form>
-                  )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {errorMessage && (
-            <div className="mb-6 mx-auto max-w-4xl">
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 sm:px-6 py-3 sm:py-4 rounded-xl text-xs sm:text-sm flex items-center gap-2 sm:gap-3">
-                <div className="w-4 h-4 sm:w-5 sm:h-5 bg-red-200 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold">!</span>
-                </div>
-                {errorMessage}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="divide-y divide-gray-100">
-                  {cartItems.map((item, index) => {
-                    const normalizedImages = normalizeImagePath(item.image);
-                    const imageUrl = normalizeImageUrl(normalizedImages[0] || '/placeholder-product.jpg');
-
-                    return (
-                      <div key={item.itemId || index} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
-                        <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
-                          <div className="flex-shrink-0">
-                            <Link href={`/products/${item.product_id}`} className="block group">
-                              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white rounded-xl border border-gray-200 overflow-hidden group-hover:shadow-md transition-shadow">
-                                <Image
-                                  src={imageUrl}
-                                  alt={item.name || 'Product image'}
-                                  width={96}
-                                  height={96}
-                                  className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                                />
-                              </div>
-                            </Link>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-col sm:flex-row sm:justify-between gap-3 sm:gap-4">
-                              <div className="flex-1">
-                                <Link href={`/products/${item.product_id}`} className="group">
-                                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
-                                    {item.name || 'Unnamed Product'}
-                                  </h3>
-                                </Link>
-                                <div className="mt-1 sm:mt-2 text-xs sm:text-sm text-gray-600">
-                                  Store: {item.storeName === 'N/A' ? 'No supermarket assigned' : item.storeName}
-                                </div>
-                                {item.variation && (
-                                  <div className="mt-1 sm:mt-2 flex items-center gap-2">
-                                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                                      {item.variation.size && item.variation.color
-                                        ? `${item.variation.size} / ${item.variation.color}`
-                                        : item.variation.size || item.variation.color || 'Variation'}
-                                    </span>
-                                  </div>
-                                )}
-                                <div className="mt-1 sm:mt-2 flex items-center gap-2">
-                                  <span className="text-xs bg-gray-100 text-gray-600 px-2 sm:px-3 py-1 rounded-full">
-                                    {durationsLoading ? (
-                                      'Calculating...'
-                                    ) : storeDurations[item.address]?.text ? (
-                                      `Est. delivery: ${storeDurations[item.address].text}`
-                                    ) : (
-                                      'Delivery: N/A'
-                                    )}
-                                  </span>
-                                </div>
-                                <div className="mt-2 sm:mt-3 flex items-center justify-between">
-                                  <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200">
-                                    <button
-                                      onClick={() => handleDecreaseQuantity(item.itemId)}
-                                      disabled={item.quantity <= 1}
-                                      className="p-1 sm:p-2 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-l-lg transition-colors"
-                                      aria-label="Decrease quantity"
-                                    >
-                                      <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
-                                      </svg>
-                                    </button>
-                                    <span className="px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm font-semibold bg-white border-x border-gray-200 min-w-[2.5rem] sm:min-w-[3rem] text-center">
-                                      {item.quantity || 1}
-                                    </span>
-                                    <button
-                                      onClick={() => handleIncreaseQuantity(item.itemId)}
-                                      className="p-1 sm:p-2 hover:bg-gray-100 rounded-r-lg transition-colors"
-                                      aria-label="Increase quantity"
-                                    >
-                                      <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                                      </svg>
-                                    </button>
-                                  </div>
-                                  <button
-                                    onClick={() => handleRemoveItem(item.itemId)}
-                                    className="text-gray-400 hover:text-red-500 p-1 sm:p-2 rounded-lg hover:bg-red-50 transition-colors group"
-                                    aria-label="Remove item"
-                                  >
-                                    <FaTrashAlt className="text-xs sm:text-sm group-hover:scale-110 transition-transform" />
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <div className="text-xs text-gray-500 mb-1">Unit Price</div>
-                                <div className="text-sm font-medium text-gray-700 mb-1 sm:mb-2">${Number(item.price || 0).toFixed(2)}</div>
-                                <div className="text-xs text-gray-500 mb-1">Subtotal</div>
-                                <div className="text-lg sm:text-xl font-bold text-gray-900">
-                                  ${(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              {/* Review by Stores Section */}
-              {cartItems.some(item => item.storeName !== 'N/A' && storeOptions[item.name?.trim()]?.length > 0) && (
-                <div className="mt-6 sm:mt-8 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
-                  <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6 flex items-center gap-2">
-                    <div className="w-1.5 h-5 sm:h-6 bg-blue-600 rounded-full"></div>
-                    Review by Stores
-                  </h2>
-                  {cartItems
-                    .filter(item => item.storeName !== 'N/A')
-                    .map((item) => {
-                      const options = storeOptions[item.name?.trim()] || [];
-                      if (!options.length) return null;
-
-                      const sortedOptions = [...options].sort((a, b) => {
-                        const durA = storeDurations[a.address]?.value || Infinity;
-                        const durB = storeDurations[b.address]?.value || Infinity;
-                        return durA - durB;
-                      });
-
-                      const normalizedImages = normalizeImagePath(item.image);
-                      const imageUrl = normalizeImageUrl(normalizedImages[0] || '/placeholder-product.jpg');
-
-                      return (
-                        <div key={item.itemId} className="mb-6 sm:mb-8 border-b border-gray-200 pb-4 sm:pb-6 last:border-b-0 last:pb-0">
-                          <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white rounded-xl border border-gray-200 overflow-hidden">
-                              <Image
-                                src={imageUrl}
-                                alt={item.name || 'Product image'}
-                                width={64}
-                                height={64}
-                                className="w-full h-full object-contain"
-                              />
-                            </div>
-                            <h3 className="text-base sm:text-lg font-semibold text-gray-900">{item.name}</h3>
-                          </div>
-                          <div className="space-y-3">
-                            {sortedOptions.map((opt) => {
-                              const optImages = normalizeImagePath(opt.image);
-                              const optImageUrl = normalizeImageUrl(optImages[0] || '/placeholder-product.jpg');
-
-                              return (
-                                <div
-                                  key={opt.itemId}
-                                  className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg border bg-gray-50 border-gray-200"
-                                >
-                                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
-                                    <Image
-                                      src={optImageUrl}
-                                      alt={opt.storeName}
-                                      width={48}
-                                      height={48}
-                                      className="w-full h-full object-contain"
-                                    />
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="font-medium text-gray-800 text-sm sm:text-base">{opt.storeName === 'N/A' ? 'No supermarket assigned' : opt.storeName}</div>
-                                    {opt.variations && (
-                                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full mt-1 inline-block">
-                                        {opt.variations.size && opt.variations.color
-                                          ? `${opt.variations.size} / ${opt.variations.color}`
-                                          : opt.variations.size || opt.variations.color || 'Variation'}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
-                                    <span className="text-gray-900 text-sm sm:text-base">${opt.price.toFixed(2)}</span>
-                                    {durationsLoading ? (
-                                      <span className="text-gray-600 text-xs sm:text-sm bg-gray-100 px-2 sm:px-3 py-1 rounded-full">
-                                        Calculating...
-                                      </span>
-                                    ) : storeDurations[opt.address] ? (
-                                      <span className="text-gray-600 text-xs sm:text-sm bg-gray-100 px-2 sm:px-3 py-1 rounded-full">
-                                        Est. delivery: {storeDurations[opt.address].text}
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-600 text-xs sm:text-sm bg-gray-100 px-2 sm:px-3 py-1 rounded-full">
-                                        N/A
-                                      </span>
-                                    )}
-                                    <button
-                                      onClick={() => handleSwitchStore(item.itemId, opt)}
-                                      className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 text-xs sm:text-sm w-full sm:w-auto"
-                                      disabled={opt.storeName === 'N/A'}
-                                    >
-                                      Choose
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  {Object.keys(storeOptions).every((name) => storeOptions[name].length === 0) && (
-                    <p className="text-gray-600 text-center text-sm sm:text-base">No alternative stores available for your items. Please ensure stores have valid addresses.</p>
-                  )}
+              {errorMessage && (
+                <div className="mb-6 mx-auto max-w-4xl">
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 sm:px-6 py-3 sm:py-4 rounded-xl text-xs sm:text-sm flex items-center gap-2 sm:gap-3">
+                    <div className="w-4 h-4 sm:w-5 sm:h-5 bg-red-200 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-bold">!</span>
+                    </div>
+                    {errorMessage}
+                  </div>
                 </div>
               )}
-            </div>
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 sticky top-20 sm:top-24">
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6 flex items-center gap-2">
-                  <div className="w-1.5 h-5 sm:h-6 bg-blue-600 rounded-full"></div>
-                  Order Summary
-                </h2>
-                <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal ({cartItems.length} items)</span>
-                    <span className="font-medium">${total.toFixed(2)}</span>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+                <div className="lg:col-span-2">
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="divide-y divide-gray-100">
+                      {cartItems.map((item, index) => {
+                        const normalizedImages = normalizeImagePath(item.image);
+                        const imageUrl = normalizeImageUrl(normalizedImages[0] || '/placeholder-product.jpg');
+
+                        return (
+                          <div key={item.itemId || index} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
+                            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+                              <div className="flex-shrink-0">
+                                <Link href={`/products/${item.product_id}`} className="block group">
+                                  <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white rounded-xl border border-gray-200 overflow-hidden group-hover:shadow-md transition-shadow">
+                                    <Image
+                                      src={imageUrl}
+                                      alt={item.name || 'Product image'}
+                                      width={96}
+                                      height={96}
+                                      className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                                    />
+                                  </div>
+                                </Link>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-col sm:flex-row sm:justify-between gap-3 sm:gap-4">
+                                  <div className="flex-1">
+                                    <Link href={`/products/${item.product_id}`} className="group">
+                                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+                                        {item.name || 'Unnamed Product'}
+                                      </h3>
+                                    </Link>
+                                    <div className="mt-1 sm:mt-2 text-xs sm:text-sm text-gray-600">
+                                      Store: {item.storeName === 'N/A' ? 'No supermarket assigned' : item.storeName}
+                                    </div>
+                                    {item.variation && (
+                                      <div className="mt-1 sm:mt-2 flex items-center gap-2">
+                                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                                          {item.variation.size && item.variation.color
+                                            ? `${item.variation.size} / ${item.variation.color}`
+                                            : item.variation.size || item.variation.color || 'Variation'}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div className="mt-1 sm:mt-2 flex items-center gap-2">
+                                      <span className="text-xs bg-gray-100 text-gray-600 px-2 sm:px-3 py-1 rounded-full">
+                                        {durationsLoading ? (
+                                          'Calculating...'
+                                        ) : storeDurations[item.address]?.text ? (
+                                          `Est. delivery: ${storeDurations[item.address].text}`
+                                        ) : (
+                                          'Delivery: N/A'
+                                        )}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 sm:mt-3 flex items-center justify-between">
+                                      <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200">
+                                        <button
+                                          onClick={() => handleDecreaseQuantity(item.itemId)}
+                                          disabled={item.quantity <= 1}
+                                          className="p-1 sm:p-2 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-l-lg transition-colors"
+                                          aria-label="Decrease quantity"
+                                        >
+                                          <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
+                                          </svg>
+                                        </button>
+                                        <span className="px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm font-semibold bg-white border-x border-gray-200 min-w-[2.5rem] sm:min-w-[3rem] text-center">
+                                          {item.quantity || 1}
+                                        </span>
+                                        <button
+                                          onClick={() => handleIncreaseQuantity(item.itemId)}
+                                          className="p-1 sm:p-2 hover:bg-gray-100 rounded-r-lg transition-colors"
+                                          aria-label="Increase quantity"
+                                        >
+                                          <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                      <button
+                                        onClick={() => handleRemoveItem(item.itemId)}
+                                        className="text-gray-400 hover:text-red-500 p-1 sm:p-2 rounded-lg hover:bg-red-50 transition-colors group"
+                                        aria-label="Remove item"
+                                      >
+                                        <FaTrashAlt className="text-xs sm:text-sm group-hover:scale-110 transition-transform" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <div className="text-xs text-gray-500 mb-1">Unit Price</div>
+                                    <div className="text-sm font-medium text-gray-700 mb-1 sm:mb-2">${Number(item.price || 0).toFixed(2)}</div>
+                                    <div className="text-xs text-gray-500 mb-1">Subtotal</div>
+                                    <div className="text-lg sm:text-xl font-bold text-gray-900">
+                                      ${(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Shipping</span>
-                    <span className="font-medium text-green-600">Free</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Tax</span>
-                    <span className="font-medium">Calculated at checkout</span>
-                  </div>
-                  <div className="border-t border-gray-200 pt-3 sm:pt-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-base sm:text-lg font-bold text-gray-900">Total</span>
-                      <span className="text-lg sm:text-2xl font-bold text-blue-600">${total.toFixed(2)}</span>
+                  {/* Review by Stores Section */}
+                  {cartItems.some(item => item.storeName !== 'N/A' && storeOptions[item.name?.trim()]?.length > 0) && (
+                    <div className="mt-6 sm:mt-8 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
+                      <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6 flex items-center gap-2">
+                        <div className="w-1.5 h-5 sm:h-6 bg-blue-600 rounded-full"></div>
+                        Review by Stores
+                      </h2>
+                      {cartItems
+                        .filter(item => item.storeName !== 'N/A')
+                        .map((item) => {
+                          const options = storeOptions[item.name?.trim()] || [];
+                          if (!options.length) return null;
+
+                          const sortedOptions = [...options].sort((a, b) => {
+                            const durA = storeDurations[a.address]?.value || Infinity;
+                            const durB = storeDurations[b.address]?.value || Infinity;
+                            return durA - durB;
+                          });
+
+                          const normalizedImages = normalizeImagePath(item.image);
+                          const imageUrl = normalizeImageUrl(normalizedImages[0] || '/placeholder-product.jpg');
+
+                          return (
+                            <div key={item.itemId} className="mb-6 sm:mb-8 border-b border-gray-200 pb-4 sm:pb-6 last:border-b-0 last:pb-0">
+                              <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+                                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white rounded-xl border border-gray-200 overflow-hidden">
+                                  <Image
+                                    src={imageUrl}
+                                    alt={item.name || 'Product image'}
+                                    width={64}
+                                    height={64}
+                                    className="w-full h-full object-contain"
+                                  />
+                                </div>
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-900">{item.name}</h3>
+                              </div>
+                              <div className="space-y-3">
+                                {sortedOptions.map((opt) => {
+                                  const optImages = normalizeImagePath(opt.image);
+                                  const optImageUrl = normalizeImageUrl(optImages[0] || '/placeholder-product.jpg');
+
+                                  return (
+                                    <div
+                                      key={opt.itemId}
+                                      className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg border bg-gray-50 border-gray-200"
+                                    >
+                                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
+                                        <Image
+                                          src={optImageUrl}
+                                          alt={opt.storeName}
+                                          width={48}
+                                          height={48}
+                                          className="w-full h-full object-contain"
+                                        />
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="font-medium text-gray-800 text-sm sm:text-base">{opt.storeName === 'N/A' ? 'No supermarket assigned' : opt.storeName}</div>
+                                        {opt.variations && (
+                                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full mt-1 inline-block">
+                                            {opt.variations.size && opt.variations.color
+                                              ? `${opt.variations.size} / ${opt.variations.color}`
+                                              : opt.variations.size || opt.variations.color || 'Variation'}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
+                                        <span className="text-gray-900 text-sm sm:text-base">${opt.price.toFixed(2)}</span>
+                                        {durationsLoading ? (
+                                          <span className="text-gray-600 text-xs sm:text-sm bg-gray-100 px-2 sm:px-3 py-1 rounded-full">
+                                            Calculating...
+                                          </span>
+                                        ) : storeDurations[opt.address] ? (
+                                          <span className="text-gray-600 text-xs sm:text-sm bg-gray-100 px-2 sm:px-3 py-1 rounded-full">
+                                            Est. delivery: {storeDurations[opt.address].text}
+                                          </span>
+                                        ) : (
+                                          <span className="text-gray-600 text-xs sm:text-sm bg-gray-100 px-2 sm:px-3 py-1 rounded-full">
+                                            N/A
+                                          </span>
+                                        )}
+                                        <button
+                                          onClick={() => handleSwitchStore(item.itemId, opt)}
+                                          className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 text-xs sm:text-sm w-full sm:w-auto"
+                                          disabled={opt.storeName === 'N/A'}
+                                        >
+                                          Choose
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      {Object.keys(storeOptions).every((name) => storeOptions[name].length === 0) && (
+                        <p className="text-gray-600 text-center text-sm sm:text-base">No alternative stores available for your items. Please ensure stores have valid addresses.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="lg:col-span-1">
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 sticky top-20 sm:top-24">
+                    <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6 flex items-center gap-2">
+                      <div className="w-1.5 h-5 sm:h-6 bg-blue-600 rounded-full"></div>
+                      Order Summary
+                    </h2>
+                    <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Subtotal ({cartItems.length} items)</span>
+                        <span className="font-medium">${total.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Shipping</span>
+                        <span className="font-medium text-green-600">Free</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Tax</span>
+                        <span className="font-medium">Calculated at checkout</span>
+                      </div>
+                      <div className="border-t border-gray-200 pt-3 sm:pt-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-base sm:text-lg font-bold text-gray-900">Total</span>
+                          <span className="text-lg sm:text-2xl font-bold text-blue-600">${total.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2 sm:space-y-3">
+                      <Link href="/checkout" onClick={handleProceedToCheckout} className="block">
+                        <button className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-semibold shadow-lg transition-all duration-200 transform hover:scale-105 flex items-center justify-center gap-2 sm:gap-3 text-sm sm:text-base">
+                          <HiOutlineLockClosed className="text-base sm:text-lg" />
+                          Secure Checkout
+                        </button>
+                      </Link>
+                      <button
+                        onClick={handleClearCart}
+                        className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 sm:py-3 px-4 sm:px-6 rounded-xl font-medium transition-colors border border-gray-200 text-sm sm:text-base"
+                      >
+                        Clear Cart
+                      </button>
+                    </div>
+                    <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
+                      <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600">
+                        <FaShieldAlt className="text-green-500 flex-shrink-0" />
+                        <span>Secure payment with 256-bit SSL encryption</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="space-y-2 sm:space-y-3">
-                  <Link href="/checkout" onClick={handleProceedToCheckout} className="block">
-                    <button className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-semibold shadow-lg transition-all duration-200 transform hover:scale-105 flex items-center justify-center gap-2 sm:gap-3 text-sm sm:text-base">
-                      <HiOutlineLockClosed className="text-base sm:text-lg" />
-                      Secure Checkout
-                    </button>
-                  </Link>
-                  <button
-                    onClick={handleClearCart}
-                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 sm:py-3 px-4 sm:px-6 rounded-xl font-medium transition-colors border border-gray-200 text-sm sm:text-base"
-                  >
-                    Clear Cart
-                  </button>
-                </div>
-                <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
-                  <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600">
-                    <FaShieldAlt className="text-green-500 flex-shrink-0" />
-                    <span>Secure payment with 256-bit SSL encryption</span>
-                  </div>
-                </div>
               </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
         <CustomAuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
       </div>

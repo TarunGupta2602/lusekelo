@@ -24,7 +24,7 @@ export default function VendorProfile({ userName, userEmail, setUserName, setPro
   const [uploadError, setUploadError] = useState('');
   const [error, setLocalError] = useState('');
 
-  const USE_SIGNED_URLS = false; // Set to true for private buckets
+  const USE_SIGNED_URLS = false; // Set to true for private buckets with signed URLs; false for public buckets
 
   // Debug Supabase client and authentication
   useEffect(() => {
@@ -229,39 +229,157 @@ export default function VendorProfile({ userName, userEmail, setUserName, setPro
         console.error('User error:', userError);
         return;
       }
-      // ...existing code...
-      // (all update logic unchanged)
-      // ...existing code...
-      // After saving, force refresh profile data from DB
+
+      // Validate password if provided
+      if (newPassword || confirmPassword) {
+        if (newPassword !== confirmPassword) {
+          setLocalError('Passwords do not match.');
+          setError('Passwords do not match.');
+          return;
+        }
+        if (newPassword.length < 6) {
+          setLocalError('Password must be at least 6 characters.');
+          setError('Password must be at least 6 characters.');
+          return;
+        }
+      }
+
+      // Upload logo if a new file is selected
+      let newLogoUrl = editBusinessLogo;
+      if (logoFile) {
+        const timestamp = Date.now();
+        const logoExtension = logoFile.name.split('.').pop();
+        const logoPath = `${user.id}/logo_${timestamp}.${logoExtension}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('business-logos')
+          .upload(logoPath, logoFile, {
+            upsert: true,
+            contentType: logoFile.type,
+            metadata: { owner: user.id },
+          });
+
+        if (uploadError) {
+          uploadErrors.push(`Logo upload failed: ${uploadError.message}`);
+        } else {
+          if (USE_SIGNED_URLS) {
+            const { data: signedData, error: signedError } = await supabase.storage
+              .from('business-logos')
+              .createSignedUrl(logoPath, 31536000); // 1 year expiration
+            if (signedError) {
+              uploadErrors.push(`Failed to generate signed URL for logo: ${signedError.message}`);
+            } else {
+              newLogoUrl = signedData.signedUrl;
+            }
+          } else {
+            newLogoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/business-logos/${logoPath}`;
+          }
+        }
+      }
+
+      // Upload new KYC documents
+      let newKycDocs = [...editKycDocuments];
+      for (const file of documentFiles) {
+        const timestamp = Date.now();
+        const docPath = `${user.id}/${file.name.split('.')[0]}_${timestamp}.${file.name.split('.').pop()}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('kyc-documents')
+          .upload(docPath, file, {
+            contentType: file.type,
+            metadata: { owner: user.id },
+          });
+
+        if (uploadError) {
+          uploadErrors.push(`Document "${file.name}" upload failed: ${uploadError.message}`);
+          continue;
+        }
+
+        let docUrl;
+        if (USE_SIGNED_URLS) {
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from('kyc-documents')
+            .createSignedUrl(docPath, 31536000); // 1 year expiration
+          if (signedError) {
+            uploadErrors.push(`Failed to generate signed URL for "${file.name}": ${signedError.message}`);
+            continue;
+          }
+          docUrl = signedData.signedUrl;
+        } else {
+          docUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/kyc-documents/${docPath}`;
+        }
+        newKycDocs.push(docUrl);
+      }
+
+      // Update profile data
+      const updatedProfile = {
+        id: user.id,
+        business_name: editBusinessName,
+        business_logo: newLogoUrl,
+        tin: editTin,
+        bank_account: editBankAccount,
+        mobile_money: editMobileMoney,
+        kyc_documents: newKycDocs,
+        kyc_status: newKycDocs.length > 0 || profileData.kyc_documents?.length > 0 ? 'submitted' : profileData.kyc_status || 'not_started',
+      };
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .upsert(updatedProfile, { onConflict: ['id'] });
+
+      if (updateError) {
+        setLocalError(`Error updating profile: ${updateError.message}`);
+        setError(`Error updating profile: ${updateError.message}`);
+        console.error('Profile update error:', updateError);
+        return;
+      }
+
+      // Update password if provided
+      if (newPassword) {
+        const { error: passwordError } = await supabase.auth.updateUser({ password: newPassword });
+        if (passwordError) {
+          setLocalError(`Error updating password: ${passwordError.message}`);
+          setError(`Error updating password: ${passwordError.message}`);
+          console.error('Password update error:', passwordError);
+        }
+      }
+
+      // Fetch fresh profile data
       const { data: freshProfile, error: freshError } = await supabase
         .from('profiles')
         .select('business_name, business_logo, tin, bank_account, mobile_money, kyc_documents, kyc_status')
         .eq('id', user.id)
         .single();
+
       if (freshError) {
-        setLocalError('Error fetching updated profile: ' + freshError.message);
-        setError('Error fetching updated profile: ' + freshError.message);
+        setLocalError(`Error fetching updated profile: ${freshError.message}`);
+        setError(`Error fetching updated profile: ${freshError.message}`);
+        console.error('Fresh profile fetch error:', freshError);
       } else {
         setProfileData(freshProfile || {});
         setProfile(freshProfile || {});
+        setUserName(editBusinessName || userName);
+        setEditBusinessLogo(freshProfile?.business_logo || newLogoUrl);
+        setLogoPreview(freshProfile?.business_logo || newLogoUrl);
+        setEditKycDocuments(freshProfile?.kyc_documents || newKycDocs);
       }
-      setUserName(editBusinessName || userName);
-      setEditBusinessLogo(freshProfile?.business_logo || newLogoUrl);
-      setLogoPreview(freshProfile?.business_logo || newLogoUrl);
-      setEditKycDocuments(freshProfile?.kyc_documents || newKycDocs);
+
       setDocumentFiles([]);
       setNewPassword('');
       setConfirmPassword('');
       setIsEditing(false);
       setIsProfilePanelOpen(false);
-      alert('Profile updated successfully!' + (uploadErrors.length > 0 ? ' Note: Some uploads failed.' : ''));
+
+      const successMessage = 'Profile updated successfully!' + (uploadErrors.length > 0 ? ` Note: Some uploads failed - ${uploadErrors.join(', ')}` : '');
+      alert(successMessage);
     } catch (err) {
-      setLocalError('Unexpected error: ' + err.message);
-      setError('Unexpected error: ' + err.message);
+      setLocalError(`Unexpected error: ${err.message}`);
+      setError(`Unexpected error: ${err.message}`);
       console.error('Unexpected error in handleSaveProfile:', err);
     } finally {
       setIsLoading(false);
       if (logoPreview && logoFile) URL.revokeObjectURL(logoPreview);
+      if (uploadErrors.length > 0) {
+        setUploadError(uploadErrors.join(', '));
+      }
     }
   };
 
