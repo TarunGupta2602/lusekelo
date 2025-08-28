@@ -5,13 +5,25 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 export default function AddressSyncWrapper() {
   const supabase = createClientComponentClient();
-  const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const [isSyncing, setIsSyncing] = useState(false); // Lock to prevent concurrent syncs
-  const [lastSyncedAddress, setLastSyncedAddress] = useState(null); // Track last synced address
+
+  // Normalize address to prevent duplicates due to formatting
+  const normalizeAddress = (address) => {
+    if (!address) return "";
+    return address.trim().toLowerCase().replace(/\s+/g, " ");
+  };
 
   const syncAddress = async (session) => {
     if (isSyncing) {
       console.log("🔒 Sync already in progress, skipping");
+      return;
+    }
+
+    // Check last sync time to prevent rapid re-syncs
+    const lastSyncTime = localStorage.getItem("lastSyncTime");
+    const now = Date.now();
+    if (lastSyncTime && now - parseInt(lastSyncTime) < 5 * 60 * 1000) { // 5 minutes
+      console.log("⏳ Recently synced, skipping");
       return;
     }
 
@@ -44,111 +56,92 @@ export default function AddressSyncWrapper() {
           console.log("📍 Using saved location from localStorage:", parsedLocation);
         } catch (err) {
           console.error("❌ Error parsing localStorage:", err.message);
+          localStorage.removeItem("userLocation");
+          return;
         }
       }
 
-      // If no saved location, use geolocation
+      // If no fullAddress from localStorage, skip sync
       if (!fullAddress) {
-        if (!navigator.geolocation) {
-          console.error("❌ Geolocation not supported");
-          return;
-        }
-        try {
-          const position = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              timeout: 10000,
-              enableHighAccuracy: true,
-            });
-          });
-          const { latitude, longitude } = position.coords;
-          console.log("📍 Geolocation:", { latitude, longitude });
-
-          if (!GOOGLE_MAPS_API_KEY) {
-            console.error("❌ Google Maps API key missing");
-            return;
-          }
-          const geoRes = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`
-          );
-          const geoData = await geoRes.json();
-          console.log("🌍 Geocoding API response:", geoData);
-
-          if (geoData.status === "OK" && geoData.results.length > 0) {
-            fullAddress = geoData.results[0].formatted_address;
-            console.log("📍 Full address:", fullAddress);
-          } else {
-            console.warn("⚠️ No results from Geocoding API:", geoData.status, geoData.error_message || "No error message");
-            return;
-          }
-        } catch (err) {
-          console.error("❌ Geolocation or Geocoding error:", err.message);
-          return;
-        }
-      }
-
-      // Skip sync if the address hasn't changed
-      if (fullAddress === lastSyncedAddress) {
-        console.log("📍 Address unchanged, skipping sync");
+        console.log("⚠️ No address in localStorage, skipping sync");
         return;
       }
 
-      // Save address to Supabase, checking for duplicates
-      if (fullAddress) {
-        // Check if the address already exists for this user
-        const { data: existing, error: checkError } = await supabase
-          .from("addresses")
-          .select("id, is_last_used")
-          .eq("user_id", userId)
-          .eq("full_address", fullAddress)
-          .maybeSingle(); // Use maybeSingle to handle no results gracefully
+      // Normalize the address for comparison
+      const normalizedAddress = normalizeAddress(fullAddress);
 
-        if (checkError && checkError.code !== "PGRST116") {
-          console.error("❌ Error checking existing address:", checkError.message, checkError.details, checkError.hint);
+      // Check if the address already exists for this user
+      const { data: existingAddresses, error: checkError } = await supabase
+        .from("addresses")
+        .select("id, full_address, is_last_used")
+        .eq("user_id", userId);
+
+      if (checkError) {
+        console.error("❌ Error checking existing addresses:", checkError.message, checkError.details, checkError.hint);
+        return;
+      }
+
+      // Find if the normalized address exists
+      const existingAddress = existingAddresses.find(
+        (addr) => normalizeAddress(addr.full_address) === normalizedAddress
+      );
+
+      if (existingAddress) {
+        // Address exists, update it to be last used if not already
+        if (!existingAddress.is_last_used) {
+          const { data, error } = await supabase
+            .from("addresses")
+            .update({ is_last_used: true, created_at: new Date().toISOString() })
+            .eq("id", existingAddress.id)
+            .select();
+          if (error) {
+            console.error("❌ Address update error:", error.message, error.details, error.hint);
+          } else {
+            console.log("✅ Updated existing address:", data);
+            // Reset other addresses' is_last_used flag
+            await supabase
+              .from("addresses")
+              .update({ is_last_used: false })
+              .eq("user_id", userId)
+              .neq("id", existingAddress.id);
+            localStorage.removeItem("userLocation");
+            localStorage.setItem("lastSyncTime", now.toString());
+          }
+        } else {
+          console.log("📍 Address already marked as last used, no update needed");
+          localStorage.removeItem("userLocation");
+          localStorage.setItem("lastSyncTime", now.toString());
+        }
+      } else {
+        // Reset all existing addresses' is_last_used flag
+        const { error: resetError } = await supabase
+          .from("addresses")
+          .update({ is_last_used: false })
+          .eq("user_id", userId);
+
+        if (resetError) {
+          console.error("❌ Error resetting last used flags:", resetError.message, resetError.details, resetError.hint);
           return;
         }
 
-        if (existing) {
-          // Address exists, update only if not already marked as last used
-          if (!existing.is_last_used) {
-            const { data, error } = await supabase
-              .from("addresses")
-              .update({ is_last_used: true, created_at: new Date().toISOString() })
-              .eq("id", existing.id)
-              .select();
-            if (error) {
-              console.error("❌ Address update error:", error.message, error.details, error.hint);
-            } else {
-              console.log("✅ Updated existing address:", data);
-              localStorage.removeItem("userLocation");
-              setLastSyncedAddress(fullAddress);
-            }
-          } else {
-            console.log("📍 Address already marked as last used, no update needed");
-            localStorage.removeItem("userLocation");
-            setLastSyncedAddress(fullAddress);
-          }
+        // Insert new address
+        const { data, error } = await supabase
+          .from("addresses")
+          .insert([
+            {
+              user_id: userId,
+              full_address: fullAddress, // Store original address
+              is_last_used: true,
+            },
+          ])
+          .select();
+        if (error) {
+          console.error("❌ Address insert error:", error.message, error.details, error.hint);
         } else {
-          // No existing address, insert new one
-          const { data, error } = await supabase
-            .from("addresses")
-            .insert([
-              {
-                user_id: userId,
-                full_address: fullAddress,
-                is_last_used: true,
-              },
-            ])
-            .select();
-          if (error) {
-            console.error("❌ Address insert error:", error.message, error.details, error.hint);
-          } else {
-            console.log("✅ Address inserted successfully:", data);
-            localStorage.removeItem("userLocation");
-            setLastSyncedAddress(fullAddress);
-          }
+          console.log("✅ Address inserted successfully:", data);
+          localStorage.removeItem("userLocation");
+          localStorage.setItem("lastSyncTime", now.toString());
         }
-      } else {
-        console.warn("⚠️ No valid address to insert");
       }
     } catch (err) {
       console.error("❌ Address sync error:", err.message);

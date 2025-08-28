@@ -24,7 +24,7 @@ export default function VendorSidebar({
   };
 
   return (
-    <div className="w-full md:w-64 bg-white shadow-xl z-50 fixed md:static top-0 left-0 flex md:flex-col items-center justify-between h-12 md:h-auto px-4 md:px-0 border-b md:border-b-0 md:border-r border-gray-200 overflow-y-auto">
+    <div className="w-full md:w-64 bg-white shadow-xl z-50 fixed md:static top-0 left-0 flex md:flex-col items-center justify-between h-16 md:h-auto px-4 md:px-0 border-b md:border-b-0 md:border-r border-gray-200 overflow-y-auto">
 
       {/* Mobile Header */}
       <div className="flex items-center justify-between w-full md:hidden">

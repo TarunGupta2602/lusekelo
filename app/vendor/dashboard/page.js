@@ -1215,20 +1215,22 @@ export default function VendorDashboard() {
         )}
 
         {sidebarSection === 'Orders' && (
-          <OrdersSection
-            filteredOrders={filteredOrders}
-            ordersLoading={ordersLoading}
-            error={error}
-            orderPageNumbers={orderPageNumbers}
-            orderCurrentPage={orderCurrentPage}
-            handleOrderPageChange={handleOrderPageChange}
-            paginatedOrders={paginatedOrders}
-            handleOrderStatusChange={handleOrderStatusChange}
-            ORDER_STATUS_OPTIONS={ORDER_STATUS_OPTIONS}
-            handleDeleteOrder={handleDeleteOrder}
-            handleReturnOrder={handleReturnOrder}
-          />
-        )}
+  <OrdersSection
+    filteredOrders={filteredOrders}
+    ordersLoading={ordersLoading}
+    error={error}
+    orderPageNumbers={orderPageNumbers}
+    orderCurrentPage={orderCurrentPage}
+    handleOrderPageChange={handleOrderPageChange}
+    paginatedOrders={paginatedOrders}
+    handleOrderStatusChange={handleOrderStatusChange}
+    ORDER_STATUS_OPTIONS={ORDER_STATUS_OPTIONS}
+    handleDeleteOrder={handleDeleteOrder}
+    handleReturnOrder={handleReturnOrder}
+    setOrders={setOrders} // Added prop
+    setFilteredOrders={setFilteredOrders} // Added prop
+  />
+)}
       </div>
     </div>
   );

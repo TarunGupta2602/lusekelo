@@ -36,12 +36,20 @@ const normalizeImageUrl = (url) => {
   return url;
 };
 
+// Normalize address to prevent duplicates due to formatting
+const normalizeAddress = (address) => {
+  if (!address) return "";
+  return address.trim().toLowerCase().replace(/\s+/g, " ");
+};
+
 export default function CartPage() {
   const [userAddress, setUserAddress] = useState(null);
+  const [savedAddresses, setSavedAddresses] = useState([]);
   const [editingAddress, setEditingAddress] = useState(false);
   const [newAddress, setNewAddress] = useState("");
   const [addressLoading, setAddressLoading] = useState(false);
   const [addressError, setAddressError] = useState("");
+  const [addressSuccess, setAddressSuccess] = useState("");
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -54,41 +62,42 @@ export default function CartPage() {
   const [durationsLoading, setDurationsLoading] = useState(false);
   const router = useRouter();
 
-  // Fetch user and address
+  // Fetch user and addresses
   useEffect(() => {
-    const fetchUserAndAddress = async () => {
+    const fetchUserAndAddresses = async () => {
       try {
         const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError || !userData?.user) {
           setUser(null);
           setUserAddress(null);
+          setSavedAddresses([]);
           setAuthChecked(true);
           return;
         }
 
         setUser(userData.user);
 
-        // Fetch the user's address, prioritizing is_last_used
+        // Fetch all user addresses
         const { data: addressData, error: addressError } = await supabase
           .from('addresses')
           .select('id, full_address, is_last_used, created_at')
           .eq('user_id', userData.user.id)
           .order('is_last_used', { ascending: false })
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+          .order('created_at', { ascending: false });
 
-        if (addressError && addressError.code !== 'PGRST116') {
-          console.error('Error fetching address:', addressError);
-          setAddressError('Failed to fetch address.');
+        if (addressError) {
+          console.error('Error fetching addresses:', addressError);
+          setAddressError('Failed to fetch addresses.');
           setTimeout(() => setAddressError(''), 3000);
-        } else if (addressData) {
-          setUserAddress({ id: addressData.id, address: addressData.full_address });
-        } else {
+          setSavedAddresses([]);
           setUserAddress(null);
+        } else {
+          setSavedAddresses(addressData || []);
+          const lastUsedAddress = addressData.find(addr => addr.is_last_used) || addressData[0];
+          setUserAddress(lastUsedAddress ? { id: lastUsedAddress.id, address: lastUsedAddress.full_address } : null);
         }
       } catch (err) {
-        console.error('Unexpected error fetching user or address:', err);
+        console.error('Unexpected error fetching user or addresses:', err);
         setAddressError('An error occurred while fetching user data.');
         setTimeout(() => setAddressError(''), 3000);
       } finally {
@@ -96,38 +105,39 @@ export default function CartPage() {
       }
     };
 
-    fetchUserAndAddress();
+    fetchUserAndAddresses();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         setUser(session.user);
         setShowAuthModal(false);
         setAuthChecked(true);
-        // Fetch address for newly signed-in user
-        const fetchAddress = async () => {
+        // Fetch addresses for newly signed-in user
+        const fetchAddresses = async () => {
           const { data: addressData, error: addressError } = await supabase
             .from('addresses')
             .select('id, full_address, is_last_used, created_at')
             .eq('user_id', session.user.id)
             .order('is_last_used', { ascending: false })
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
+            .order('created_at', { ascending: false });
 
-          if (addressError && addressError.code !== 'PGRST116') {
-            console.error('Error fetching address:', addressError);
-            setAddressError('Failed to fetch address.');
+          if (addressError) {
+            console.error('Error fetching addresses:', addressError);
+            setAddressError('Failed to fetch addresses.');
             setTimeout(() => setAddressError(''), 3000);
-          } else if (addressData) {
-            setUserAddress({ id: addressData.id, address: addressData.full_address });
-          } else {
+            setSavedAddresses([]);
             setUserAddress(null);
+          } else {
+            setSavedAddresses(addressData || []);
+            const lastUsedAddress = addressData.find(addr => addr.is_last_used) || addressData[0];
+            setUserAddress(lastUsedAddress ? { id: lastUsedAddress.id, address: lastUsedAddress.full_address } : null);
           }
         };
-        fetchAddress();
+        fetchAddresses();
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setUserAddress(null);
+        setSavedAddresses([]);
         setShowAuthModal(true);
         setAuthChecked(true);
       }
@@ -750,6 +760,53 @@ export default function CartPage() {
     }
   };
 
+  const handleSelectAddress = async (addressId) => {
+    if (!user || addressLoading) return;
+    setAddressLoading(true);
+    setAddressError("");
+    setAddressSuccess("");
+    try {
+      // Reset all addresses' is_last_used flag
+      await supabase
+        .from('addresses')
+        .update({ is_last_used: false })
+        .eq('user_id', user.id);
+
+      // Set selected address as is_last_used
+      const { data: updateData, error: updateError } = await supabase
+        .from('addresses')
+        .update({
+          is_last_used: true,
+          created_at: new Date().toISOString(),
+        })
+        .eq('id', addressId)
+        .select('id, full_address')
+        .single();
+
+      if (updateError) {
+        console.error('Error selecting address:', updateError);
+        throw new Error('Failed to select address.');
+      }
+
+      setUserAddress({ id: updateData.id, address: updateData.full_address });
+      setSavedAddresses((prev) =>
+        prev.map((addr) =>
+          addr.id === addressId
+            ? { ...addr, is_last_used: true }
+            : { ...addr, is_last_used: false }
+        )
+      );
+      setAddressSuccess("Address selected successfully!");
+      setTimeout(() => setAddressSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error selecting address:', err);
+      setAddressError("Failed to select address. Please try again.");
+      setTimeout(() => setAddressError(''), 3000);
+    } finally {
+      setAddressLoading(false);
+    }
+  };
+
   // Show loading state while authentication or cart items are being fetched
   if (!authChecked || loading) {
     return (
@@ -833,7 +890,7 @@ export default function CartPage() {
                 </div>
                 <p className="text-gray-600 ml-8 sm:ml-10 text-sm sm:text-base">{cartItems.length} item{cartItems.length !== 1 ? 's' : ''} in your cart</p>
               </div>
-              {/* Address Section with Enhanced UI */}
+              {/* Address Section with Address Selection */}
               <div className="mb-6 sm:mb-8">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
                   <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
@@ -844,27 +901,75 @@ export default function CartPage() {
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Delivery Address</h2>
-                        {!editingAddress && user && (
-                          <button
-                            className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                            onClick={() => {
-                              setEditingAddress(true);
-                              setNewAddress(userAddress?.address || "");
-                              setAddressError("");
-                            }}
-                          >
-                            {userAddress ? 'Change' : 'Add Address'}
-                          </button>
+                        {user && !editingAddress && (
+                          <div className="flex gap-2 sm:gap-3">
+                            <button
+                              className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                              onClick={() => {
+                                setEditingAddress(true);
+                                setNewAddress(userAddress?.address || "");
+                                setAddressError("");
+                                setAddressSuccess("");
+                              }}
+                            >
+                              {userAddress ? 'Edit' : 'Add Address'}
+                            </button>
+                            <button
+                              className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                              onClick={() => {
+                                setEditingAddress(true);
+                                setNewAddress("");
+                                setAddressError("");
+                                setAddressSuccess("");
+                              }}
+                            >
+                              Add New
+                            </button>
+                          </div>
                         )}
                       </div>
                       {!editingAddress ? (
                         <div className="mt-2">
-                          {userAddress?.address ? (
-                            <p className="text-gray-700 text-sm sm:text-base leading-relaxed">{userAddress.address}</p>
-                          ) : user ? (
-                            <p className="text-gray-500 italic text-sm sm:text-base">No address set. Please add a delivery address.</p>
+                          {user ? (
+                            savedAddresses.length > 0 ? (
+                              <div className="space-y-3">
+                                <select
+                                  className="w-full py-2 sm:py-3 px-3 sm:px-4 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm sm:text-base"
+                                  value={userAddress?.id || ""}
+                                  onChange={(e) => {
+                                    const selectedAddress = savedAddresses.find(addr => addr.id === e.target.value);
+                                    if (selectedAddress) {
+                                      handleSelectAddress(selectedAddress.id);
+                                    }
+                                  }}
+                                  disabled={addressLoading}
+                                >
+                                  <option value="" disabled>Select an address</option>
+                                  {savedAddresses.map((addr) => (
+                                    <option key={addr.id} value={addr.id}>
+                                      {addr.full_address} {addr.is_last_used ? "(Last Used)" : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                                {userAddress ? (
+                                  <p className="text-gray-700 text-sm sm:text-base leading-relaxed">
+                                    Selected: {userAddress.address}
+                                  </p>
+                                ) : (
+                                  <p className="text-gray-500 italic text-sm sm:text-base">
+                                    Please select or add a delivery address.
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-gray-500 italic text-sm sm:text-base">
+                                No addresses saved. Please add a delivery address.
+                              </p>
+                            )
                           ) : (
-                            <p className="text-gray-500 italic text-sm sm:text-base">Please sign in to set a delivery address.</p>
+                            <p className="text-gray-500 italic text-sm sm:text-base">
+                              Please sign in to select or add a delivery address.
+                            </p>
                           )}
                         </div>
                       ) : (
@@ -872,55 +977,126 @@ export default function CartPage() {
                           className="mt-3 sm:mt-4 space-y-3 sm:space-y-4"
                           onSubmit={async (e) => {
                             e.preventDefault();
-                            if (!newAddress || !user) return;
+                            if (!newAddress || !user) {
+                              setAddressError("Please enter a valid address.");
+                              setTimeout(() => setAddressError(''), 3000);
+                              return;
+                            }
                             setAddressLoading(true);
                             setAddressError("");
+                            setAddressSuccess("");
                             try {
-                              const res = await fetch(`/api/geocode?address=${encodeURIComponent(newAddress)}`);
-                              const data = await res.json();
-                              if (data.status === "OK" && data.results.length > 0) {
-                                const address = data.results[0].formatted_address;
-                                const newAddressId = crypto.randomUUID();
-                                // Update is_last_used to false for all existing addresses
+                              const formattedAddress = newAddress.trim();
+                              const normalizedAddress = normalizeAddress(formattedAddress);
+
+                              // Check for existing address to prevent duplicates
+                              const { data: existingAddresses, error: checkError } = await supabase
+                                .from('addresses')
+                                .select('id, full_address, is_last_used')
+                                .eq('user_id', user.id);
+
+                              if (checkError) {
+                                console.error('Error checking existing addresses:', checkError);
+                                throw new Error('Failed to check existing addresses.');
+                              }
+
+                              const existingAddress = existingAddresses.find(
+                                (addr) => normalizeAddress(addr.full_address) === normalizedAddress
+                              );
+
+                              if (existingAddress) {
+                                // Update existing address
+                                const { data: updateData, error: updateError } = await supabase
+                                  .from('addresses')
+                                  .update({
+                                    full_address: formattedAddress,
+                                    is_last_used: true,
+                                    created_at: new Date().toISOString(),
+                                  })
+                                  .eq('id', existingAddress.id)
+                                  .select();
+
+                                if (updateError) {
+                                  console.error('Error updating address:', updateError);
+                                  throw new Error('Failed to update address.');
+                                }
+
+                                if (updateData && updateData.length > 0) {
+                                  // Reset other addresses' is_last_used flag
+                                  await supabase
+                                    .from('addresses')
+                                    .update({ is_last_used: false })
+                                    .eq('user_id', user.id)
+                                    .neq('id', existingAddress.id);
+
+                                  setUserAddress({ id: updateData[0].id, address: updateData[0].full_address });
+                                  setSavedAddresses((prev) =>
+                                    prev.map((addr) =>
+                                      addr.id === existingAddress.id
+                                        ? { ...addr, full_address: formattedAddress, is_last_used: true }
+                                        : { ...addr, is_last_used: false }
+                                    )
+                                  );
+                                  setEditingAddress(false);
+                                  setAddressSuccess("Address updated successfully!");
+                                  setTimeout(() => setAddressSuccess(''), 3000);
+                                }
+                              } else {
+                                // Reset all existing addresses' is_last_used flag
                                 await supabase
                                   .from('addresses')
                                   .update({ is_last_used: false })
                                   .eq('user_id', user.id);
+
                                 // Insert new address
-                                const { error: insertError } = await supabase
+                                const newAddressId = crypto.randomUUID();
+                                const { data: insertData, error: insertError } = await supabase
                                   .from('addresses')
                                   .insert({
                                     id: newAddressId,
                                     user_id: user.id,
-                                    full_address: address,
+                                    full_address: formattedAddress,
                                     is_last_used: true,
                                     created_at: new Date().toISOString(),
-                                  });
+                                  })
+                                  .select();
+
                                 if (insertError) {
                                   console.error('Error saving address:', insertError);
-                                  setAddressError('Failed to save address.');
-                                  setTimeout(() => setAddressError(''), 3000);
-                                } else {
-                                  setUserAddress({ id: newAddressId, address });
-                                  setEditingAddress(false);
+                                  throw new Error('Failed to save address.');
                                 }
-                              } else {
-                                setAddressError("Could not find location. Please try a more specific address.");
-                                setTimeout(() => setAddressError(''), 3000);
+
+                                if (insertData && insertData.length > 0) {
+                                  setUserAddress({ id: insertData[0].id, address: insertData[0].full_address });
+                                  setSavedAddresses((prev) => [
+                                    ...prev.map((addr) => ({ ...addr, is_last_used: false })),
+                                    {
+                                      id: insertData[0].id,
+                                      full_address: insertData[0].full_address,
+                                      is_last_used: true,
+                                      created_at: insertData[0].created_at,
+                                    },
+                                  ]);
+                                  setEditingAddress(false);
+                                  setAddressSuccess("Address added successfully!");
+                                  setTimeout(() => setAddressSuccess(''), 3000);
+                                }
                               }
                             } catch (err) {
                               console.error('Error updating address:', err);
-                              setAddressError("Failed to fetch location.");
+                              setAddressError("Failed to save address. Please try again.");
                               setTimeout(() => setAddressError(''), 3000);
+                            } finally {
+                              setAddressLoading(false);
                             }
-                            setAddressLoading(false);
                           }}
                         >
                           <input
                             type="text"
+                            maxLength={255}
                             className="w-full py-2 sm:py-3 px-3 sm:px-4 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm sm:text-base"
                             value={newAddress}
-                            onChange={e => setNewAddress(e.target.value)}
+                            onChange={(e) => setNewAddress(e.target.value)}
                             placeholder="Enter your delivery address..."
                             disabled={addressLoading}
                           />
@@ -935,7 +1111,11 @@ export default function CartPage() {
                             <button
                               type="button"
                               className="bg-gray-200 text-gray-700 px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50 text-sm sm:text-base"
-                              onClick={() => { setEditingAddress(false); setAddressError(""); }}
+                              onClick={() => {
+                                setEditingAddress(false);
+                                setAddressError("");
+                                setAddressSuccess("");
+                              }}
                               disabled={addressLoading}
                             >
                               Cancel
@@ -943,6 +1123,9 @@ export default function CartPage() {
                           </div>
                           {addressError && (
                             <div className="text-red-500 text-xs sm:text-sm mt-2">{addressError}</div>
+                          )}
+                          {addressSuccess && (
+                            <div className="text-green-500 text-xs sm:text-sm mt-2">{addressSuccess}</div>
                           )}
                         </form>
                       )}

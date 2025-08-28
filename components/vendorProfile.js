@@ -67,7 +67,7 @@ export default function VendorProfile({ userName, userEmail, setUserName, setPro
             bank_account: '',
             mobile_money: '',
             kyc_documents: [],
-            kyc_status: 'not_started',
+            kyc_status: 'pending',
           };
           const { error: insertError } = await supabase
             .from('profiles')
@@ -140,7 +140,7 @@ export default function VendorProfile({ userName, userEmail, setUserName, setPro
     switch (status) {
       case 'approved':
         return 'bg-green-100 text-green-800';
-      case 'submitted':
+      case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'rejected':
         return 'bg-red-100 text-red-800';
@@ -255,18 +255,19 @@ export default function VendorProfile({ userName, userEmail, setUserName, setPro
           .upload(logoPath, logoFile, {
             upsert: true,
             contentType: logoFile.type,
-            metadata: { owner: user.id },
           });
 
         if (uploadError) {
           uploadErrors.push(`Logo upload failed: ${uploadError.message}`);
+          console.error('Logo upload error:', uploadError);
         } else {
           if (USE_SIGNED_URLS) {
             const { data: signedData, error: signedError } = await supabase.storage
               .from('business-logos')
-              .createSignedUrl(logoPath, 31536000); // 1 year expiration
+              .createSignedUrl(logoPath, 31536000);
             if (signedError) {
               uploadErrors.push(`Failed to generate signed URL for logo: ${signedError.message}`);
+              console.error('Signed URL error for logo:', signedError);
             } else {
               newLogoUrl = signedData.signedUrl;
             }
@@ -280,16 +281,17 @@ export default function VendorProfile({ userName, userEmail, setUserName, setPro
       let newKycDocs = [...editKycDocuments];
       for (const file of documentFiles) {
         const timestamp = Date.now();
-        const docPath = `${user.id}/${file.name.split('.')[0]}_${timestamp}.${file.name.split('.').pop()}`;
+        const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const docPath = `${user.id}/${safeFileName.split('.')[0]}_${timestamp}.${safeFileName.split('.').pop()}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('kyc-documents')
           .upload(docPath, file, {
             contentType: file.type,
-            metadata: { owner: user.id },
           });
 
         if (uploadError) {
           uploadErrors.push(`Document "${file.name}" upload failed: ${uploadError.message}`);
+          console.error('Document upload error:', uploadError);
           continue;
         }
 
@@ -297,9 +299,10 @@ export default function VendorProfile({ userName, userEmail, setUserName, setPro
         if (USE_SIGNED_URLS) {
           const { data: signedData, error: signedError } = await supabase.storage
             .from('kyc-documents')
-            .createSignedUrl(docPath, 31536000); // 1 year expiration
+            .createSignedUrl(docPath, 31536000);
           if (signedError) {
             uploadErrors.push(`Failed to generate signed URL for "${file.name}": ${signedError.message}`);
+            console.error('Signed URL error for document:', signedError);
             continue;
           }
           docUrl = signedData.signedUrl;
@@ -311,23 +314,23 @@ export default function VendorProfile({ userName, userEmail, setUserName, setPro
 
       // Update profile data
       const updatedProfile = {
-        id: user.id,
         business_name: editBusinessName,
         business_logo: newLogoUrl,
         tin: editTin,
         bank_account: editBankAccount,
         mobile_money: editMobileMoney,
         kyc_documents: newKycDocs,
-        kyc_status: newKycDocs.length > 0 || profileData.kyc_documents?.length > 0 ? 'submitted' : profileData.kyc_status || 'not_started',
+        kyc_status: newKycDocs.length > 0 || profileData.kyc_documents?.length > 0 ? 'pending' : profileData.kyc_status || 'pending',
       };
 
       const { error: updateError } = await supabase
         .from('profiles')
-        .upsert(updatedProfile, { onConflict: ['id'] });
+        .update(updatedProfile)
+        .eq('id', user.id);
 
       if (updateError) {
-        setLocalError(`Error updating profile: ${updateError.message}`);
-        setError(`Error updating profile: ${updateError.message}`);
+        setLocalError(`Error updating profile: ${updateError.message || JSON.stringify(updateError)}`);
+        setError(`Error updating profile: ${updateError.message || JSON.stringify(updateError)}`);
         console.error('Profile update error:', updateError);
         return;
       }
@@ -621,7 +624,7 @@ export default function VendorProfile({ userName, userEmail, setUserName, setPro
                 <div>
                   <p className="text-gray-600 text-sm">KYC Status:</p>
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusClass(profileData?.kyc_status)}`}>
-                    {profileData?.kyc_status || 'Not Started'}
+                    {profileData?.kyc_status || 'Pending'}
                   </span>
                 </div>
                 <button
