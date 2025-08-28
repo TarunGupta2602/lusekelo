@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
+import Link from "next/link";
 import { FaUserEdit, FaHistory, FaMapMarkerAlt, FaHeadset, FaHeart, FaSignOutAlt, FaArrowLeft, FaTrashAlt, FaTimes } from "react-icons/fa";
 
 const normalizeImagePath = (path) => {
@@ -118,12 +119,11 @@ export function ProfileSidebar({ onClose }) {
       const { data: wishlistData, error: wishlistError } = await supabase
         .from("wishlists")
         .select("items")
-        .eq("user_id", user.id)
-        .single();
+        .eq("user_id", user.id);
 
       if (wishlistError) throw wishlistError;
 
-      const productIds = wishlistData?.items || [];
+      const productIds = wishlistData?.[0]?.items || [];
 
       if (productIds.length === 0) {
         setWishlist([]);
@@ -584,9 +584,10 @@ export function ProfileSidebar({ onClose }) {
           ) : (
             <div className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pr-1 sm:pr-2">
               {wishlist.map((item) => (
-                <div
+                <Link
+                  href={`/products/${item.id}`}
                   key={item.id}
-                  className="bg-gray-800/50 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/50"
+                  className="block bg-gray-800/50 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/50 hover:border-blue-500/50"
                 >
                   <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
                     {item.image && item.image.length > 0 && (
@@ -614,7 +615,7 @@ export function ProfileSidebar({ onClose }) {
                       )}
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
