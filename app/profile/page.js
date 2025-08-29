@@ -737,4 +737,4 @@ export function ProfileSidebar({ onClose }) {
       )}
     </div>
   );
-}
+}  
