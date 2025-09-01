@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -123,10 +124,12 @@ export default function SuccessPageContent() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [feedbackSuccess, setFeedbackSuccess] = useState(false);
   const [hoveredRating, setHoveredRating] = useState(0);
+  const [selectedProductId, setSelectedProductId] = useState(null);
+  const [reviewedProductIds, setReviewedProductIds] = useState([]);
 
   useEffect(() => {
     if (!paymentId) {
@@ -172,6 +175,10 @@ export default function SuccessPageContent() {
               payment_id: order.payment_id,
             }))
           );
+          // If only one product, set selectedProductId automatically
+          if (data.length === 1) {
+            setSelectedProductId(data[0].product_id);
+          }
         }
       } catch (err) {
         console.error('Unexpected error fetching orders:', err);
@@ -193,23 +200,55 @@ export default function SuccessPageContent() {
       return;
     }
 
+    if (!selectedProductId) {
+      setErrorMessage('Please select a product to review.');
+      setTimeout(() => setErrorMessage(''), 3000);
+      return;
+    }
+
+    if (rating === 0) {
+      setErrorMessage('Please select a rating.');
+      setTimeout(() => setErrorMessage(''), 3000);
+      return;
+    }
+
+    if (rating < 4 && !feedback.trim()) {
+      setErrorMessage('Please provide feedback for ratings below 4 stars.');
+      setTimeout(() => setErrorMessage(''), 3000);
+      return;
+    }
+
+    if (feedback.length > 500) {
+      setErrorMessage('Feedback cannot exceed 500 characters.');
+      setTimeout(() => setErrorMessage(''), 3000);
+      return;
+    }
+
     try {
-      const { error } = await supabase.from('product_reviews').insert(
-        orders.map((order) => ({
-          product_id: order.product_id,
-          user_id: order.user_id,
-          rating,
-          feedback,
-        }))
-      );
+      const selectedOrder = orders.find((order) => order.product_id === selectedProductId);
+      if (!selectedOrder) {
+        setErrorMessage('Selected product not found in order.');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
+
+      const { error } = await supabase.from('product_reviews').insert({
+        product_id: selectedOrder.product_id,
+        user_id: selectedOrder.user_id,
+        rating,
+        feedback: feedback.trim() || null,
+      });
 
       if (error) {
         console.error('Error submitting feedback:', error);
         setErrorMessage('Failed to submit feedback. Please try again.');
         setTimeout(() => setErrorMessage(''), 3000);
       } else {
-        setFeedback('');
         setFeedbackSuccess(true);
+        setReviewedProductIds((prev) => [...prev, selectedProductId]);
+        setFeedback('');
+        setRating(0);
+        setSelectedProductId(orders.length === 1 ? orders[0].product_id : null);
         setTimeout(() => setFeedbackSuccess(false), 3000);
       }
     } catch (err) {
@@ -292,11 +331,12 @@ export default function SuccessPageContent() {
   }
 
   const totalAmount = orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0);
+  const selectedProduct = orders.find((order) => order.product_id === selectedProductId);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-20">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           {/* Progress Indicator */}
           <div className="mb-8 flex items-center justify-center gap-4 text-sm font-medium text-gray-600">
             <div className="flex items-center gap-2">
@@ -320,19 +360,34 @@ export default function SuccessPageContent() {
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
               Thank You for Your Order!
             </h1>
-            <p className="text-gray-600 text-sm">
+            <p className="text-gray-600 text-sm max-w-md mx-auto">
               Your order has been successfully placed and will be delivered soon.
             </p>
           </div>
 
           {/* Error Message */}
           {errorMessage && (
-            <div className="mb-6 mx-auto max-w-4xl">
-              <div className="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2 shadow-sm">
+            <div className="mb-6">
+              <div className="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                 <div className="w-4 h-4 bg-red-200 rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-xs font-bold">!</span>
                 </div>
                 {errorMessage}
+              </div>
+            </div>
+          )}
+
+          {/* Success Message */}
+          {feedbackSuccess && (
+            <div className="mb-6">
+              <div className="bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                <FaCheckCircle className="text-green-600" />
+                Thank you for your feedback!{' '}
+                {orders.length > 1 && reviewedProductIds.length < orders.length && (
+                  <span>
+                    Review another product by selecting below.
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -407,7 +462,7 @@ export default function SuccessPageContent() {
             <div className="mt-4 text-center">
               <button
                 onClick={handleDownloadInvoice}
-                className="text-blue-600 text-sm font-semibold hover:underline focus:outline-none"
+                className="text-blue-600 text-sm font-semibold hover:underline focus:outline-none transition-colors duration-200"
               >
                 Download Invoice ↓
               </button>
@@ -419,8 +474,65 @@ export default function SuccessPageContent() {
             <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 text-center">
               Rate Your Experience
             </h3>
-            <form onSubmit={handleFeedbackSubmit} className="space-y-4">
-              <div className="flex justify-center gap-1 sm:gap-2">
+            {orders.length === 1 && selectedProduct && (
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
+                  <Image
+                    src={normalizeImageUrl(normalizeImagePath(selectedProduct.product_image)[0])}
+                    alt={selectedProduct.product_name}
+                    width={64}
+                    height={64}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div>
+                  <h4 className="text-base font-semibold text-gray-900">{selectedProduct.product_name}</h4>
+                  <p className="text-sm text-gray-600">Product ID: {selectedProduct.product_id}</p>
+                </div>
+              </div>
+            )}
+            {orders.length > 1 && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Product to Review
+                </label>
+                <select
+                  value={selectedProductId || ''}
+                  onChange={(e) => setSelectedProductId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+                  disabled={reviewedProductIds.length === orders.length}
+                >
+                  <option value="" disabled>
+                    Select a product
+                  </option>
+                  {orders.map((order) => (
+                    <option
+                      key={order.product_id}
+                      value={order.product_id}
+                      disabled={reviewedProductIds.includes(order.product_id)}
+                    >
+                      {order.product_name} {reviewedProductIds.includes(order.product_id) ? '(Reviewed)' : ''}
+                    </option>
+                  ))}
+                </select>
+                {selectedProduct && (
+                  <div className="mt-4 flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
+                      <Image
+                        src={normalizeImageUrl(normalizeImagePath(selectedProduct.product_image)[0])}
+                        alt={selectedProduct.product_name}
+                        width={48}
+                        height={48}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="text-sm text-gray-600">{selectedProduct.product_name}</div>
+                  </div>
+                )}
+              </div>
+            )}
+            <form onSubmit={handleFeedbackSubmit} className="space-y-6">
+              <div className="flex justify-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
@@ -428,10 +540,11 @@ export default function SuccessPageContent() {
                     onClick={() => handleRatingClick(star)}
                     onMouseEnter={() => setHoveredRating(star)}
                     onMouseLeave={() => setHoveredRating(0)}
-                    className="p-1 sm:p-2 transition-colors"
+                    className="p-2 transition-colors duration-200"
+                    disabled={reviewedProductIds.includes(selectedProductId)}
                   >
                     <Star
-                      size={28}
+                      size={32}
                       className={`${
                         star <= (hoveredRating || rating)
                           ? 'fill-yellow-400 text-yellow-400'
@@ -441,29 +554,51 @@ export default function SuccessPageContent() {
                   </button>
                 ))}
               </div>
-              <p className="text-center text-gray-500 text-sm mb-4">
-                Share your feedback to help us improve!
-              </p>
-              <textarea
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                placeholder="Write your review..."
-                rows={4}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
-              />
+              <div className="text-center text-gray-500 text-sm mb-4">
+                {rating > 0 ? (
+                  <>
+                    {rating === 1 && 'Very Dissatisfied'}
+                    {rating === 2 && 'Dissatisfied'}
+                    {rating === 3 && 'Neutral'}
+                    {rating === 4 && 'Satisfied'}
+                    {rating === 5 && 'Very Satisfied'}
+                  </>
+                ) : (
+                  'Select a rating'
+                )}
+              </div>
+              <div>
+                <textarea
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  placeholder={rating < 4 ? 'Please tell us what went wrong...' : 'Share your feedback (optional)...'}
+                  rows={5}
+                  maxLength={500}
+                  className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow resize-none"
+                  disabled={reviewedProductIds.includes(selectedProductId)}
+                />
+                <div className="text-right text-xs text-gray-500 mt-1">
+                  {feedback.length}/500 characters
+                </div>
+              </div>
               <div className="text-center">
                 <button
                   type="submit"
-                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold shadow-md transition-all duration-300 hover:scale-105"
+                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-lg font-semibold shadow-md transition-all duration-300 hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  disabled={reviewedProductIds.includes(selectedProductId) || !selectedProductId || rating === 0}
                 >
-                  Submit Feedback
+                  Submit Review
                 </button>
               </div>
             </form>
-            {feedbackSuccess && (
-              <p className="mt-4 text-green-600 font-medium text-center flex items-center justify-center gap-2">
-                <FaCheckCircle className="text-green-600" />
-                Thank you for your feedback!
+            {orders.length > 1 && reviewedProductIds.length > 0 && reviewedProductIds.length < orders.length && (
+              <p className="mt-4 text-center text-sm text-gray-600">
+                Review another product by selecting it above.
+              </p>
+            )}
+            {reviewedProductIds.length === orders.length && (
+              <p className="mt-4 text-center text-sm text-gray-600">
+                You’ve reviewed all products in this order. Thank you!
               </p>
             )}
           </div>
@@ -471,7 +606,7 @@ export default function SuccessPageContent() {
           {/* Return Home */}
           <div className="text-center">
             <Link href="/">
-              <button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-lg font-semibold shadow-md transition-all duration-300 hover:scale-105 flex items-center gap-2 mx-auto">
+              <button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-4 rounded-lg font-semibold shadow-md transition-all duration-300 hover:scale-105 flex items-center gap-2 mx-auto">
                 <FaArrowLeft className="text-lg" />
                 Return to Home
               </button>

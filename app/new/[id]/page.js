@@ -307,6 +307,7 @@ export default function CategoryProducts({ params, searchParams }) {
             name: productToAdd.name,
             price: productToAdd.price,
             image: productToAdd.image,
+            supermarket_id: productToAdd.supermarket_id,
           });
           setCartMessage('Product added to cart!');
         }
