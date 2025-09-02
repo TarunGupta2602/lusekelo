@@ -327,7 +327,7 @@ export function ProfileSidebar({ onClose }) {
   if (loading || !user) return null;
 
   return (
-    <div className="fixed top-0 right-0 mt-13 w-full sm:w-96 md:w-[420px] lg:w-[450px] bg-gradient-to-b from-gray-900 to-black text-white h-full shadow-2xl z-50 overflow-y-auto transition-all duration-300 font-sans rounded-l-3xl">
+    <div className="fixed top-0 right-0 mt-13 w-full sm:w-96 md:w-[420px] lg:w-[450px] bg-gradient-to-br from-gray-900 to-gray-800 text-white h-full shadow-2xl z-50 overflow-y-auto transition-all duration-300 font-sans rounded-l-3xl">
       {/* Close button for all views */}
       <button
         onClick={onClose}
@@ -339,37 +339,37 @@ export function ProfileSidebar({ onClose }) {
       </button>
       {showOrderHistory ? (
         <div className="p-4 sm:p-6 flex flex-col min-h-full">
-          <div className="flex items-center justify-between mb-6 sm:mb-8">
+          <div className="flex items-center justify-between mb-6 sm:mb-8 pr-12 sm:pr-16">
             <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Order History</h2>
             <button
               onClick={() => setShowOrderHistory(false)}
-              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-4 py-2 sm:px-5 sm:py-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm"
+              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm shadow-sm"
             >
               <FaArrowLeft className="text-base sm:text-lg" />
               Back
             </button>
           </div>
           {error && (
-            <p className="text-red-400 bg-red-900/20 p-3 sm:p-4 rounded-xl mb-6 sm:mb-8 text-xs sm:text-sm shadow-md">
+            <p className="text-red-400 bg-red-900/20 p-3 sm:p-4 rounded-xl mb-6 sm:mb-8 text-xs sm:text-sm shadow-md border border-red-500/30">
               {error}
             </p>
           )}
           {ordersLoading ? (
             <div className="flex justify-center items-center h-32 sm:h-40">
-              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-t-3 border-b-3 border-blue-500"></div>
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-t-3 border-b-3 border-blue-500 border-opacity-80"></div>
             </div>
           ) : orders.length === 0 ? (
-            <p className="text-gray-400 text-center py-12 sm:py-16 text-base sm:text-lg">No orders found.</p>
+            <p className="text-gray-400 text-center py-12 sm:py-16 text-base sm:text-lg font-medium">No orders found yet.</p>
           ) : (
             <div className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pr-1 sm:pr-2">
               {orders.map((order) => (
                 <div
                   key={order.id}
-                  className="bg-gray-800/50 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/50"
+                  className="bg-gray-800/40 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/40 hover:border-gray-600/50"
                 >
                   <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
                     {order.products?.image && (
-                      <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-gray-600/50 shadow-sm">
+                      <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-gray-600/40 shadow-sm">
                         <Image
                           src={normalizeImagePath(order.products.image)[0]}
                           alt={order.products.name || "Product"}
@@ -465,33 +465,33 @@ export function ProfileSidebar({ onClose }) {
         </div>
       ) : showAddresses ? (
         <div className="p-4 sm:p-6 flex flex-col min-h-full">
-          <div className="flex items-center justify-between mb-6 sm:mb-8">
+          <div className="flex items-center justify-between mb-6 sm:mb-8 pr-12 sm:pr-16">
             <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Saved Addresses</h2>
             <button
               onClick={() => setShowAddresses(false)}
-              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-4 py-2 sm:px-5 sm:py-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm"
+              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm shadow-sm"
             >
               <FaArrowLeft className="text-base sm:text-lg" />
               Back
             </button>
           </div>
           {error && (
-            <p className="text-red-400 bg-red-900/20 p-3 sm:p-4 rounded-xl mb-6 sm:mb-8 text-xs sm:text-sm shadow-md">
+            <p className="text-red-400 bg-red-900/20 p-3 sm:p-4 rounded-xl mb-6 sm:mb-8 text-xs sm:text-sm shadow-md border border-red-500/30">
               {error}
             </p>
           )}
           {addressesLoading ? (
             <div className="flex justify-center items-center h-32 sm:h-40">
-              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-t-3 border-b-3 border-blue-500"></div>
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-t-3 border-b-3 border-blue-500 border-opacity-80"></div>
             </div>
           ) : addresses.length === 0 ? (
-            <p className="text-gray-400 text-center py-12 sm:py-16 text-base sm:text-lg">No addresses saved.</p>
+            <p className="text-gray-400 text-center py-12 sm:py-16 text-base sm:text-lg font-medium">No addresses saved yet.</p>
           ) : (
             <div className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pr-1 sm:pr-2">
               {addresses.map((address) => (
                 <div
                   key={address.id}
-                  className="bg-gray-800/50 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/50"
+                  className="bg-gray-800/40 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/40 hover:border-gray-600/50"
                 >
                   <div className="flex justify-between items-start">
                     <div className="pr-8 sm:pr-10">
@@ -560,38 +560,38 @@ export function ProfileSidebar({ onClose }) {
         </div>
       ) : showWishlist ? (
         <div className="p-4 sm:p-6 flex flex-col min-h-full">
-          <div className="flex items-center justify-between mb-6 sm:mb-8">
+          <div className="flex items-center justify-between mb-6 sm:mb-8 pr-12 sm:pr-16">
             <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Wishlist</h2>
             <button
               onClick={() => setShowWishlist(false)}
-              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-4 py-2 sm:px-5 sm:py-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm"
+              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm shadow-sm"
             >
               <FaArrowLeft className="text-base sm:text-lg" />
               Back
             </button>
           </div>
           {error && (
-            <p className="text-red-400 bg-red-900/20 p-3 sm:p-4 rounded-xl mb-6 sm:mb-8 text-xs sm:text-sm shadow-md">
+            <p className="text-red-400 bg-red-900/20 p-3 sm:p-4 rounded-xl mb-6 sm:mb-8 text-xs sm:text-sm shadow-md border border-red-500/30">
               {error}
             </p>
           )}
           {wishlistLoading ? (
             <div className="flex justify-center items-center h-32 sm:h-40">
-              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-t-3 border-b-3 border-blue-500"></div>
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-t-3 border-b-3 border-blue-500 border-opacity-80"></div>
             </div>
           ) : wishlist.length === 0 ? (
-            <p className="text-gray-400 text-center py-12 sm:py-16 text-base sm:text-lg">No items in your wishlist.</p>
+            <p className="text-gray-400 text-center py-12 sm:py-16 text-base sm:text-lg font-medium">No items in your wishlist yet.</p>
           ) : (
             <div className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pr-1 sm:pr-2">
               {wishlist.map((item) => (
                 <Link
                   href={`/products/${item.id}`}
                   key={item.id}
-                  className="block bg-gray-800/50 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/50 hover:border-blue-500/50"
+                  className="block bg-gray-800/40 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/40 hover:border-blue-500/40"
                 >
                   <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
                     {item.image && item.image.length > 0 && (
-                      <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-gray-600/50 shadow-sm">
+                      <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-gray-600/40 shadow-sm">
                         <Image
                           src={normalizeImagePath(item.image)[0]}
                           alt={item.name || "Product"}
@@ -622,8 +622,8 @@ export function ProfileSidebar({ onClose }) {
         </div>
       ) : (
         <>
-          <div className="flex flex-col items-center py-6 px-4 sm:py-8 sm:px-6 bg-gradient-to-b from-gray-900 to-black relative">
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-4 border-blue-500 shadow-xl">
+          <div className="flex flex-col items-center py-6 px-4 sm:py-8 sm:px-6 bg-gradient-to-b from-gray-900 to-gray-800 relative">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-4 border-blue-500/80 shadow-xl">
               {avatarPreview ? (
                 <Image
                   src={avatarPreview}
@@ -658,13 +658,13 @@ export function ProfileSidebar({ onClose }) {
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="mt-3 sm:mt-4 w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl bg-gray-800 text-white border border-gray-700 focus:border-blue-500 focus:outline-none transition-all duration-200"
+                  className="mt-3 sm:mt-4 w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl bg-gray-800 text-white border border-gray-700 focus:border-blue-500 focus:outline-none transition-all duration-200 shadow-sm"
                   placeholder="Enter full name"
                 />
                 <div className="flex justify-center space-x-4 sm:space-x-6 mt-4 sm:mt-6">
                   <button
                     onClick={handleSave}
-                    className="bg-blue-600 px-4 py-2 sm:px-6 sm:py-3 rounded-xl hover:bg-blue-700 text-xs sm:text-sm font-medium transition-all duration-200 shadow-md"
+                    className="bg-blue-600 px-4 py-2 sm:px-6 sm:py-3 rounded-xl hover:bg-blue-700 text-xs sm:text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
                   >
                     Save
                   </button>
@@ -673,7 +673,7 @@ export function ProfileSidebar({ onClose }) {
                       setEditMode(false);
                       setAvatarPreview(null);
                     }}
-                    className="bg-gray-700 px-4 py-2 sm:px-6 sm:py-3 rounded-xl hover:bg-gray-600 text-xs sm:text-sm font-medium transition-all duration-200 shadow-md"
+                    className="bg-gray-700 px-4 py-2 sm:px-6 sm:py-3 rounded-xl hover:bg-gray-600 text-xs sm:text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
                   >
                     Cancel
                   </button>
@@ -687,12 +687,17 @@ export function ProfileSidebar({ onClose }) {
                 <p className="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2">{user.email}</p>
                 <button
                   onClick={handleEditToggle}
-                  className="mt-3 sm:mt-4 text-xs sm:text-sm text-blue-400 hover:text-blue-300 underline transition-all duration-200 flex items-center justify-center gap-1 sm:gap-2"
+                  className="mt-3 sm:mt-4 text-xs sm:text-sm text-blue-400 hover:text-blue-300 underline transition-all duration-200 flex items-center justify-center gap-1 sm:gap-2 mx-auto"
                 >
                   <FaUserEdit className="text-base sm:text-lg" />
                   Edit Profile
                 </button>
               </div>
+            )}
+            {error && (
+              <p className="text-red-400 bg-red-900/20 p-3 sm:p-4 rounded-xl mt-4 sm:mt-6 text-xs sm:text-sm shadow-md border border-red-500/30 w-full max-w-xs sm:max-w-sm">
+                {error}
+              </p>
             )}
           </div>
 
@@ -718,7 +723,7 @@ export function ProfileSidebar({ onClose }) {
               <div
                 key={item.label}
                 onClick={item.onClick}
-                className="flex items-center space-x-3 sm:space-x-4 py-3 sm:py-4 cursor-pointer text-gray-200 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-300 px-3 sm:px-4 backdrop-blur-sm"
+                className="flex items-center space-x-3 sm:space-x-4 py-3 sm:py-4 cursor-pointer text-gray-200 hover:text-white hover:bg-gray-800/40 rounded-xl transition-all duration-300 px-3 sm:px-4 backdrop-blur-sm shadow-sm hover:shadow-md"
               >
                 <span className="text-lg sm:text-xl">{item.icon}</span>
                 <span className="text-sm sm:text-base font-medium">{item.label}</span>
@@ -727,7 +732,7 @@ export function ProfileSidebar({ onClose }) {
 
             <button
               onClick={handleLogout}
-              className="w-full flex items-center space-x-3 sm:space-x-4 mt-6 sm:mt-8 py-3 sm:py-4 text-red-400 hover:text-red-500 hover:bg-gray-800/50 rounded-xl transition-all duration-300 px-3 sm:px-4 backdrop-blur-sm"
+              className="w-full flex items-center space-x-3 sm:space-x-4 mt-6 sm:mt-8 py-3 sm:py-4 text-red-400 hover:text-red-500 hover:bg-gray-800/40 rounded-xl transition-all duration-300 px-3 sm:px-4 backdrop-blur-sm shadow-sm hover:shadow-md"
             >
               <FaSignOutAlt className="text-lg sm:text-xl" />
               <span className="text-sm sm:text-base font-medium">Logout</span>
@@ -737,4 +742,4 @@ export function ProfileSidebar({ onClose }) {
       )}
     </div>
   );
-}  
+}

@@ -32,6 +32,99 @@ export default function VendorDashboard() {
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [showManageImages, setShowManageImages] = useState(false);
+  // Coupon management states
+  const [showCouponForm, setShowCouponForm] = useState(false);
+  const [couponForm, setCouponForm] = useState({
+    code: '',
+    discount: '',
+    expiry_date: '',
+    product_id: '',
+    usage_limit: '',
+  });
+  const [coupons, setCoupons] = useState([]);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  // Fetch coupons for this store's products
+  useEffect(() => {
+    const fetchCoupons = async () => {
+      if (!store?.id) return;
+      setCouponLoading(true);
+      setCouponError('');
+      try {
+        const { data, error } = await supabase
+          .from('coupons')
+          .select('*')
+          .in('product_id', products.map(p => p.id));
+        if (error) setCouponError(error.message);
+        setCoupons(data || []);
+      } catch (err) {
+        setCouponError(err.message);
+      } finally {
+        setCouponLoading(false);
+      }
+    };
+    fetchCoupons();
+  }, [store, products]);
+  // Coupon form handlers
+  const handleCouponFormChange = (e) => {
+    const { name, value } = e.target;
+    setCouponForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCreateCoupon = async (e) => {
+    e.preventDefault();
+    setCouponLoading(true);
+    setCouponError('');
+    if (!couponForm.code || !couponForm.discount || !couponForm.expiry_date || !couponForm.product_id) {
+      setCouponError('All fields are required.');
+      setCouponLoading(false);
+      return;
+    }
+    try {
+      const { error } = await supabase.from('coupons').insert({
+        code: couponForm.code.trim(),
+        discount: parseFloat(couponForm.discount),
+        expiry_date: couponForm.expiry_date,
+        product_id: couponForm.product_id,
+        usage_limit: couponForm.usage_limit ? parseInt(couponForm.usage_limit) : null,
+      });
+      if (error) {
+        setCouponError(error.message);
+      } else {
+        setShowCouponForm(false);
+        setCouponForm({ code: '', discount: '', expiry_date: '', product_id: '', usage_limit: '' });
+        // Refetch coupons
+        const { data } = await supabase
+          .from('coupons')
+          .select('*')
+          .in('product_id', products.map(p => p.id));
+        setCoupons(data || []);
+        alert('Coupon created successfully!');
+      }
+    } catch (err) {
+      setCouponError(err.message);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleDeleteCoupon = async (id) => {
+    if (!window.confirm('Delete this coupon?')) return;
+    setCouponLoading(true);
+    try {
+      const { error } = await supabase.from('coupons').delete().eq('id', id);
+      if (error) {
+        setCouponError(error.message);
+      } else {
+        setCoupons((prev) => prev.filter(c => c.id !== id));
+        alert('Coupon deleted.');
+      }
+    } catch (err) {
+      setCouponError(err.message);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
   const productsPerPage = 10;
   const ordersPerPage = 10;
 
@@ -952,7 +1045,122 @@ export default function VendorDashboard() {
         )}
 
         {sidebarSection === 'Inventory' && (
-          <>
+            <>
+              {/* Coupon Management Section */}
+              <div className="mb-6 p-4 bg-white rounded-lg shadow border border-green-200">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-lg font-bold text-green-700">Manage Coupons</h3>
+                  <button
+                    className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600"
+                    onClick={() => setShowCouponForm((prev) => !prev)}
+                  >
+                    {showCouponForm ? 'Close' : 'Create Coupon'}
+                  </button>
+                </div>
+                {showCouponForm && (
+                  <form className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleCreateCoupon}>
+                    <input
+                      type="text"
+                      name="code"
+                      value={couponForm.code}
+                      onChange={handleCouponFormChange}
+                      placeholder="Coupon Code"
+                      className="border px-3 py-2 rounded"
+                      required
+                    />
+                    <input
+                      type="number"
+                      name="discount"
+                      value={couponForm.discount}
+                      onChange={handleCouponFormChange}
+                      placeholder="Discount (%)"
+                      className="border px-3 py-2 rounded"
+                      required
+                    />
+                    <input
+                      type="date"
+                      name="expiry_date"
+                      value={couponForm.expiry_date}
+                      onChange={handleCouponFormChange}
+                      className="border px-3 py-2 rounded"
+                      required
+                    />
+                    <select
+                      name="product_id"
+                      value={couponForm.product_id}
+                      onChange={handleCouponFormChange}
+                      className="border px-3 py-2 rounded"
+                      required
+                    >
+                      <option value="">Select Product</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      name="usage_limit"
+                      value={couponForm.usage_limit}
+                      onChange={handleCouponFormChange}
+                      placeholder="Usage Limit (optional)"
+                      className="border px-3 py-2 rounded"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                      disabled={couponLoading}
+                    >
+                      {couponLoading ? 'Creating...' : 'Create Coupon'}
+                    </button>
+                    {couponError && <div className="col-span-2 text-red-600 text-sm">{couponError}</div>}
+                  </form>
+                )}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="p-2">Code</th>
+                        <th className="p-2">Discount</th>
+                        <th className="p-2">Expiry</th>
+                        <th className="p-2">Product</th>
+                        <th className="p-2">Usage Limit</th>
+                        <th className="p-2">Used</th>
+                        <th className="p-2">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {couponLoading ? (
+                        <tr><td colSpan={7} className="p-2">Loading...</td></tr>
+                      ) : coupons.length === 0 ? (
+                        <tr><td colSpan={7} className="p-2 text-gray-500">No coupons found.</td></tr>
+                      ) : (
+                        coupons.map((c) => {
+                          const prod = products.find(p => p.id === c.product_id);
+                          return (
+                            <tr key={c.id} className="border-b">
+                              <td className="p-2 font-mono">{c.code}</td>
+                              <td className="p-2">{c.discount}%</td>
+                              <td className="p-2">{c.expiry_date}</td>
+                              <td className="p-2">{prod ? prod.name : '-'}</td>
+                              <td className="p-2">{c.usage_limit || '-'}</td>
+                              <td className="p-2">{c.used_count || 0}</td>
+                              <td className="p-2">
+                                <button
+                                  className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600"
+                                  onClick={() => handleDeleteCoupon(c.id)}
+                                  disabled={couponLoading}
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             <div className="flex flex-wrap gap-2 mb-6 items-center bg-white p-4 rounded-lg shadow border border-blue-100">
               {['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'All'].map((f) => (
                 <button
