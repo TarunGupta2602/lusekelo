@@ -3,7 +3,23 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
 import Link from "next/link";
-import { FaUserEdit, FaHistory, FaMapMarkerAlt, FaHeadset, FaHeart, FaSignOutAlt, FaArrowLeft, FaTrashAlt, FaTimes } from "react-icons/fa";
+import { 
+  FaUserEdit, 
+  FaHistory, 
+  FaMapMarkerAlt, 
+  FaHeadset, 
+  FaHeart, 
+  FaSignOutAlt, 
+  FaArrowLeft, 
+  FaTrashAlt, 
+  FaTimes,
+  FaCheck,
+  FaUser,
+  FaCamera,
+  FaShoppingBag,
+  FaCreditCard,
+  FaShieldAlt
+} from "react-icons/fa";
 
 const normalizeImagePath = (path) => {
   if (!path) return ['/placeholder-product.jpg'];
@@ -33,14 +49,15 @@ export function ProfileSidebar({ onClose }) {
   const [showWishlist, setShowWishlist] = useState(false);
   const [error, setError] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [deleteType, setDeleteType] = useState(null); // 'order' or 'address'
+  const [deleteType, setDeleteType] = useState(null);
+  const [isUpdating, setIsUpdating] = useState(false);
   const avatarFileRef = useRef(null);
 
   useEffect(() => {
     const fetchUser = async () => {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (error || !user) {
-        setError("User not found. Please log in again.");
+        setError("Authentication required. Please sign in to continue.");
         setLoading(false);
         return;
       }
@@ -60,7 +77,7 @@ export function ProfileSidebar({ onClose }) {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
-        setError("User not authenticated");
+        setError("Session expired. Please sign in again.");
         setOrdersLoading(false);
         return;
       }
@@ -74,7 +91,7 @@ export function ProfileSidebar({ onClose }) {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Error fetching order history");
+        setError(data.error || "Unable to load order history");
         setOrdersLoading(false);
         return;
       }
@@ -82,7 +99,7 @@ export function ProfileSidebar({ onClose }) {
       setOrders(data.orders || []);
       setOrdersLoading(false);
     } catch (err) {
-      setError("Unexpected error: " + err.message);
+      setError("Network error. Please check your connection.");
       setOrdersLoading(false);
     }
   };
@@ -105,7 +122,7 @@ export function ProfileSidebar({ onClose }) {
       setAddresses(data || []);
       setAddressesLoading(false);
     } catch (err) {
-      setError("Error fetching addresses: " + err.message);
+      setError("Unable to load addresses. Please try again.");
       setAddressesLoading(false);
     }
   };
@@ -141,7 +158,7 @@ export function ProfileSidebar({ onClose }) {
       setWishlist(productsData || []);
       setWishlistLoading(false);
     } catch (err) {
-      setError("Error fetching wishlist: " + err.message);
+      setError("Unable to load wishlist. Please try again.");
       setWishlistLoading(false);
     }
   };
@@ -162,7 +179,7 @@ export function ProfileSidebar({ onClose }) {
 
       fetchAddresses();
     } catch (err) {
-      setError("Error updating address: " + err.message);
+      setError("Unable to update address. Please try again.");
     }
   };
 
@@ -179,7 +196,7 @@ export function ProfileSidebar({ onClose }) {
       setDeleteConfirmId(null);
       setDeleteType(null);
     } catch (err) {
-      setError("Error deleting address: " + err.message);
+      setError("Unable to delete address. Please try again.");
     }
   };
 
@@ -187,7 +204,7 @@ export function ProfileSidebar({ onClose }) {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
-        setError("User not authenticated");
+        setError("Session expired. Please sign in again.");
         return;
       }
 
@@ -202,7 +219,7 @@ export function ProfileSidebar({ onClose }) {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Error deleting order");
+        setError(data.error || "Unable to delete order");
         return;
       }
 
@@ -210,7 +227,7 @@ export function ProfileSidebar({ onClose }) {
       setDeleteConfirmId(null);
       setDeleteType(null);
     } catch (err) {
-      setError("Unexpected error: " + err.message);
+      setError("Network error. Please try again.");
     }
   };
 
@@ -230,83 +247,106 @@ export function ProfileSidebar({ onClose }) {
   const handleEditToggle = () => {
     setEditMode(!editMode);
     setAvatarPreview(null);
+    setError("");
   };
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Image size must be less than 5MB");
+        return;
+      }
       setAvatarPreview(URL.createObjectURL(file));
     }
   };
 
   const handleSave = async () => {
     if (!user) return;
+    if (!fullName.trim()) {
+      setError("Please enter your full name");
+      return;
+    }
+
+    setIsUpdating(true);
+    setError("");
 
     let avatarUrl = user.user_metadata?.avatar_url;
     const file = avatarFileRef.current?.files?.[0];
     let avatarPath;
 
-    if (file) {
-      const fileExt = file.name.split(".").pop();
-      avatarPath = `public/${user.id}-${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(avatarPath, file);
+    try {
+      if (file) {
+        const fileExt = file.name.split(".").pop();
+        avatarPath = `public/${user.id}-${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(avatarPath, file);
 
-      if (uploadError) {
-        setError("Error uploading avatar: " + uploadError.message);
+        if (uploadError) {
+          setError("Failed to upload image. Please try again.");
+          setIsUpdating(false);
+          return;
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("avatars")
+          .getPublicUrl(avatarPath);
+        avatarUrl = publicUrlData.publicUrl;
+      }
+
+      const { error: upsertError } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: user.id,
+            full_name: fullName.trim(),
+            avatar_url: avatarUrl,
+          },
+          { onConflict: ["id"] }
+        );
+
+      if (upsertError) {
+        setError("Failed to update profile. Please try again.");
+        setIsUpdating(false);
         return;
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(avatarPath);
-      avatarUrl = publicUrlData.publicUrl;
-    }
-
-    const { error: upsertError } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          id: user.id,
-          full_name: fullName,
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: {
+          full_name: fullName.trim(),
           avatar_url: avatarUrl,
         },
-        { onConflict: ["id"] }
-      );
+      });
 
-    if (upsertError) {
-      setError("Error updating profile: " + upsertError.message);
-      return;
+      if (updateError) {
+        setError("Failed to update user data. Please try again.");
+        setIsUpdating(false);
+        return;
+      }
+
+      const { data: updatedUserData, error: userFetchError } = await supabase.auth.getUser();
+      if (userFetchError || !updatedUserData?.user) {
+        setError("Failed to refresh user data. Please reload the page.");
+        setIsUpdating(false);
+        return;
+      }
+
+      setUser(updatedUserData.user);
+      setEditMode(false);
+      setAvatarPreview(null);
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsUpdating(false);
     }
-
-    const { error: updateError } = await supabase.auth.updateUser({
-      data: {
-        full_name: fullName,
-        avatar_url: avatarUrl,
-      },
-    });
-
-    if (updateError) {
-      setError("Error updating auth metadata: " + updateError.message);
-      return;
-    }
-
-    const { data: updatedUserData, error: userFetchError } = await supabase.auth.getUser();
-    if (userFetchError || !updatedUserData?.user) {
-      setError("Failed to refetch updated user: " + userFetchError?.message);
-      return;
-    }
-
-    setUser(updatedUserData.user);
-    setEditMode(false);
-    setAvatarPreview(null);
   };
 
   const handleOrderHistoryClick = () => {
     setShowOrderHistory(true);
     setShowAddresses(false);
     setShowWishlist(false);
+    setError("");
     fetchOrders();
   };
 
@@ -314,6 +354,7 @@ export function ProfileSidebar({ onClose }) {
     setShowAddresses(true);
     setShowOrderHistory(false);
     setShowWishlist(false);
+    setError("");
     fetchAddresses();
   };
 
@@ -321,425 +362,641 @@ export function ProfileSidebar({ onClose }) {
     setShowWishlist(true);
     setShowOrderHistory(false);
     setShowAddresses(false);
+    setError("");
     fetchWishlist();
   };
 
-  if (loading || !user) return null;
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case "completed":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "pending":
+        return "bg-amber-50 text-amber-700 border-amber-200";
+      case "cancelled":
+        return "bg-red-50 text-red-700 border-red-200";
+      default:
+        return "bg-gray-50 text-gray-700 border-gray-200";
+    }
+  };
+
+  if (loading || !user) {
+    return (
+      <div className="fixed top-0 right-0 mt-16 w-full sm:w-96 md:w-[420px] lg:w-[480px] bg-white text-gray-900 h-full shadow-2xl z-50 flex items-center justify-center border-l border-gray-200">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="fixed top-0 right-0 mt-13 w-full sm:w-96 md:w-[420px] lg:w-[450px] bg-gradient-to-br from-gray-900 to-gray-800 text-white h-full shadow-2xl z-50 overflow-y-auto transition-all duration-300 font-sans rounded-l-3xl">
-      {/* Close button for all views */}
+    <div className="fixed top-0 right-0 mt-16 w-full sm:w-96 md:w-[420px] lg:w-[480px] bg-white text-gray-900 h-full shadow-2xl z-50 overflow-hidden border-l border-gray-200">
+      {/* Close button - Always visible */}
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 text-white text-xl bg-gray-800/80 rounded-full w-10 h-10 flex items-center justify-center hover:bg-red-500/90 transition-all duration-300 shadow-lg hover:shadow-xl backdrop-blur-md z-50 sm:top-6 sm:right-6 sm:w-12 sm:h-12 sm:text-2xl"
-        aria-label="Close profile sidebar"
-        data-testid="close-button"
+        className="absolute top-4 right-4 z-60 p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition-all duration-200 shadow-sm hover:shadow-md"
+        aria-label="Close profile"
       >
-        <FaTimes className="w-5 h-5 sm:w-7 sm:h-7" />
+        <FaTimes className="w-5 h-5" />
       </button>
-      {showOrderHistory ? (
-        <div className="p-4 sm:p-6 flex flex-col min-h-full">
-          <div className="flex items-center justify-between mb-6 sm:mb-8 pr-12 sm:pr-16">
-            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Order History</h2>
-            <button
-              onClick={() => setShowOrderHistory(false)}
-              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm shadow-sm"
-            >
-              <FaArrowLeft className="text-base sm:text-lg" />
-              Back
-            </button>
-          </div>
-          {error && (
-            <p className="text-red-400 bg-red-900/20 p-3 sm:p-4 rounded-xl mb-6 sm:mb-8 text-xs sm:text-sm shadow-md border border-red-500/30">
-              {error}
-            </p>
-          )}
-          {ordersLoading ? (
-            <div className="flex justify-center items-center h-32 sm:h-40">
-              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-t-3 border-b-3 border-blue-500 border-opacity-80"></div>
-            </div>
-          ) : orders.length === 0 ? (
-            <p className="text-gray-400 text-center py-12 sm:py-16 text-base sm:text-lg font-medium">No orders found yet.</p>
-          ) : (
-            <div className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pr-1 sm:pr-2">
-              {orders.map((order) => (
-                <div
-                  key={order.id}
-                  className="bg-gray-800/40 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/40 hover:border-gray-600/50"
-                >
-                  <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
-                    {order.products?.image && (
-                      <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-gray-600/40 shadow-sm">
-                        <Image
-                          src={normalizeImagePath(order.products.image)[0]}
-                          alt={order.products.name || "Product"}
-                          width={80}
-                          height={80}
-                          className="object-cover w-full h-full scale-105 transition-transform duration-300 hover:scale-110"
-                        />
-                      </div>
-                    )}
-                    <div className="flex-1 w-full">
-                      <div className="flex flex-col sm:flex-row justify-between items-start gap-2 sm:gap-0">
-                        <div className="pr-0 sm:pr-10 w-full sm:w-auto">
-                          <h3 className="text-lg sm:text-xl font-semibold text-white line-clamp-1">
-                            {order.products?.name || "Unknown Product"}
-                          </h3>
-                          <p className="text-xs sm:text-sm text-gray-300 mt-1 line-clamp-2">
-                            {order.products?.description || "No description available"}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-2">
-                            Order ID: {order.id.slice(0, 8)}
-                          </p>
-                        </div>
-                        <span
-                          className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium tracking-wide ${
-                            order.status === "completed"
-                              ? "bg-green-600/20 text-green-400 border border-green-500/30"
-                              : order.status === "pending"
-                              ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
-                              : "bg-red-600/20 text-red-400 border border-red-500/30"
-                          }`}
-                        >
-                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                        </span>
-                      </div>
-                      <div className="mt-4 sm:mt-5 grid grid-cols-2 gap-3 sm:gap-5 text-xs sm:text-sm text-gray-200">
-                        <div className="bg-gray-700/30 p-2 sm:p-3 rounded-lg">
-                          <span className="text-gray-400 font-medium block mb-1">Quantity</span>
-                          {order.quantity}
-                        </div>
-                        <div className="bg-gray-700/30 p-2 sm:p-3 rounded-lg">
-                          <span className="text-gray-400 font-medium block mb-1">Total</span>
-                          ₹{order.total_amount.toFixed(2)}
-                        </div>
-                        <div className="bg-gray-700/30 p-2 sm:p-3 rounded-lg">
-                          <span className="text-gray-400 font-medium block mb-1">Date</span>
-                          {new Date(order.created_at).toLocaleDateString()}
-                        </div>
-                        <div className="bg-gray-700/30 p-2 sm:p-3 rounded-lg">
-                          <span className="text-gray-400 font-medium block mb-1">Payment ID</span>
-                          {order.payment_id?.slice(0, 8) || "N/A"}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setDeleteConfirmId(order.id);
-                      setDeleteType('order');
-                    }}
-                    className="absolute top-3 right-3 sm:top-4 sm:right-4 text-red-400 hover:text-red-600 transition-all duration-200"
-                    aria-label="Delete order"
-                  >
-                    <FaTrashAlt className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </button>
-                  {deleteConfirmId === order.id && deleteType === 'order' && (
-                    <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded-2xl backdrop-blur-sm">
-                      <div className="bg-gray-800 p-4 sm:p-6 rounded-xl text-center max-w-[90%] shadow-2xl border border-gray-700">
-                        <p className="text-sm sm:text-base text-gray-200 mb-4 sm:mb-6">Are you sure you want to delete this order?</p>
-                        <div className="flex justify-center space-x-4 sm:space-x-6">
-                          <button
-                            onClick={handleDeleteConfirm}
-                            className="bg-red-600 px-4 py-2 sm:px-6 sm:py-3 rounded-lg hover:bg-red-700 text-xs sm:text-sm font-medium transition-all duration-200 shadow-md"
-                          >
-                            Delete
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDeleteConfirmId(null);
-                              setDeleteType(null);
-                            }}
-                            className="bg-gray-700 px-4 py-2 sm:px-6 sm:py-3 rounded-lg hover:bg-gray-600 text-xs sm:text-sm font-medium transition-all duration-200 shadow-md"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+
+      <div className="h-full overflow-y-auto">
+        {showOrderHistory ? (
+          <div className="min-h-full bg-gray-50">
+            {/* Header */}
+            <div className="bg-white border-b border-gray-200 px-6 py-5 sticky top-0 z-10">
+              <div className="flex items-center justify-between pr-12">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Order History</h1>
+                  <p className="text-sm text-gray-600 mt-1">Track and manage your orders</p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : showAddresses ? (
-        <div className="p-4 sm:p-6 flex flex-col min-h-full">
-          <div className="flex items-center justify-between mb-6 sm:mb-8 pr-12 sm:pr-16">
-            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Saved Addresses</h2>
-            <button
-              onClick={() => setShowAddresses(false)}
-              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm shadow-sm"
-            >
-              <FaArrowLeft className="text-base sm:text-lg" />
-              Back
-            </button>
-          </div>
-          {error && (
-            <p className="text-red-400 bg-red-900/20 p-3 sm:p-4 rounded-xl mb-6 sm:mb-8 text-xs sm:text-sm shadow-md border border-red-500/30">
-              {error}
-            </p>
-          )}
-          {addressesLoading ? (
-            <div className="flex justify-center items-center h-32 sm:h-40">
-              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-t-3 border-b-3 border-blue-500 border-opacity-80"></div>
-            </div>
-          ) : addresses.length === 0 ? (
-            <p className="text-gray-400 text-center py-12 sm:py-16 text-base sm:text-lg font-medium">No addresses saved yet.</p>
-          ) : (
-            <div className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pr-1 sm:pr-2">
-              {addresses.map((address) => (
-                <div
-                  key={address.id}
-                  className="bg-gray-800/40 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/40 hover:border-gray-600/50"
+                <button
+                  onClick={() => setShowOrderHistory(false)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm"
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="pr-8 sm:pr-10">
-                      <p className="text-lg sm:text-xl font-semibold text-white line-clamp-2">
-                        {address.full_address}
-                      </p>
-                      <p className="text-xs sm:text-sm text-gray-300 mt-2">
-                        Added: {new Date(address.created_at).toLocaleDateString()}
-                      </p>
+                  <FaArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <FaShieldAlt className="h-5 w-5 text-red-400" />
                     </div>
-                    {address.is_last_used && (
-                      <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium bg-green-600/20 text-green-400 border border-green-500/30">
-                        Default
-                      </span>
-                    )}
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-red-800">{error}</p>
+                    </div>
                   </div>
-                  <div className="mt-4 sm:mt-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
-                    {!address.is_last_used && (
-                      <button
-                        onClick={() => handleSetLastUsed(address.id)}
-                        className="text-blue-400 hover:text-blue-300 text-xs sm:text-sm font-medium underline transition-all duration-200"
-                      >
-                        Set as Default
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setDeleteConfirmId(address.id);
-                        setDeleteType('address');
-                      }}
-                      className="text-red-400 hover:text-red-600 text-xs sm:text-sm font-medium transition-all duration-200 flex items-center gap-2"
-                      aria-label="Delete address"
+                </div>
+              )}
+
+              {ordersLoading ? (
+                <div className="flex justify-center items-center h-48">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mx-auto mb-3"></div>
+                    <p className="text-gray-600">Loading orders...</p>
+                  </div>
+                </div>
+              ) : orders.length === 0 ? (
+                <div className="text-center py-16">
+                  <FaShoppingBag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No orders yet</h3>
+                  <p className="text-gray-600">When you place your first order, it will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-4 mb-14">
+                  {orders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
                     >
-                      <FaTrashAlt className="w-3 h-3 sm:w-4 sm:h-4" />
-                      Delete
-                    </button>
-                  </div>
-                  {deleteConfirmId === address.id && deleteType === 'address' && (
-                    <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded-2xl backdrop-blur-sm">
-                      <div className="bg-gray-800 p-4 sm:p-6 rounded-xl text-center max-w-[90%] shadow-2xl border border-gray-700">
-                        <p className="text-sm sm:text-base text-gray-200 mb-4 sm:mb-6">Are you sure you want to delete this address?</p>
-                        <div className="flex justify-center space-x-4 sm:space-x-6">
-                          <button
-                            onClick={handleDeleteConfirm}
-                            className="bg-red-600 px-4 py-2 sm:px-6 sm:py-3 rounded-lg hover:bg-red-700 text-xs sm:text-sm font-medium transition-all duration-200 shadow-md"
-                          >
-                            Delete
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDeleteConfirmId(null);
-                              setDeleteType(null);
-                            }}
-                            className="bg-gray-700 px-4 py-2 sm:px-6 sm:py-3 rounded-lg hover:bg-gray-600 text-xs sm:text-sm font-medium transition-all duration-200 shadow-md"
-                          >
-                            Cancel
-                          </button>
+                      <div className="p-6">
+                        {/* Header with order info and status */}
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                          <div>
+                            <h4 className="font-semibold text-gray-900">
+                              Order #{order.id.slice(0, 8).toUpperCase()}
+                            </h4>
+                            <p className="text-sm text-gray-500">
+                              {new Date(order.created_at).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(order.status)}`}>
+                              {order.status?.charAt(0).toUpperCase() + order.status?.slice(1)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Product info */}
+                        <div className="flex items-start gap-4 mb-4">
+                          {order.products?.image && (
+                            <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
+                              <Image
+                                src={normalizeImagePath(order.products.image)[0]}
+                                alt={order.products.name || "Product"}
+                                width={80}
+                                height={80}
+                                className="object-cover w-full h-full"
+                              />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-gray-900 mb-1">
+                              {order.products?.name || "Unknown Product"}
+                            </h3>
+                            <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                              {order.products?.description || "No description available"}
+                            </p>
+                            <div className="flex items-center gap-4 text-sm">
+                              <span className="text-gray-600">
+                                Qty: <span className="font-medium text-gray-900">{order.quantity}</span>
+                              </span>
+                              <span className="text-gray-600">
+                                Total: <span className="font-semibold text-gray-900">₹{order.total_amount?.toFixed(2)}</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Additional order details */}
+                        <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-600">Payment ID:</span>
+                            <span className="font-mono text-gray-900">
+                              {order.payment_id?.slice(0, 12).toUpperCase() || "N/A"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                          
+                          <div className="flex items-center gap-2">
+                            
+                            <button
+                              onClick={() => {
+                                setDeleteConfirmId(order.id);
+                                setDeleteType('order');
+                              }}
+                              className="text-gray-500 hover:text-red-600 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 transition-all duration-200 flex items-center gap-1.5"
+                              aria-label="Delete order"
+                            >
+                              <FaTrashAlt className="w-3.5 h-3.5" />
+                              Delete
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : showWishlist ? (
-        <div className="p-4 sm:p-6 flex flex-col min-h-full">
-          <div className="flex items-center justify-between mb-6 sm:mb-8 pr-12 sm:pr-16">
-            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Wishlist</h2>
-            <button
-              onClick={() => setShowWishlist(false)}
-              className="flex items-center gap-2 text-gray-300 hover:text-white font-medium px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 backdrop-blur-sm shadow-sm"
-            >
-              <FaArrowLeft className="text-base sm:text-lg" />
-              Back
-            </button>
-          </div>
-          {error && (
-            <p className="text-red-400 bg-red-900/20 p-3 sm:p-4 rounded-xl mb-6 sm:mb-8 text-xs sm:text-sm shadow-md border border-red-500/30">
-              {error}
-            </p>
-          )}
-          {wishlistLoading ? (
-            <div className="flex justify-center items-center h-32 sm:h-40">
-              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-t-3 border-b-3 border-blue-500 border-opacity-80"></div>
-            </div>
-          ) : wishlist.length === 0 ? (
-            <p className="text-gray-400 text-center py-12 sm:py-16 text-base sm:text-lg font-medium">No items in your wishlist yet.</p>
-          ) : (
-            <div className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pr-1 sm:pr-2">
-              {wishlist.map((item) => (
-                <Link
-                  href={`/products/${item.id}`}
-                  key={item.id}
-                  className="block bg-gray-800/40 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative border border-gray-700/40 hover:border-blue-500/40"
-                >
-                  <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
-                    {item.image && item.image.length > 0 && (
-                      <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-gray-600/40 shadow-sm">
-                        <Image
-                          src={normalizeImagePath(item.image)[0]}
-                          alt={item.name || "Product"}
-                          width={80}
-                          height={80}
-                          className="object-cover w-full h-full scale-105 transition-transform duration-300 hover:scale-110"
-                        />
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <h3 className="text-lg sm:text-xl font-semibold text-white line-clamp-1">
-                        {item.name || "Unknown Product"}
-                      </h3>
-                      <p className="text-xs sm:text-sm text-gray-300 mt-1 line-clamp-2">
-                        {item.description || "No description available"}
-                      </p>
-                      {item.price && (
-                        <p className="text-xs sm:text-sm text-gray-200 mt-2">
-                          Price: ₹{item.price.toFixed(2)}
-                        </p>
+
+                      {deleteConfirmId === order.id && deleteType === 'order' && (
+                        <div className="absolute inset-0 bg-white/95 flex items-center justify-center backdrop-blur-sm">
+                          <div className="bg-white p-6 rounded-xl shadow-xl border border-gray-200 max-w-sm mx-4">
+                            <h4 className="font-semibold text-gray-900 mb-2">Delete Order</h4>
+                            <p className="text-sm text-gray-600 mb-6">
+                              Are you sure you want to delete this order? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                              <button
+                                onClick={handleDeleteConfirm}
+                                className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 font-medium text-sm transition-colors duration-200"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setDeleteConfirmId(null);
+                                  setDeleteType(null);
+                                }}
+                                className="flex-1 bg-gray-100 text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium text-sm transition-colors duration-200"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       )}
                     </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="flex flex-col items-center py-6 px-4 sm:py-8 sm:px-6 bg-gradient-to-b from-gray-900 to-gray-800 relative">
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-4 border-blue-500/80 shadow-xl">
-              {avatarPreview ? (
-                <Image
-                  src={avatarPreview}
-                  alt="Preview"
-                  fill
-                  className="object-cover scale-105"
-                />
-              ) : user.user_metadata?.avatar_url ? (
-                <Image
-                  src={user.user_metadata.avatar_url}
-                  alt="Profile"
-                  fill
-                  className="object-cover scale-105"
-                />
-              ) : (
-                <div className="w-full h-full bg-blue-600 flex items-center justify-center text-3xl sm:text-4xl text-white font-bold">
-                  {user.user_metadata?.full_name?.[0].toUpperCase() || "?"}
+                  ))}
                 </div>
               )}
             </div>
+          </div>
+        ) : showAddresses ? (
+          <div className="min-h-full bg-gray-50">
+            {/* Header */}
+            <div className="bg-white border-b border-gray-200 px-6 py-5 sticky top-0 z-10">
+              <div className="flex items-center justify-between pr-12">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Saved Addresses</h1>
+                  <p className="text-sm text-gray-600 mt-1">Manage your delivery addresses</p>
+                </div>
+                <button
+                  onClick={() => setShowAddresses(false)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm"
+                >
+                  <FaArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+              </div>
+            </div>
 
-            {editMode ? (
-              <div className="w-full max-w-xs sm:max-w-sm mt-4 sm:mt-6">
-                <input
-                  type="file"
-                  accept="image/*"
-                  ref={avatarFileRef}
-                  onChange={handleAvatarChange}
-                  className="mt-2 text-xs sm:text-sm text-gray-200 w-full bg-gray-800 rounded-xl p-2 sm:p-3 border border-gray-700 focus:border-blue-500 transition-all duration-200 file:mr-3 sm:file:mr-4 file:py-1 sm:file:py-2 file:px-3 sm:file:px-4 file:rounded-full file:border-0 file:text-xs sm:file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-                />
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="mt-3 sm:mt-4 w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl bg-gray-800 text-white border border-gray-700 focus:border-blue-500 focus:outline-none transition-all duration-200 shadow-sm"
-                  placeholder="Enter full name"
-                />
-                <div className="flex justify-center space-x-4 sm:space-x-6 mt-4 sm:mt-6">
+            {/* Content */}
+            <div className="p-6 mb-14">
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <FaShieldAlt className="h-5 w-5 text-red-400" />
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-red-800">{error}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {addressesLoading ? (
+                <div className="flex justify-center items-center h-48">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mx-auto mb-3"></div>
+                    <p className="text-gray-600">Loading addresses...</p>
+                  </div>
+                </div>
+              ) : addresses.length === 0 ? (
+                <div className="text-center py-16">
+                  <FaMapMarkerAlt className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No addresses saved</h3>
+                  <p className="text-gray-600">Add addresses during checkout for faster ordering.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {addresses.map((address) => (
+                    <div
+                      key={address.id}
+                      className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden"
+                    >
+                      <div className="p-6">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1 pr-8">
+                            <p className="font-semibold text-gray-900 mb-2 leading-relaxed">
+                              {address.full_address}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Added on {new Date(address.created_at).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                          {address.is_last_used && (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <FaCheck className="w-3 h-3 mr-1" />
+                              Default
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                          {!address.is_last_used && (
+                            <button
+                              onClick={() => handleSetLastUsed(address.id)}
+                              className="text-blue-600 hover:text-blue-700 text-sm font-medium hover:underline transition-colors duration-200"
+                            >
+                              Set as Default
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setDeleteConfirmId(address.id);
+                              setDeleteType('address');
+                            }}
+                            className="flex items-center gap-2 text-red-600 hover:text-red-700 text-sm font-medium hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all duration-200"
+                            aria-label="Delete address"
+                          >
+                            <FaTrashAlt className="w-3 h-3" />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {deleteConfirmId === address.id && deleteType === 'address' && (
+                        <div className="absolute inset-0 bg-white/95 flex items-center justify-center backdrop-blur-sm">
+                          <div className="bg-white p-6 rounded-xl shadow-xl border border-gray-200 max-w-sm mx-4">
+                            <h4 className="font-semibold text-gray-900 mb-2">Delete Address</h4>
+                            <p className="text-sm text-gray-600 mb-6">
+                              Are you sure you want to delete this address? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                              <button
+                                onClick={handleDeleteConfirm}
+                                className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 font-medium text-sm transition-colors duration-200"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setDeleteConfirmId(null);
+                                  setDeleteType(null);
+                                }}
+                                className="flex-1 bg-gray-100 text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium text-sm transition-colors duration-200"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : showWishlist ? (
+          <div className="min-h-full bg-gray-50">
+            {/* Header */}
+            <div className="bg-white border-b border-gray-200 px-6 py-5 sticky top-0 z-10">
+              <div className="flex items-center justify-between pr-12">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Wishlist</h1>
+                  <p className="text-sm text-gray-600 mt-1">Items you want to buy later</p>
+                </div>
+                <button
+                  onClick={() => setShowWishlist(false)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm"
+                >
+                  <FaArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <FaShieldAlt className="h-5 w-5 text-red-400" />
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-red-800">{error}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {wishlistLoading ? (
+                <div className="flex justify-center items-center h-48">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mx-auto mb-3"></div>
+                    <p className="text-gray-600">Loading wishlist...</p>
+                  </div>
+                </div>
+              ) : wishlist.length === 0 ? (
+                <div className="text-center py-16">
+                  <FaHeart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Your wishlist is empty</h3>
+                  <p className="text-gray-600">Save items you love to buy them later.</p>
+                </div>
+              ) : (
+                <div className="space-y-4 mb-14">
+                  {wishlist.map((item) => (
+                    <Link
+                      href={`/products/${item.id}`}
+                      key={item.id}
+                      className="block bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 overflow-hidden group"
+                    >
+                      <div className="p-6">
+                        <div className="flex items-start gap-4">
+                          {item.image && item.image.length > 0 && (
+                            <div className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
+                              <Image
+                                src={normalizeImagePath(item.image)[0]}
+                                alt={item.name || "Product"}
+                                width={64}
+                                height={64}
+                                className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-200"
+                              />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">
+                              {item.name || "Unknown Product"}
+                            </h3>
+                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                              {item.description || "No description available"}
+                            </p>
+                            {item.price && (
+                              <div className="mt-3 flex items-center">
+                                <span className="text-lg font-bold text-gray-900">₹{item.price.toFixed(2)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Profile Header */}
+            <div className="bg-gradient-to-br from-blue-600 to-blue-700 px-6 py-8 relative overflow-hidden">
+              <div className="absolute inset-0 bg-blue-600 opacity-90"></div>
+              <div className="relative z-10">
+                <div className="flex flex-col items-center">
+                  <div className="relative">
+                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white/20 shadow-xl bg-white/10 backdrop-blur-sm">
+                      {avatarPreview ? (
+                        <Image
+                          src={avatarPreview}
+                          alt="Preview"
+                          fill
+                          className="object-cover"
+                        />
+                      ) : user.user_metadata?.avatar_url ? (
+                        <Image
+                          src={user.user_metadata.avatar_url}
+                          alt="Profile"
+                          fill
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-blue-500 flex items-center justify-center text-2xl text-white font-bold">
+                          <FaUser className="w-8 h-8" />
+                        </div>
+                      )}
+                    </div>
+                    {editMode && (
+                      <button
+                        onClick={() => avatarFileRef.current?.click()}
+                        className="absolute -bottom-2 -right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-600 shadow-lg hover:bg-gray-50 transition-colors duration-200"
+                        aria-label="Change avatar"
+                      >
+                        <FaCamera className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {editMode ? (
+                    <div className="mt-6 w-full max-w-sm space-y-4">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        ref={avatarFileRef}
+                        onChange={handleAvatarChange}
+                        className="hidden"
+                      />
+                      <div>
+                        <label className="block text-sm font-medium text-white/90 mb-2">
+                          Full Name
+                        </label>
+                        <input
+                          type="text"
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          className="w-full px-4 py-3 rounded-lg bg-white/10 backdrop-blur-sm text-white placeholder-white/70 border border-white/20 focus:border-white/50 focus:outline-none transition-all duration-200"
+                          placeholder="Enter your full name"
+                        />
+                      </div>
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          onClick={handleSave}
+                          disabled={isUpdating || !fullName.trim()}
+                          className="flex-1 bg-white text-blue-600 px-4 py-3 rounded-lg font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm flex items-center justify-center gap-2"
+                        >
+                          {isUpdating ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <FaCheck className="w-4 h-4" />
+                              Save Changes
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={handleEditToggle}
+                          disabled={isUpdating}
+                          className="px-4 py-3 rounded-lg bg-white/10 backdrop-blur-sm text-white border border-white/20 hover:bg-white/20 disabled:opacity-50 transition-all duration-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center mt-6">
+                      <h2 className="text-xl font-bold text-white">
+                        {user.user_metadata?.full_name || "Welcome"}
+                      </h2>
+                      <p className="text-blue-100 text-sm mt-1">{user.email}</p>
+                      <button
+                        onClick={handleEditToggle}
+                        className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm text-white text-sm font-medium rounded-lg border border-white/20 hover:bg-white/20 transition-all duration-200"
+                      >
+                        <FaUserEdit className="w-4 h-4" />
+                        Edit Profile
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Decorative elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-16 translate-x-16"></div>
+              <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/5 rounded-full translate-y-10 -translate-x-10"></div>
+            </div>
+
+            {/* Error Display */}
+            {error && !editMode && (
+              <div className="mx-6 mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <FaShieldAlt className="h-5 w-5 text-red-400" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-red-800">{error}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Navigation Menu */}
+            <div className="px-6 py-6">
+              <div className="space-y-2">
+                {[
+                  {
+                    label: "Order History",
+                    icon: <FaHistory className="w-5 h-5" />,
+                    onClick: handleOrderHistoryClick,
+                    description: "View and track your orders"
+                  },
+                  {
+                    label: "Saved Addresses",
+                    icon: <FaMapMarkerAlt className="w-5 h-5" />,
+                    onClick: handleAddressesClick,
+                    description: "Manage delivery addresses"
+                  },
+                  {
+                    label: "Wishlist",
+                    icon: <FaHeart className="w-5 h-5" />,
+                    onClick: handleWishlistClick,
+                    description: "Items you want to buy later"
+                  },
+                  {
+                    label: "Customer Support",
+                    icon: <FaHeadset className="w-5 h-5" />,
+                    onClick: () => {},
+                    description: "Get help with your orders"
+                  },
+                ].map((item) => (
                   <button
-                    onClick={handleSave}
-                    className="bg-blue-600 px-4 py-2 sm:px-6 sm:py-3 rounded-xl hover:bg-blue-700 text-xs sm:text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                    key={item.label}
+                    onClick={item.onClick}
+                    className="w-full flex items-center gap-4 p-4 text-left bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 hover:shadow-sm transition-all duration-200 group"
                   >
-                    Save
+                    <div className="text-gray-600 group-hover:text-blue-600 transition-colors duration-200">
+                      {item.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors duration-200">
+                        {item.label}
+                      </h3>
+                      <p className="text-sm text-gray-600">{item.description}</p>
+                    </div>
                   </button>
-                  <button
-                    onClick={() => {
-                      setEditMode(false);
-                      setAvatarPreview(null);
-                    }}
-                    className="bg-gray-700 px-4 py-2 sm:px-6 sm:py-3 rounded-xl hover:bg-gray-600 text-xs sm:text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
-                  >
-                    Cancel
+                ))}
+              </div>
+
+              {/* Account Actions */}
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-4 p-4 text-left text-red-600 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 hover:border-red-300 transition-all duration-200 group"
+                >
+                  <FaSignOutAlt className="w-5 h-5" />
+                  <div className="flex-1">
+                    <h3 className="font-semibold">Sign Out</h3>
+                    <p className="text-sm text-red-500">Sign out of your account</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Footer */}
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+                  <span>© 2024 Your Company</span>
+                  <span>•</span>
+                  <button className="hover:text-gray-700 transition-colors duration-200">
+                    Privacy Policy
+                  </button>
+                  <span>•</span>
+                  <button className="hover:text-gray-700 transition-colors duration-200">
+                    Terms of Service
                   </button>
                 </div>
               </div>
-            ) : (
-              <div className="text-center mt-4 sm:mt-6">
-                <p className="font-bold text-lg sm:text-xl text-white">
-                  {user.user_metadata?.full_name || "No Name"}
-                </p>
-                <p className="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2">{user.email}</p>
-                <button
-                  onClick={handleEditToggle}
-                  className="mt-3 sm:mt-4 text-xs sm:text-sm text-blue-400 hover:text-blue-300 underline transition-all duration-200 flex items-center justify-center gap-1 sm:gap-2 mx-auto"
-                >
-                  <FaUserEdit className="text-base sm:text-lg" />
-                  Edit Profile
-                </button>
-              </div>
-            )}
-            {error && (
-              <p className="text-red-400 bg-red-900/20 p-3 sm:p-4 rounded-xl mt-4 sm:mt-6 text-xs sm:text-sm shadow-md border border-red-500/30 w-full max-w-xs sm:max-w-sm">
-                {error}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1 px-4 sm:px-6 pb-6 sm:pb-8">
-            {[
-              {
-                label: "Order History",
-                icon: <FaHistory />,
-                onClick: handleOrderHistoryClick,
-              },
-              {
-                label: "Saved Addresses",
-                icon: <FaMapMarkerAlt />,
-                onClick: handleAddressesClick,
-              },
-              {
-                label: "Wishlist",
-                icon: <FaHeart />,
-                onClick: handleWishlistClick,
-              },
-              { label: "Customer Support", icon: <FaHeadset /> },
-            ].map((item) => (
-              <div
-                key={item.label}
-                onClick={item.onClick}
-                className="flex items-center space-x-3 sm:space-x-4 py-3 sm:py-4 cursor-pointer text-gray-200 hover:text-white hover:bg-gray-800/40 rounded-xl transition-all duration-300 px-3 sm:px-4 backdrop-blur-sm shadow-sm hover:shadow-md"
-              >
-                <span className="text-lg sm:text-xl">{item.icon}</span>
-                <span className="text-sm sm:text-base font-medium">{item.label}</span>
-              </div>
-            ))}
-
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center space-x-3 sm:space-x-4 mt-6 sm:mt-8 py-3 sm:py-4 text-red-400 hover:text-red-500 hover:bg-gray-800/40 rounded-xl transition-all duration-300 px-3 sm:px-4 backdrop-blur-sm shadow-sm hover:shadow-md"
-            >
-              <FaSignOutAlt className="text-lg sm:text-xl" />
-              <span className="text-sm sm:text-base font-medium">Logout</span>
-            </button>
-          </div>
-        </>
-      )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
