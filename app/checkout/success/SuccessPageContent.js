@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -33,8 +32,8 @@ const normalizeImageUrl = (url) => {
   return url;
 };
 
-// Generate PDF invoice
-const generateInvoicePDF = (orders, paymentId) => {
+// Generate PDF invoice and store in Supabase (normalized version)
+const generateInvoicePDF = async (orders, paymentId) => {
   try {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -112,9 +111,58 @@ const generateInvoicePDF = (orders, paymentId) => {
 
     // Save PDF
     doc.save(`invoice_${paymentId || 'order'}.pdf`);
+
+    // Calculate totals (example logic)
+    const taxRate = 0.1; // Example: 10% tax rate, adjust based on your rules
+    const commissionRate = 0.05; // Example: 5% commission, adjust based on your rules
+    const promotionAmount = 0; // Example: No promotions, adjust based on your logic
+
+    const taxAmount = totalAmount * taxRate;
+    const commissionAmount = totalAmount * commissionRate;
+    const userId = orders[0]?.user_id; // Assuming all orders in the invoice belong to the same user
+
+    // Insert into invoices table
+    const { data: invoiceData, error: invoiceError } = await supabase
+      .from('invoices')
+      .insert({
+        payment_id: paymentId || 'N/A',
+        user_id: userId,
+        total_amount: totalAmount,
+        tax_amount: taxAmount,
+        commission_amount: commissionAmount,
+        promotion_amount: promotionAmount,
+        invoice_date: new Date().toISOString(),
+        status: 'generated',
+      })
+      .select('id')
+      .single();
+
+    if (invoiceError) {
+      console.error('Error inserting invoice:', invoiceError);
+      throw new Error('Failed to store invoice data.');
+    }
+
+    const invoiceId = invoiceData.id;
+
+    // Insert links into invoice_orders table
+    const invoiceOrderInserts = orders.map((order) => ({
+      invoice_id: invoiceId,
+      order_id: order.id,
+    }));
+
+    const { error: linkError } = await supabase
+      .from('invoice_orders')
+      .insert(invoiceOrderInserts);
+
+    if (linkError) {
+      console.error('Error linking orders to invoice:', linkError);
+      throw new Error('Failed to link orders to invoice.');
+    }
+
+    console.log('Invoice and order links stored successfully.');
   } catch (error) {
-    console.error('Error generating PDF:', error);
-    throw new Error('Failed to generate invoice. Please try again.');
+    console.error('Error generating PDF or storing invoice:', error);
+    throw new Error('Failed to generate invoice or store data. Please try again.');
   }
 };
 
@@ -258,14 +306,16 @@ export default function SuccessPageContent() {
     }
   };
 
-  const handleDownloadInvoice = () => {
+  const handleDownloadInvoice = async () => {
     if (!orders.length) {
       setErrorMessage('No orders available to generate an invoice.');
       setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
     try {
-      generateInvoicePDF(orders, paymentId);
+      await generateInvoicePDF(orders, paymentId);
+      setFeedbackSuccess(true);
+      setTimeout(() => setFeedbackSuccess(false), 3000);
     } catch (error) {
       setErrorMessage(error.message);
       setTimeout(() => setErrorMessage(''), 3000);

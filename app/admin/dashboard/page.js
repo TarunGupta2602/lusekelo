@@ -10,6 +10,7 @@ import { Tooltip } from 'react-tooltip';
 import Papa from 'papaparse';
 import Sidebar from './Sidebar';
 import ProductsManagement from './ProductsManagement';
+import FinancialManagement from './FinancialManagement';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -930,13 +931,12 @@ export default function AdminDashboard() {
                               <td className="px-4 py-3 whitespace-nowrap hidden md:table-cell">{new Date(order.created_at).toLocaleString()}</td>
                               <td className="px-4 py-3 hidden md:table-cell">
                                 <span
-                                  className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                    order.vendor_decision === 'accepted'
+                                  className={`px-3 py-1 rounded-full text-xs font-medium ${order.vendor_decision === 'accepted'
                                       ? 'bg-green-100 text-green-700'
                                       : order.vendor_decision === 'rejected'
-                                      ? 'bg-red-100 text-red-700'
-                                      : 'bg-yellow-100 text-yellow-700'
-                                  }`}
+                                        ? 'bg-red-100 text-red-700'
+                                        : 'bg-yellow-100 text-yellow-700'
+                                    }`}
                                 >
                                   {order.vendor_decision?.charAt(0).toUpperCase() + order.vendor_decision?.slice(1) || 'Pending'}
                                 </span>
@@ -1067,9 +1067,9 @@ export default function AdminDashboard() {
             </div>
           )}
           {activeTab === 'invoices' && (
-            <div className="bg-white rounded-2xl shadow-lg p-6 text-center text-gray-500 text-sm">
-              Invoices are not available yet.
-            </div>
+
+            <FinancialManagement />
+
           )}
           {activeTab === 'vendors' && (
             <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -1198,15 +1198,14 @@ export default function AdminDashboard() {
                               </td>
                               <td className="px-4 py-3">
                                 <span
-                                  className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                    vendor.kyc_status === 'approved'
+                                  className={`px-3 py-1 rounded-full text-xs font-medium ${vendor.kyc_status === 'approved'
                                       ? 'bg-green-100 text-green-700'
                                       : vendor.kyc_status === 'submitted'
-                                      ? 'bg-yellow-100 text-yellow-700'
-                                      : vendor.kyc_status === 'rejected'
-                                      ? 'bg-red-100 text-red-700'
-                                      : 'bg-gray-100 text-gray-700'
-                                  }`}
+                                        ? 'bg-yellow-100 text-yellow-700'
+                                        : vendor.kyc_status === 'rejected'
+                                          ? 'bg-red-100 text-red-700'
+                                          : 'bg-gray-100 text-gray-700'
+                                    }`}
                                 >
                                   {vendor.kyc_status || 'Pending'}
                                 </span>

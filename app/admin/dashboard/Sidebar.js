@@ -7,7 +7,6 @@ const TABS = [
   { key: 'invoices', label: 'Invoices' },
   { key: 'products', label: 'Products & Categories' },
   { key: 'agents', label: 'Agents' },
-  { key: 'assignOrder', label: 'Assign Order' },
 ];
 
 const SidebarHeader = ({ collapsed, setCollapsed, setMobileOpen }) => (
