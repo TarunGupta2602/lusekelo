@@ -4,24 +4,38 @@
 import { useEffect, useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Link from 'next/link';
-import { FaArrowLeft, FaDownload, FaEye } from 'react-icons/fa';
+import { FaArrowLeft, FaDownload, FaEye, FaCheckCircle } from 'react-icons/fa';
 
 // Initialize Supabase client
 const supabase = createClientComponentClient();
 
 export default function FinancialManagement() {
   const [invoices, setInvoices] = useState([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [sortConfig, setSortConfig] = useState({ key: 'invoice_date', direction: 'desc' });
   const [showModal, setShowModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [commissionForm, setCommissionForm] = useState({ product_id: '', commission_rate: '' });
+  const [taxForm, setTaxForm] = useState({ region: '', product_category: '', tax_rate: '' });
+  const [promotionForm, setPromotionForm] = useState({
+    name: '',
+    discount_percentage: '',
+    product_id: '',
+    start_date: '',
+    end_date: '',
+  });
 
   useEffect(() => {
-    const fetchInvoices = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
+        
+        // Fetch invoices
         let query = supabase
           .from('invoices')
           .select(`
@@ -36,14 +50,11 @@ export default function FinancialManagement() {
             status,
             invoice_orders(order_id)
           `)
-          .order('invoice_date', { ascending: false });
+          .order(sortConfig.key, { ascending: sortConfig.direction === 'asc' });
 
-        // Apply search filter
         if (searchTerm) {
           query = query.ilike('payment_id', `%${searchTerm}%`);
         }
-
-        // Apply date range filter
         if (dateRange.start) {
           query = query.gte('invoice_date', dateRange.start);
         }
@@ -51,33 +62,54 @@ export default function FinancialManagement() {
           query = query.lte('invoice_date', dateRange.end);
         }
 
-        const { data, error } = await query;
+        const { data: invoiceData, error: invoiceError } = await query;
 
-        if (error) {
-          console.error('Error fetching invoices:', error);
+        if (invoiceError) {
+          console.error('Error fetching invoices:', invoiceError);
           setErrorMessage('Failed to fetch invoices. Please try again.');
           setInvoices([]);
-        } else if (!data || data.length === 0) {
+        } else if (!invoiceData || invoiceData.length === 0) {
           setErrorMessage('No invoices found.');
           setInvoices([]);
         } else {
-          const formattedInvoices = data.map((invoice) => ({
+          const formattedInvoices = invoiceData.map((invoice) => ({
             ...invoice,
             order_ids: invoice.invoice_orders.map((link) => link.order_id),
           }));
           setInvoices(formattedInvoices);
         }
+
+        // Fetch products for dropdown
+        const { data: productData, error: productError } = await supabase
+          .from('products')
+          .select('id, name');
+
+        if (productError) {
+          console.error('Error fetching products:', productError);
+          setErrorMessage('Failed to fetch products. Please try again.');
+          setProducts([]);
+        } else {
+          setProducts(productData);
+        }
       } catch (err) {
-        console.error('Unexpected error fetching invoices:', err);
-        setErrorMessage('An unexpected error occurred. Please try again.');
+        console.error('Unexpected error:', err);
+        setErrorMessage('An unexpected error occurred.');
         setInvoices([]);
+        setProducts([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchInvoices();
-  }, [searchTerm, dateRange]);
+    fetchData();
+  }, [searchTerm, dateRange, sortConfig]);
+
+  const handleSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
 
   const handleDownloadCSV = () => {
     const headers = [
@@ -125,6 +157,108 @@ export default function FinancialManagement() {
     setShowModal(true);
   };
 
+  const handleCommissionSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const { error } = await supabase.from('seller_commissions').insert({
+        product_id: commissionForm.product_id,
+        commission_rate: parseFloat(commissionForm.commission_rate) / 100,
+      });
+
+      if (error) {
+        console.error('Error setting commission:', error);
+        setErrorMessage('Failed to set commission. Please try again.');
+      } else {
+        setSuccessMessage('Commission set successfully!');
+        setCommissionForm({ product_id: '', commission_rate: '' });
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      setErrorMessage('An unexpected error occurred.');
+    }
+    setTimeout(() => {
+      setErrorMessage('');
+      setSuccessMessage('');
+    }, 3000);
+  };
+
+  const handleTaxSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const { error } = await supabase.from('tax_rules').insert({
+        region: taxForm.region,
+        product_category: taxForm.product_category,
+        tax_rate: parseFloat(taxForm.tax_rate) / 100,
+      });
+
+      if (error) {
+        console.error('Error setting tax rule:', error);
+        setErrorMessage('Failed to set tax rule. Please try again.');
+      } else {
+        setSuccessMessage('Tax rule set successfully!');
+        setTaxForm({ region: '', product_category: '', tax_rate: '' });
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      setErrorMessage('An unexpected error occurred.');
+    }
+    setTimeout(() => {
+      setErrorMessage('');
+      setSuccessMessage('');
+    }, 3000);
+  };
+
+  const handlePromotionSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      // Insert into promotions table
+      const { data: promoData, error: promoError } = await supabase
+        .from('promotions')
+        .insert({
+          name: promotionForm.name,
+          discount_percentage: parseFloat(promotionForm.discount_percentage) / 100,
+          start_date: promotionForm.start_date,
+          end_date: promotionForm.end_date,
+        })
+        .select('id')
+        .single();
+
+      if (promoError) {
+        console.error('Error setting promotion:', promoError);
+        setErrorMessage('Failed to set promotion. Please try again.');
+        return;
+      }
+
+      const promotionId = promoData.id;
+
+      // Insert into promotion_products table (single product_id)
+      if (promotionForm.product_id) {
+        const { error: linkError } = await supabase
+          .from('promotion_products')
+          .insert({
+            promotion_id: promotionId,
+            product_id: promotionForm.product_id,
+          });
+
+        if (linkError) {
+          console.error('Error linking product to promotion:', linkError);
+          setErrorMessage('Failed to link product to promotion.');
+          return;
+        }
+      }
+
+      setSuccessMessage('Promotion set successfully!');
+      setPromotionForm({ name: '', discount_percentage: '', product_id: '', start_date: '', end_date: '' });
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      setErrorMessage('An unexpected error occurred.');
+    }
+    setTimeout(() => {
+      setErrorMessage('');
+      setSuccessMessage('');
+    }, 3000);
+  };
+
   const totalAmount = invoices.reduce((sum, inv) => sum + inv.total_amount, 0);
   const totalTax = invoices.reduce((sum, inv) => sum + inv.tax_amount, 0);
   const totalCommission = invoices.reduce((sum, inv) => sum + inv.commission_amount, 0);
@@ -147,7 +281,7 @@ export default function FinancialManagement() {
             </Link>
           </div>
 
-          {/* Error Message */}
+          {/* Messages */}
           {errorMessage && (
             <div className="mb-6">
               <div className="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
@@ -155,6 +289,14 @@ export default function FinancialManagement() {
                   <span className="text-xs font-bold">!</span>
                 </div>
                 {errorMessage}
+              </div>
+            </div>
+          )}
+          {successMessage && (
+            <div className="mb-6">
+              <div className="bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                <FaCheckCircle className="text-green-600" />
+                {successMessage}
               </div>
             </div>
           )}
@@ -176,6 +318,204 @@ export default function FinancialManagement() {
             <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
               <h3 className="text-sm font-medium text-gray-600">Total Taxes</h3>
               <p className="text-2xl font-bold text-blue-600">₹{totalTax.toFixed(2)}</p>
+            </div>
+          </div>
+
+          {/* Management Forms */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            {/* Set Commission */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Set Commission</h3>
+              <form onSubmit={handleCommissionSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="product_id" className="block text-sm font-medium text-gray-700 mb-1">
+                    Product
+                  </label>
+                  <select
+                    id="product_id"
+                    value={commissionForm.product_id}
+                    onChange={(e) => setCommissionForm({ ...commissionForm, product_id: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="" disabled>Select a product</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="commission_rate" className="block text-sm font-medium text-gray-700 mb-1">
+                    Commission Rate (%)
+                  </label>
+                  <input
+                    id="commission_rate"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={commissionForm.commission_rate}
+                    onChange={(e) => setCommissionForm({ ...commissionForm, commission_rate: e.target.value })}
+                    placeholder="e.g., 5 for 5%"
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-lg font-semibold shadow-md transition-all duration-300"
+                >
+                  Set Commission
+                </button>
+              </form>
+            </div>
+
+            {/* Set Tax Rule */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Set Tax Rule</h3>
+              <form onSubmit={handleTaxSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="region" className="block text-sm font-medium text-gray-700 mb-1">
+                    Region
+                  </label>
+                  <input
+                    id="region"
+                    type="text"
+                    value={taxForm.region}
+                    onChange={(e) => setTaxForm({ ...taxForm, region: e.target.value })}
+                    placeholder="e.g., default"
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="product_category" className="block text-sm font-medium text-gray-700 mb-1">
+                    Product Category
+                  </label>
+                  <input
+                    id="product_category"
+                    type="text"
+                    value={taxForm.product_category}
+                    onChange={(e) => setTaxForm({ ...taxForm, product_category: e.target.value })}
+                    placeholder="e.g., general"
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="tax_rate" className="block text-sm font-medium text-gray-700 mb-1">
+                    Tax Rate (%)
+                  </label>
+                  <input
+                    id="tax_rate"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={taxForm.tax_rate}
+                    onChange={(e) => setTaxForm({ ...taxForm, tax_rate: e.target.value })}
+                    placeholder="e.g., 10 for 10%"
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-lg font-semibold shadow-md transition-all duration-300"
+                >
+                  Set Tax Rule
+                </button>
+              </form>
+            </div>
+
+            {/* Set Promotion */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Set Promotion</h3>
+              <form onSubmit={handlePromotionSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="promo_name" className="block text-sm font-medium text-gray-700 mb-1">
+                    Promotion Name
+                  </label>
+                  <input
+                    id="promo_name"
+                    type="text"
+                    value={promotionForm.name}
+                    onChange={(e) => setPromotionForm({ ...promotionForm, name: e.target.value })}
+                    placeholder="e.g., Summer Sale"
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="discount_percentage" className="block text-sm font-medium text-gray-700 mb-1">
+                    Discount Percentage (%)
+                  </label>
+                  <input
+                    id="discount_percentage"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={promotionForm.discount_percentage}
+                    onChange={(e) => setPromotionForm({ ...promotionForm, discount_percentage: e.target.value })}
+                    placeholder="e.g., 20 for 20%"
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="product_id" className="block text-sm font-medium text-gray-700 mb-1">
+                    Product
+                  </label>
+                  <select
+                    id="product_id"
+                    value={promotionForm.product_id}
+                    onChange={(e) => setPromotionForm({ ...promotionForm, product_id: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="" disabled>Select a product (optional)</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    id="start_date"
+                    type="date"
+                    value={promotionForm.start_date}
+                    onChange={(e) => setPromotionForm({ ...promotionForm, start_date: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    id="end_date"
+                    type="date"
+                    value={promotionForm.end_date}
+                    onChange={(e) => setPromotionForm({ ...promotionForm, end_date: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-lg font-semibold shadow-md transition-all duration-300"
+                >
+                  Set Promotion
+                </button>
+              </form>
             </div>
           </div>
 
@@ -249,14 +589,28 @@ export default function FinancialManagement() {
                 <table className="w-full text-sm text-left text-gray-600">
                   <thead className="text-xs text-gray-700 uppercase bg-gray-50">
                     <tr>
-                      <th scope="col" className="px-4 py-3">Invoice ID</th>
-                      <th scope="col" className="px-4 py-3">Payment ID</th>
+                      <th scope="col" className="px-4 py-3 cursor-pointer" onClick={() => handleSort('id')}>
+                        Invoice ID {sortConfig.key === 'id' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th scope="col" className="px-4 py-3 cursor-pointer" onClick={() => handleSort('payment_id')}>
+                        Payment ID {sortConfig.key === 'payment_id' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </th>
                       <th scope="col" className="px-4 py-3">User ID</th>
-                      <th scope="col" className="px-4 py-3">Total (₹)</th>
-                      <th scope="col" className="px-4 py-3">Tax (₹)</th>
-                      <th scope="col" className="px-4 py-3">Commission (₹)</th>
-                      <th scope="col" className="px-4 py-3">Promotion (₹)</th>
-                      <th scope="col" className="px-4 py-3">Date</th>
+                      <th scope="col" className="px-4 py-3 cursor-pointer" onClick={() => handleSort('total_amount')}>
+                        Total (₹) {sortConfig.key === 'total_amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th scope="col" className="px-4 py-3 cursor-pointer" onClick={() => handleSort('tax_amount')}>
+                        Tax (₹) {sortConfig.key === 'tax_amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th scope="col" className="px-4 py-3 cursor-pointer" onClick={() => handleSort('commission_amount')}>
+                        Commission (₹) {sortConfig.key === 'commission_amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th scope="col" className="px-4 py-3 cursor-pointer" onClick={() => handleSort('promotion_amount')}>
+                        Promotion (₹) {sortConfig.key === 'promotion_amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th scope="col" className="px-4 py-3 cursor-pointer" onClick={() => handleSort('invoice_date')}>
+                        Date {sortConfig.key === 'invoice_date' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </th>
                       <th scope="col" className="px-4 py-3">Status</th>
                       <th scope="col" className="px-4 py-3">Actions</th>
                     </tr>
@@ -309,6 +663,15 @@ export default function FinancialManagement() {
                   </p>
                   <p className="text-sm text-gray-600">
                     <strong>Total Amount:</strong> ₹{selectedInvoice.total_amount.toFixed(2)}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Tax Amount:</strong> ₹{selectedInvoice.tax_amount.toFixed(2)}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Commission Amount:</strong> ₹{selectedInvoice.commission_amount.toFixed(2)}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Promotion Amount:</strong> ₹{selectedInvoice.promotion_amount.toFixed(2)}
                   </p>
                   <p className="text-sm text-gray-600">
                     <strong>Order IDs:</strong>{' '}

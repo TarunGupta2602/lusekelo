@@ -32,11 +32,13 @@ const normalizeImageUrl = (url) => {
   return url;
 };
 
-// Generate PDF invoice and store in Supabase (normalized version)
+// Generate PDF invoice and store in Supabase
 const generateInvoicePDF = async (orders, paymentId) => {
   try {
+    console.log('Generating PDF with orders:', orders); // Debug log
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
     const lineHeight = 10;
     let yPosition = margin;
@@ -70,8 +72,10 @@ const generateInvoicePDF = async (orders, paymentId) => {
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('Item', margin, yPosition);
-    doc.text('Qty', margin + 100, yPosition);
-    doc.text('Amount', margin + 140, yPosition, { align: 'right' });
+    doc.text('Qty', margin + 80, yPosition);
+    doc.text('Unit Price', margin + 100, yPosition);
+    doc.text('Discount', margin + 140, yPosition);
+    doc.text('Total', margin + 180, yPosition, { align: 'right' });
     yPosition += 5;
     doc.line(margin, yPosition, pageWidth - margin, yPosition);
     yPosition += 10;
@@ -80,28 +84,85 @@ const generateInvoicePDF = async (orders, paymentId) => {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     orders.forEach((order) => {
-      const productName = order.product_name || 'Unknown Product';
-      const quantity = order.quantity || 1;
-      const amount = Number(order.total_amount || 0).toFixed(2);
+      if (yPosition > pageHeight - margin - 20) {
+        doc.addPage();
+        yPosition = margin;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Item', margin, yPosition);
+        doc.text('Qty', margin + 80, yPosition);
+        doc.text('Unit Price', margin + 100, yPosition);
+        doc.text('Discount', margin + 140, yPosition);
+        doc.text('Total', margin + 180, yPosition, { align: 'right' });
+        yPosition += 5;
+        doc.line(margin, yPosition, pageWidth - margin, yPosition);
+        yPosition += 10;
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+      }
 
-      // Split long product names
-      const splitText = doc.splitTextToSize(productName, 90);
+      const productName = order.products.name || 'Unknown Product';
+      const quantity = order.quantity || 1;
+      const unitPrice = Number(order.products.price || 0).toFixed(2);
+      const originalSubtotal = Number(order.products.price || 0) * quantity;
+      const discountAmount = (originalSubtotal - Number(order.total_amount || 0)).toFixed(2);
+      const total = Number(order.total_amount || 0).toFixed(2);
+
+      if (!productName || !quantity || !unitPrice || !total) {
+        console.warn('Invalid order data:', order);
+      }
+
+      const splitText = doc.splitTextToSize(productName, 70);
       splitText.forEach((line, index) => {
         doc.text(line, margin, yPosition + index * lineHeight);
       });
-      doc.text(quantity.toString(), margin + 100, yPosition);
-      doc.text(`₹${amount}`, margin + 140, yPosition, { align: 'right' });
+      doc.text(quantity.toString(), margin + 80, yPosition);
+      doc.text(`₹${unitPrice}`, margin + 100, yPosition);
+      doc.text(discountAmount > 0 ? `-₹${discountAmount}` : '₹0.00', margin + 140, yPosition);
+      doc.text(`₹${total}`, margin + 180, yPosition, { align: 'right' });
       yPosition += Math.max(splitText.length * lineHeight, lineHeight);
     });
 
-    // Total
+    // Breakdown
     yPosition += 5;
     doc.line(margin, yPosition, pageWidth - margin, yPosition);
     yPosition += 10;
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    const totalAmount = orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0);
-    doc.text(`Total: ₹${totalAmount.toFixed(2)}`, margin + 140, yPosition, { align: 'right' });
+    const originalSubtotal = orders.reduce((acc, order) => acc + (Number(order.products.price || 0) * order.quantity), 0);
+    const afterDiscount = orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0);
+    const discountTotal = originalSubtotal - afterDiscount;
+    const taxTotal = orders.reduce((acc, order) => acc + Number(order.tax_amount || 0), 0);
+    const grandTotal = afterDiscount + taxTotal;
+
+    // Items Total
+    doc.text('Items Total:', margin + 100, yPosition);
+    doc.text(`₹${originalSubtotal.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
+    yPosition += lineHeight;
+
+    // Discounts (Promotions and Coupons)
+    if (discountTotal > 0) {
+      doc.text('Discounts:', margin + 100, yPosition);
+      doc.text(`-₹${discountTotal.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
+      yPosition += lineHeight;
+    }
+
+    // Subtotal After Discounts
+    doc.text('Subtotal After Discounts:', margin + 100, yPosition);
+    doc.text(`₹${afterDiscount.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
+    yPosition += lineHeight;
+
+    // Tax
+    doc.text('Tax:', margin + 100, yPosition);
+    doc.text(`₹${taxTotal.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
+    yPosition += lineHeight;
+
+    // Grand Total
+    yPosition += 5;
+    doc.line(margin + 100, yPosition, pageWidth - margin, yPosition);
+    yPosition += 10;
+    doc.text('Grand Total:', margin + 100, yPosition);
+    doc.text(`₹${grandTotal.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
 
     // Footer
     yPosition += 20;
@@ -112,14 +173,19 @@ const generateInvoicePDF = async (orders, paymentId) => {
     // Save PDF
     doc.save(`invoice_${paymentId || 'order'}.pdf`);
 
-    // Calculate totals (example logic)
-    const taxRate = 0.1; // Example: 10% tax rate, adjust based on your rules
-    const commissionRate = 0.05; // Example: 5% commission, adjust based on your rules
-    const promotionAmount = 0; // Example: No promotions, adjust based on your logic
+    // Calculate commission for DB only (not shown in PDF, as it's a vendor cost)
+    const commissionRate = 0.05; // 5% commission
+    const commissionAmount = afterDiscount * commissionRate;
+    const userId = orders[0]?.user_id;
 
-    const taxAmount = totalAmount * taxRate;
-    const commissionAmount = totalAmount * commissionRate;
-    const userId = orders[0]?.user_id; // Assuming all orders in the invoice belong to the same user
+    console.log('Inserting invoice with data:', {
+      payment_id: paymentId || 'N/A',
+      user_id: userId,
+      total_amount: grandTotal,
+      tax_amount: taxTotal,
+      commission_amount: commissionAmount,
+      promotion_amount: discountTotal,
+    }); // Debug log
 
     // Insert into invoices table
     const { data: invoiceData, error: invoiceError } = await supabase
@@ -127,10 +193,10 @@ const generateInvoicePDF = async (orders, paymentId) => {
       .insert({
         payment_id: paymentId || 'N/A',
         user_id: userId,
-        total_amount: totalAmount,
-        tax_amount: taxAmount,
+        total_amount: grandTotal,
+        tax_amount: taxTotal,
         commission_amount: commissionAmount,
-        promotion_amount: promotionAmount,
+        promotion_amount: discountTotal,
         invoice_date: new Date().toISOString(),
         status: 'generated',
       })
@@ -197,8 +263,11 @@ export default function SuccessPageContent() {
             user_id,
             quantity,
             total_amount,
+            tax_amount,
+            coupon_id,
             payment_id,
-            products(name, image)
+            products(name, image, price),
+            coupons(code, discount)
           `)
           .eq('payment_id', paymentId)
           .eq('status', 'completed');
@@ -217,13 +286,19 @@ export default function SuccessPageContent() {
               product_id: order.product_id,
               user_id: order.user_id,
               quantity: order.quantity,
+              total_amount: order.total_amount,
+              tax_amount: order.tax_amount,
+              coupon_id: order.coupon_id,
+              coupon_code: order.coupons?.code || null,
+              coupon_discount: order.coupons?.discount || null,
+              payment_id: order.payment_id,
               product_name: order.products?.name || 'Unknown Product',
               product_image: order.products?.image || '/placeholder-product.jpg',
-              total_amount: order.total_amount,
-              payment_id: order.payment_id,
+              products: {
+                price: order.products?.price || 0,
+              },
             }))
           );
-          // If only one product, set selectedProductId automatically
           if (data.length === 1) {
             setSelectedProductId(data[0].product_id);
           }
@@ -312,6 +387,7 @@ export default function SuccessPageContent() {
       setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
+    console.log('Orders before generating PDF:', orders); // Debug log
     try {
       await generateInvoicePDF(orders, paymentId);
       setFeedbackSuccess(true);
@@ -380,8 +456,15 @@ export default function SuccessPageContent() {
     );
   }
 
-  const totalAmount = orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0);
-  const selectedProduct = orders.find((order) => order.product_id === selectedProductId);
+  // Calculate totals for display (consistent with PDF)
+  const originalSubtotal = orders.reduce((acc, order) => acc + (Number(order.products.price || 0) * order.quantity), 0);
+  const afterDiscount = orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0);
+  const discountTotal = originalSubtotal - afterDiscount;
+  const taxTotal = orders.reduce((acc, order) => acc + Number(order.tax_amount || 0), 0);
+  const grandTotal = afterDiscount + taxTotal;
+
+  // Define selectedProduct safely
+  const selectedProduct = selectedProductId ? orders.find((order) => order.product_id === selectedProductId) : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200">
@@ -452,6 +535,8 @@ export default function SuccessPageContent() {
               {orders.map((order, index) => {
                 const normalizedImages = normalizeImagePath(order.product_image);
                 const imageUrl = normalizeImageUrl(normalizedImages[0] || '/placeholder-product.jpg');
+                const originalSubtotal = Number(order.products.price || 0) * order.quantity;
+                const discountAmount = originalSubtotal - Number(order.total_amount || 0);
 
                 return (
                   <div key={order.id || index} className="py-4 sm:py-6">
@@ -485,9 +570,24 @@ export default function SuccessPageContent() {
                             <p className="text-sm text-gray-600">
                               Order ID: {order.id}
                             </p>
+                            {order.coupon_code && (
+                              <p className="text-sm text-green-600">
+                                Coupon Applied: {order.coupon_code} ({order.coupon_discount}% off)
+                              </p>
+                            )}
+                            {discountAmount > 0 && (
+                              <p className="text-sm text-green-600">
+                                Discount: ₹{discountAmount.toFixed(2)}
+                              </p>
+                            )}
+                            {order.tax_amount > 0 && (
+                              <p className="text-sm text-gray-600">
+                                Tax: ₹{order.tax_amount.toFixed(2)}
+                              </p>
+                            )}
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <div className="text-xs text-gray-500 mb-1">Amount</div>
+                            <div className="text-xs text-gray-500 mb-1">Total</div>
                             <div className="text-lg font-bold text-gray-900">
                               ₹{Number(order.total_amount || 0).toFixed(2)}
                             </div>
@@ -500,9 +600,27 @@ export default function SuccessPageContent() {
               })}
             </div>
             <div className="border-t border-gray-200 pt-4 mt-4">
-              <div className="flex justify-between items-center">
-                <span className="text-base sm:text-lg font-bold text-gray-900">Total Paid</span>
-                <span className="text-xl sm:text-2xl font-bold text-blue-600">₹{totalAmount.toFixed(2)}</span>
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>Items Total</span>
+                <span>₹{originalSubtotal.toFixed(2)}</span>
+              </div>
+              {discountTotal > 0 && (
+                <div className="flex justify-between text-sm text-green-600 mt-2">
+                  <span>Discounts (Promotions/Coupons)</span>
+                  <span>-₹{discountTotal.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm text-gray-600 mt-2">
+                <span>Subtotal After Discounts</span>
+                <span>₹{afterDiscount.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm text-gray-600 mt-2">
+                <span>Tax</span>
+                <span>₹{taxTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-base sm:text-lg font-bold text-gray-900">Grand Total</span>
+                <span className="text-xl sm:text-2xl font-bold text-blue-600">₹{grandTotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm text-gray-600 mt-2">
                 <span>Payment ID</span>
@@ -529,7 +647,7 @@ export default function SuccessPageContent() {
                 <div className="w-16 h-16 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
                   <Image
                     src={normalizeImageUrl(normalizeImagePath(selectedProduct.product_image)[0])}
-                    alt={selectedProduct.product_name}
+                    alt={selectedProduct.product_name || 'Product image'}
                     width={64}
                     height={64}
                     className="w-full h-full object-contain"
@@ -570,7 +688,7 @@ export default function SuccessPageContent() {
                     <div className="w-12 h-12 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
                       <Image
                         src={normalizeImageUrl(normalizeImagePath(selectedProduct.product_image)[0])}
-                        alt={selectedProduct.product_name}
+                        alt={selectedProduct.product_name || 'Product image'}
                         width={48}
                         height={48}
                         className="w-full h-full object-contain"
