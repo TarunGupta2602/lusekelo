@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { FaSearch, FaClipboardList, FaUserFriends, FaBars, FaTimes, FaChevronDown } from 'react-icons/fa';
 
@@ -7,6 +8,7 @@ const TABS = [
   { key: 'invoices', label: 'Invoices' },
   { key: 'products', label: 'Products & Categories' },
   { key: 'agents', label: 'Agents' },
+  { key: 'reports', label: 'Reports & Analytics' }, // Added new tab
 ];
 
 const SidebarHeader = ({ collapsed, setCollapsed, setMobileOpen }) => (
@@ -152,9 +154,9 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
   }, []);
 
   const bookingItems = TABS.filter((tab) =>
-    ['orders', 'vendors', 'invoices', 'products'].includes(tab.key)
+    ['orders', 'vendors', 'invoices', 'products', 'reports'].includes(tab.key)
   );
-  const agentItems = TABS.filter((tab) => ['agents', 'assignOrder'].includes(tab.key));
+  const agentItems = TABS.filter((tab) => ['agents'].includes(tab.key));
 
   return (
     <>

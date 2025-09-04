@@ -10,6 +10,7 @@ import Papa from 'papaparse';
 import Sidebar from './Sidebar';
 import ProductsManagement from './ProductsManagement';
 import FinancialManagement from './FinancialManagement';
+import ReportsAnalytics from './ReportsAnalytics';
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -20,6 +21,7 @@ const TABS = [
   { key: 'invoices', label: 'Invoices' },
   { key: 'agents', label: 'Delivery Agents' },
   { key: 'products', label: 'Products & Categories' },
+   { key: 'reports', label: 'Reports & Analytics' },
 ];
 // Utility function to normalize image path
 const normalizeImagePath = (image) => {
@@ -1442,6 +1444,9 @@ export default function AdminDashboard() {
           )}
           {activeTab === 'products' && (
             <ProductsManagement />
+          )}
+          {activeTab === 'reports' && (
+            <ReportsAnalytics />
           )}
         </main>
       </div>
