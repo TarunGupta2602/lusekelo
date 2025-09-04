@@ -1,5 +1,4 @@
 'use client';
-
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
@@ -11,12 +10,10 @@ import Papa from 'papaparse';
 import Sidebar from './Sidebar';
 import ProductsManagement from './ProductsManagement';
 import FinancialManagement from './FinancialManagement';
-
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
-
 const TABS = [
   { key: 'orders', label: 'Orders' },
   { key: 'vendors', label: 'Vendors' },
@@ -24,7 +21,6 @@ const TABS = [
   { key: 'agents', label: 'Delivery Agents' },
   { key: 'products', label: 'Products & Categories' },
 ];
-
 // Utility function to normalize image path
 const normalizeImagePath = (image) => {
   if (Array.isArray(image) && image.length > 0) {
@@ -32,7 +28,6 @@ const normalizeImagePath = (image) => {
   }
   return typeof image === 'string' && image ? image : '/file.svg';
 };
-
 export default function AdminDashboard() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -69,13 +64,11 @@ export default function AdminDashboard() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersPage, setOrdersPage] = useState(1);
   const ordersPerPage = 10;
-  const [ordersTotalPages, setOrdersTotalPages] = useState(1);
   const [searchOrders, setSearchOrders] = useState('');
   const router = useRouter();
   const [showEditVendorModal, setShowEditVendorModal] = useState(false);
   const [editVendorForm, setEditVendorForm] = useState({ id: '', full_name: '', email: '' });
   const [expandedRows, setExpandedRows] = useState({});
-
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -100,7 +93,6 @@ export default function AdminDashboard() {
     };
     getUser();
   }, [router]);
-
   useEffect(() => {
     if (activeTab === 'vendors') {
       fetch('/api/vendors')
@@ -109,15 +101,13 @@ export default function AdminDashboard() {
     } else if (activeTab === 'agents') {
       fetchAgents();
     } else if (activeTab === 'orders') {
-      fetchOrders(ordersPage);
+      fetchOrders();
       fetchAgents();
     }
-  }, [activeTab, ordersPage]);
-
+  }, [activeTab]);
   useEffect(() => {
     setOrdersPage(1);
   }, [searchOrders]);
-
   const fetchAgents = async () => {
     const { data } = await supabase
       .from('agents')
@@ -125,29 +115,23 @@ export default function AdminDashboard() {
       .order('created_at', { ascending: false });
     setAgents(data || []);
   };
-
-  const fetchOrders = async (page = 1) => {
+  const fetchOrders = async () => {
     setOrdersLoading(true);
     try {
-      const from = (page - 1) * ordersPerPage;
-      const to = from + ordersPerPage - 1;
-      const { data, error, count } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .select(
           `id, quantity, total_amount, status, admin_status, dispute_reason, created_at, vendor_decision, agent_id, products:product_id (id, name, image, supermarket:supermarket_id (id, name))`
         )
-        .order('created_at', { ascending: false })
-        .range(from, to);
+        .order('created_at', { ascending: false });
       if (error) throw new Error(`Error fetching orders: ${error.message}`);
       setOrders(data || []);
-      setOrdersTotalPages(Math.ceil((count || 0) / ordersPerPage));
     } catch (err) {
       setError(`Unexpected error fetching orders: ${err.message}`);
     } finally {
       setOrdersLoading(false);
     }
   };
-
   const handleProfileUpdate = async () => {
     const { error } = await supabase
       .from('profiles')
@@ -161,7 +145,6 @@ export default function AdminDashboard() {
       alert('Error updating profile: ' + error.message);
     }
   };
-
   const handleDisableVendor = async () => {
     if (!vendorToDisable) return;
     const { error } = await supabase
@@ -177,7 +160,6 @@ export default function AdminDashboard() {
       alert('Error disabling vendor: ' + error.message);
     }
   };
-
   const handleAgentFormChange = (e) => {
     const { name, value, type, checked } = e.target;
     const processedValue = name === 'gov_id' ? value.replace(/[^0-9]/g, '') : value;
@@ -187,7 +169,6 @@ export default function AdminDashboard() {
       [name]: type === 'checkbox' ? checked : name === 'bike_rc' ? maskedBikeRc : processedValue,
     }));
   };
-
   const handleAddAgent = async () => {
     const { id, ...newAgent } = agentForm;
     const { error } = await supabase.from('agents').insert([newAgent]);
@@ -211,7 +192,6 @@ export default function AdminDashboard() {
       alert('Error adding agent: ' + error.message);
     }
   };
-
   const handleEditAgent = (agent) => {
     setAgentForm({
       ...agent,
@@ -220,7 +200,6 @@ export default function AdminDashboard() {
     });
     setShowEditAgentModal(true);
   };
-
   const handleUpdateAgent = async () => {
     const { id, ...updateData } = agentForm;
     const { error } = await supabase.from('agents').update(updateData).eq('id', id);
@@ -244,7 +223,6 @@ export default function AdminDashboard() {
       alert('Error updating agent: ' + error.message);
     }
   };
-
   const handleDeleteAgent = async (id) => {
     if (!window.confirm('Are you sure you want to delete this agent?')) return;
     const { error } = await supabase.from('agents').delete().eq('id', id);
@@ -255,7 +233,6 @@ export default function AdminDashboard() {
       alert('Error deleting agent: ' + error.message);
     }
   };
-
   const handleExportAgents = () => {
     const exportData = agents.map((agent) => ({
       id: agent.id,
@@ -269,7 +246,6 @@ export default function AdminDashboard() {
       gov_id: agent.gov_id,
       license: agent.license,
     }));
-
     const csv = Papa.unparse(exportData);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -282,20 +258,17 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(url);
     alert('Agents exported successfully!');
   };
-
   const handleImportAgents = async (e) => {
     const file = e.target.files[0];
     if (!file) {
       alert('Please select a CSV file to import.');
       return;
     }
-
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: async (result) => {
         const parsedAgents = result.data;
-
         const requiredFields = [
           'name',
           'tracking_id',
@@ -307,7 +280,6 @@ export default function AdminDashboard() {
           'gov_id',
           'license',
         ];
-
         const validAgents = parsedAgents
           .map((agent) => ({
             name: agent.name?.trim() || '',
@@ -323,12 +295,10 @@ export default function AdminDashboard() {
           .filter((agent) =>
             requiredFields.every((field) => agent[field] !== '' && agent[field] !== undefined)
           );
-
         if (validAgents.length === 0) {
           alert('No valid agents found in the CSV file.');
           return;
         }
-
         try {
           const { error } = await supabase.from('agents').insert(validAgents);
           if (error) {
@@ -346,7 +316,6 @@ export default function AdminDashboard() {
       },
     });
   };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-blue-800">
@@ -356,7 +325,6 @@ export default function AdminDashboard() {
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-blue-800">
@@ -364,7 +332,6 @@ export default function AdminDashboard() {
       </div>
     );
   }
-
   const indexOfLastAgent = currentPage * agentsPerPage;
   const indexOfFirstAgent = indexOfLastAgent - agentsPerPage;
   const currentAgents = agents
@@ -376,7 +343,6 @@ export default function AdminDashboard() {
     )
     .slice(indexOfFirstAgent, indexOfLastAgent);
   const totalPages = Math.ceil(agents.length / agentsPerPage);
-
   const filteredOrders = orders.filter((order) => {
     const search = searchOrders.toLowerCase();
     return (
@@ -393,7 +359,6 @@ export default function AdminDashboard() {
   const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
   const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
   const filteredTotalPages = Math.max(1, Math.ceil(filteredOrders.length / ordersPerPage));
-
   const getStatusClass = (status) => {
     switch (status) {
       case 'completed':
@@ -406,7 +371,6 @@ export default function AdminDashboard() {
         return 'bg-red-100 text-red-700';
     }
   };
-
   const getAdminStatusClass = (adminStatus) => {
     switch (adminStatus) {
       case 'disputed':
@@ -418,7 +382,6 @@ export default function AdminDashboard() {
         return 'bg-gray-100 text-gray-700';
     }
   };
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Modals */}
@@ -1067,9 +1030,7 @@ export default function AdminDashboard() {
             </div>
           )}
           {activeTab === 'invoices' && (
-
             <FinancialManagement />
-
           )}
           {activeTab === 'vendors' && (
             <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -1225,7 +1186,6 @@ export default function AdminDashboard() {
                                           router.push('/admin');
                                           return;
                                         }
-
                                         const res = await fetch('/api/vendors/approve', {
                                           method: 'POST',
                                           headers: {
