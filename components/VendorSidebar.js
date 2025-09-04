@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -25,7 +27,6 @@ export default function VendorSidebar({
 
   return (
     <div className="w-full md:w-64 bg-white shadow-xl z-50 fixed md:static top-0 left-0 flex md:flex-col items-center justify-between h-16 md:h-auto px-4 md:px-0 border-b md:border-b-0 md:border-r border-gray-200 overflow-y-auto">
-
       {/* Mobile Header */}
       <div className="flex items-center justify-between w-full md:hidden">
         <h1 className="text-xl font-extrabold text-blue-700">LOCO</h1>
@@ -151,7 +152,11 @@ export default function VendorSidebar({
               <div className="ml-4 md:ml-6 mt-1 space-y-2 transition-all duration-300 ease-in-out">
                 <button
                   onClick={() => handleNavigation('Orders', '/vendor/dashboard?section=orders')}
-                  className="flex items-center w-full px-4 py-2 md:py-3 rounded-xl transition-all duration-200 text-sm md:text-base text-gray-700 hover:bg-gray-100 hover:shadow-sm"
+                  className={`flex items-center w-full px-4 py-2 md:py-3 rounded-xl transition-all duration-200 text-sm md:text-base ${
+                    sidebarSection === 'Orders'
+                      ? 'bg-blue-100 text-blue-800 font-semibold shadow-md'
+                      : 'text-gray-700 hover:bg-gray-100 hover:shadow-sm'
+                  }`}
                   aria-label="Orders"
                 >
                   <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -161,13 +166,31 @@ export default function VendorSidebar({
                 </button>
                 <button
                   onClick={() => handleNavigation('Inventory', '/vendor/dashboard?section=inventory')}
-                  className="flex items-center w-full px-4 py-2 md:py-3 rounded-xl transition-all duration-200 text-sm md:text-base text-gray-700 hover:bg-gray-100 hover:shadow-sm"
+                  className={`flex items-center w-full px-4 py-2 md:py-3 rounded-xl transition-all duration-200 text-sm md:text-base ${
+                    sidebarSection === 'Inventory'
+                      ? 'bg-blue-100 text-blue-800 font-semibold shadow-md'
+                      : 'text-gray-700 hover:bg-gray-100 hover:shadow-sm'
+                  }`}
                   aria-label="Inventory"
                 >
                   <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Inventory
+                </button>
+                <button
+                  onClick={() => handleNavigation('Finance', '/vendor/dashboard?section=finance')}
+                  className={`flex items-center w-full px-4 py-2 md:py-3 rounded-xl transition-all duration-200 text-sm md:text-base ${
+                    sidebarSection === 'Finance'
+                      ? 'bg-blue-100 text-blue-800 font-semibold shadow-md'
+                      : 'text-gray-700 hover:bg-gray-100 hover:shadow-sm'
+                  }`}
+                  aria-label="Finance & Settlements"
+                >
+                  <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Finance & Settlements
                 </button>
               </div>
             )}
