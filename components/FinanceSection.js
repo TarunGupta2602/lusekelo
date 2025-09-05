@@ -63,7 +63,7 @@ export default function FinanceSection({ store, products, orders, setError }) {
         const orderIds = orders.filter(o => productIds.includes(o.product_id)).map(o => o.id);
         console.log('Order IDs for Invoices:', orderIds);
 
-        let filteredInvoices = []; // Initialize to avoid undefined
+        let filteredInvoices = [];
         if (orderIds.length === 0) {
           setInvoices([]);
           setSectionErrors(prev => ({ ...prev, invoices: 'No orders found for your products.' }));
@@ -115,8 +115,12 @@ export default function FinanceSection({ store, products, orders, setError }) {
         setLoading(prev => ({ ...prev, payouts: true }));
         setSectionErrors(prev => ({ ...prev, payouts: '' }));
         const invoicesByWeek = {};
-        invoices.forEach(invoice => { // Use invoices state instead of filteredInvoices
+        filteredInvoices.forEach(invoice => {
           const date = new Date(invoice.invoice_date);
+          if (isNaN(date)) {
+            console.warn(`Invalid invoice_date for invoice ${invoice.id}: ${invoice.invoice_date}`);
+            return;
+          }
           const weekStart = new Date(date);
           weekStart.setDate(date.getDate() - date.getDay());
           const weekKey = weekStart.toISOString().split('T')[0];
@@ -129,8 +133,8 @@ export default function FinanceSection({ store, products, orders, setError }) {
               status: (new Date() - date) / (1000 * 60 * 60 * 24) <= 30 ? 'Pending' : 'Paid',
             };
           }
-          invoicesByWeek[weekKey].total_amount += invoice.total_amount;
-          invoicesByWeek[weekKey].commission_amount += invoice.commission_amount;
+          invoicesByWeek[weekKey].total_amount += Number(invoice.total_amount) || 0;
+          invoicesByWeek[weekKey].commission_amount += Number(invoice.commission_amount) || 0;
         });
 
         const payoutData = Object.values(invoicesByWeek);
@@ -179,11 +183,11 @@ export default function FinanceSection({ store, products, orders, setError }) {
     const rows = invoices.map((invoice) => [
       invoice.id,
       invoice.payment_id,
-      invoice.user_id,
-      invoice.total_amount.toFixed(2),
-      invoice.tax_amount.toFixed(2),
-      invoice.commission_amount.toFixed(2),
-      invoice.promotion_amount.toFixed(2),
+      invoice.user_id || 'N/A',
+      Number(invoice.total_amount).toFixed(2),
+      Number(invoice.tax_amount).toFixed(2),
+      Number(invoice.commission_amount).toFixed(2),
+      Number(invoice.promotion_amount).toFixed(2),
       new Date(invoice.invoice_date).toLocaleDateString('en-GB'),
       invoice.status,
       invoice.order_ids.join(', '),
@@ -205,8 +209,8 @@ export default function FinanceSection({ store, products, orders, setError }) {
     setShowModal(true);
   };
 
-  const totalCommission = invoices.reduce((sum, inv) => sum + inv.commission_amount, 0);
-  const totalAmount = invoices.reduce((sum, inv) => sum + inv.total_amount, 0);
+  const totalCommission = invoices.reduce((sum, inv) => sum + Number(inv.commission_amount), 0);
+  const totalAmount = invoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
 
   return (
     <div className="space-y-6">
@@ -255,7 +259,7 @@ export default function FinanceSection({ store, products, orders, setError }) {
                       const order = orders.find(o => o.id === orderId);
                       return order && order.product_id === commission.product_id;
                     }))
-                    .reduce((sum, inv) => sum + inv.commission_amount, 0);
+                    .reduce((sum, inv) => sum + Number(inv.commission_amount), 0);
                   return (
                     <tr key={commission.id} className="border-b hover:bg-gray-50">
                       <td className="px-3 py-2 truncate max-w-[120px] sm:max-w-[200px]">{commission.products?.name || 'Unknown'}</td>
@@ -408,9 +412,9 @@ export default function FinanceSection({ store, products, orders, setError }) {
                   <tr key={invoice.id} className="border-b hover:bg-gray-50">
                     <td className="px-3 py-2 truncate max-w-[100px] sm:max-w-[150px]" title={invoice.id}>{invoice.id}</td>
                     <td className="px-3 py-2 truncate max-w-[100px] sm:max-w-[150px]" title={invoice.payment_id}>{invoice.payment_id}</td>
-                    <td className="px-3 py-2 truncate max-w-[100px] sm:max-w-[150px]" title={invoice.user_id}>{invoice.user_id}</td>
-                    <td className="px-3 py-2">₹{invoice.total_amount.toFixed(2)}</td>
-                    <td className="px-3 py-2">₹{invoice.commission_amount.toFixed(2)}</td>
+                    <td className="px-3 py-2 truncate max-w-[100px] sm:max-w-[150px]" title={invoice.user_id || 'N/A'}>{invoice.user_id || 'N/A'}</td>
+                    <td className="px-3 py-2">₹{Number(invoice.total_amount).toFixed(2)}</td>
+                    <td className="px-3 py-2">₹{Number(invoice.commission_amount).toFixed(2)}</td>
                     <td className="px-3 py-2">{new Date(invoice.invoice_date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
                     <td className="px-3 py-2">
                       <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${invoice.status === 'generated' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
@@ -442,10 +446,10 @@ export default function FinanceSection({ store, products, orders, setError }) {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Details for Invoice {selectedInvoice.id}</h3>
             <div className="space-y-2 text-sm text-gray-600">
               <p><strong>Payment ID:</strong> {selectedInvoice.payment_id}</p>
-              <p><strong>Total Amount:</strong> ₹{selectedInvoice.total_amount.toFixed(2)}</p>
-              <p><strong>Tax Amount:</strong> ₹{selectedInvoice.tax_amount.toFixed(2)}</p>
-              <p><strong>Commission Paid:</strong> ₹{selectedInvoice.commission_amount.toFixed(2)}</p>
-              <p><strong>Promotion Amount:</strong> ₹{selectedInvoice.promotion_amount.toFixed(2)}</p>
+              <p><strong>Total Amount:</strong> ₹{Number(selectedInvoice.total_amount).toFixed(2)}</p>
+              <p><strong>Tax Amount:</strong> ₹{Number(selectedInvoice.tax_amount).toFixed(2)}</p>
+              <p><strong>Commission Paid:</strong> ₹{Number(selectedInvoice.commission_amount).toFixed(2)}</p>
+              <p><strong>Promotion Amount:</strong> ₹{Number(selectedInvoice.promotion_amount).toFixed(2)}</p>
               <p><strong>Order IDs:</strong>{' '}
                 {selectedInvoice.order_ids.length > 0 ? selectedInvoice.order_ids.join(', ') : 'None'}
               </p>
