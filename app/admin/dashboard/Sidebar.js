@@ -1,6 +1,7 @@
+'use client';
 
 import React, { useState, useCallback } from 'react';
-import { FaSearch, FaClipboardList, FaUserFriends, FaBars, FaTimes, FaChevronDown } from 'react-icons/fa';
+import { FaSearch, FaClipboardList, FaUserFriends, FaBars, FaTimes, FaChevronDown, FaEdit } from 'react-icons/fa';
 
 const TABS = [
   { key: 'orders', label: 'Orders' },
@@ -8,7 +9,8 @@ const TABS = [
   { key: 'invoices', label: 'Invoices' },
   { key: 'products', label: 'Products & Categories' },
   { key: 'agents', label: 'Agents' },
-  { key: 'reports', label: 'Reports & Analytics' }, // Added new tab
+  { key: 'reports', label: 'Reports & Analytics' },
+  { key: 'cms', label: 'CMS' }, // New CMS tab
 ];
 
 const SidebarHeader = ({ collapsed, setCollapsed, setMobileOpen }) => (
@@ -71,7 +73,7 @@ const DropdownSection = ({ title, icon, items, activeTab, setActiveTab, collapse
       }`}
       onClick={onToggle}
       aria-expanded={open}
-      aria-controls={`${title.toLowerCase()}-dropdown`}
+      aria-controls={`${title.toLowerCase().replace(/\s/g, '-')}-dropdown`}
     >
       {icon}
       {!collapsed && <span className="text-sm">{title}</span>}
@@ -80,7 +82,7 @@ const DropdownSection = ({ title, icon, items, activeTab, setActiveTab, collapse
       )}
     </button>
     {open && !collapsed && (
-      <ul id={`${title.toLowerCase()}-dropdown`} className="ml-8 mt-2 space-y-1">
+      <ul id={`${title.toLowerCase().replace(/\s/g, '-')}-dropdown`} className="ml-8 mt-2 space-y-1">
         {items.map((item) => (
           <li key={item.key}>
             <button
@@ -106,6 +108,7 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
   const [openDropdowns, setOpenDropdowns] = useState({
     bookings: true,
     agents: true,
+    content: true, // New dropdown for CMS
   });
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const [dragging, setDragging] = useState(false);
@@ -157,6 +160,7 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
     ['orders', 'vendors', 'invoices', 'products', 'reports'].includes(tab.key)
   );
   const agentItems = TABS.filter((tab) => ['agents'].includes(tab.key));
+  const contentItems = TABS.filter((tab) => ['cms'].includes(tab.key)); // New CMS section
 
   return (
     <>
@@ -204,6 +208,17 @@ export default function Sidebar({ activeTab, setActiveTab, searchOrders, setSear
             collapsed={collapsed}
             open={openDropdowns.agents}
             onToggle={() => handleDropdown('agents')}
+            setMobileOpen={setMobileOpen}
+          />
+          <DropdownSection
+            title="Content Management"
+            icon={<FaEdit className="text-lg text-blue-500" />}
+            items={contentItems}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            collapsed={collapsed}
+            open={openDropdowns.content}
+            onToggle={() => handleDropdown('content')}
             setMobileOpen={setMobileOpen}
           />
         </nav>

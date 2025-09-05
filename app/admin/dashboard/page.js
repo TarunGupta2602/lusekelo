@@ -11,6 +11,7 @@ import Sidebar from './Sidebar';
 import ProductsManagement from './ProductsManagement';
 import FinancialManagement from './FinancialManagement';
 import ReportsAnalytics from './ReportsAnalytics';
+import CMSSection from './CMSSection';
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -22,6 +23,7 @@ const TABS = [
   { key: 'agents', label: 'Delivery Agents' },
   { key: 'products', label: 'Products & Categories' },
    { key: 'reports', label: 'Reports & Analytics' },
+   { key: 'cms', label: 'CMS' },
 ];
 // Utility function to normalize image path
 const normalizeImagePath = (image) => {
@@ -1447,6 +1449,9 @@ export default function AdminDashboard() {
           )}
           {activeTab === 'reports' && (
             <ReportsAnalytics />
+          )}
+          {activeTab === 'cms' && (
+            < CMSSection/>
           )}
         </main>
       </div>

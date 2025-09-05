@@ -1,12 +1,15 @@
-"use client";
-import React, { useState, useEffect } from "react";
-import Image from "next/image";
-import Link from "next/link";
-import dynamic from "next/dynamic";
-import NewPage from "./new/page";
-import LocationPopup from "./location/page"; // <-- Use latest popup
 
-// Consolidated fetch function
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import NewPage from './new/page';
+import LocationPopup from './location/page';
+import { supabase } from '@/lib/supabaseClient';
+
+// Consolidated fetch function for stores
 async function fetchData(endpoint) {
   const res = await fetch(`/api/${endpoint}`);
   if (!res.ok) throw new Error(`Failed to fetch ${endpoint}`);
@@ -56,11 +59,9 @@ const SkeletonLoader = () => (
 // Fixed gallery images parsing function
 const getGalleryImages = (gallery_images) => {
   if (Array.isArray(gallery_images)) {
-    // Handle array where first element might be comma-separated URLs
     const allUrls = [];
     gallery_images.forEach(item => {
       if (typeof item === 'string') {
-        // Split by comma in case multiple URLs are in one string
         const urls = item.split(',').map(url => url.trim()).filter(Boolean);
         allUrls.push(...urls);
       } else if (item) {
@@ -70,14 +71,12 @@ const getGalleryImages = (gallery_images) => {
     return allUrls;
   }
   if (typeof gallery_images === 'string') {
-    // Handle JSON string
     try {
       const parsed = JSON.parse(gallery_images);
       if (Array.isArray(parsed)) {
-        return getGalleryImages(parsed); // Recursively process the parsed array
+        return getGalleryImages(parsed);
       }
     } catch (e) {
-      // If not JSON, try comma-separated
       const split = gallery_images.split(',').map(url => url.trim()).filter(Boolean);
       return split;
     }
@@ -94,6 +93,7 @@ const normalizeImageUrl = (url) => {
 
 const ShopContent = () => {
   const [stores, setStores] = useState([]);
+  const [homepage, setHomepage] = useState(null);
   const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -101,10 +101,46 @@ const ShopContent = () => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const storesData = await fetchData("stores");
+
+        // Fetch stores
+        const storesData = await fetchData('stores');
         setStores(storesData);
+
+        // Fetch homepage content from Supabase
+        const { data: homepageData, error: homepageError } = await supabase
+          .from('homepage')
+          .select('*')
+          .single();
+
+        if (homepageError) {
+          console.error('Failed to fetch homepage content:', homepageError.message);
+          // Fallback to default values
+          setHomepage({
+            title: 'We Bring The Store To',
+            subtitle: 'Your Door',
+            description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.',
+            button_text: 'Shop Now',
+            image_url: '/veggies.svg',
+          });
+        } else {
+          setHomepage(homepageData || {
+            title: 'We Bring The Store To',
+            subtitle: 'Your Door',
+            description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.',
+            button_text: 'Shop Now',
+            image_url: '/veggies.svg',
+          });
+        }
       } catch (error) {
-        console.error("Failed to load data:", error);
+        console.error('Failed to load data:', error);
+        // Fallback for homepage data
+        setHomepage({
+          title: 'We Bring The Store To',
+          subtitle: 'Your Door',
+          description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.',
+          button_text: 'Shop Now',
+          image_url: '/veggies.svg',
+        });
       } finally {
         setLoading(false);
       }
@@ -115,7 +151,7 @@ const ShopContent = () => {
 
   return (
     <>
-      <LocationPopup /> {/* <-- Always use the latest popup */}
+      <LocationPopup />
       {loading ? (
         <SkeletonLoader />
       ) : (
@@ -123,27 +159,25 @@ const ShopContent = () => {
           {/* HERO SECTION */}
           <div
             className="bg-[#013033] flex flex-col lg:flex-row rounded-xl sm:rounded-2xl h-[50vh] sm:h-[60vh] md:h-[70vh] lg:h-[calc(100lvh-8rem)] w-[95%] sm:w-[calc(100%-3rem)] mx-auto mt-4 sm:mt-7"
-            style={{ borderBottomLeftRadius: "90% 30%", borderBottomRightRadius: "90% 30%" }}
+            style={{ borderBottomLeftRadius: '90% 30%', borderBottomRightRadius: '90% 30%' }}
           >
             <div className="w-full sm:w-[calc(100%-3rem)] mx-auto flex flex-col lg:flex-row my-auto justify-between items-center p-6 sm:px-10 sm:py-20">
               <div className="flex flex-col space-y-6 sm:space-y-10 w-full lg:w-[50%] text-center lg:text-left">
                 <div className="space-y-2">
-                  <h1 className="text-white text-3xl sm:text-4xl md:text-5xl font-bold">We Bring The Store To</h1>
-                  <h1 className="text-[#BBEB6D] text-3xl sm:text-4xl md:text-5xl font-bold">Your Door</h1>
+                  <h1 className="text-white text-3xl sm:text-4xl md:text-5xl font-bold">{homepage?.title}</h1>
+                  <h1 className="text-[#BBEB6D] text-3xl sm:text-4xl md:text-5xl font-bold">{homepage?.subtitle}</h1>
                 </div>
                 <div>
-                  <p className="text-gray-300 text-base sm:text-lg">
-                    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.
-                  </p>
+                  <p className="text-gray-300 text-base sm:text-lg">{homepage?.description}</p>
                 </div>
-                <Link href={"/products"}>
+                <Link href="/products">
                   <div>
-                    <button className="bg-[#BBEB6D] text-black px-4 py-2 rounded-lg">Shop Now</button>
+                    <button className="bg-[#BBEB6D] text-black px-4 py-2 rounded-lg">{homepage?.button_text}</button>
                   </div>
                 </Link>
               </div>
               <div className="hidden lg:flex w-full lg:w-[50%] justify-center">
-                <Image src="/veggies.svg" alt="veggies" width={700} height={700} />
+                <Image src={homepage?.image_url || '/veggies.svg'} alt="hero image" width={700} height={700} />
               </div>
             </div>
           </div>
@@ -151,12 +185,9 @@ const ShopContent = () => {
           {/* FEATURED STORES */}
           <div className="w-full px-4 sm:px-6 lg:px-8 py-8 bg-gray-50">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6 ml-0 sm:ml-2">Buy From Store</h2>
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               {stores.slice(0, showAll ? stores.length : 4).map((store) => {
                 const galleryImages = getGalleryImages(store.gallery_images);
-                
-                // Create array of all images: main image + gallery images
                 const allImages = [];
                 if (store.main_image) {
                   allImages.push(normalizeImageUrl(store.main_image));
@@ -166,65 +197,57 @@ const ShopContent = () => {
                     allImages.push(normalizeImageUrl(img));
                   }
                 });
-
-                // If no images, use placeholder
                 if (allImages.length === 0) {
                   allImages.push('/placeholder-store.jpg');
                 }
-
                 return (
                   <Link href={`/store/${store.id}`} key={store.id} className="block">
                     <div className="flex flex-col sm:flex-row bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                      {/* Main Image */}
                       <div className="w-full sm:w-2/5 relative">
                         <div className="relative h-48 sm:h-full w-full">
-                          <Image
-                            src={allImages[0]}
-                            alt={store.name}
-                            fill
-                            className="object-cover"
-                          />
+                          <Image src={allImages[0]} alt={store.name} fill className="object-cover" />
                         </div>
                       </div>
-                      
-                      {/* Thumbnail Gallery */}
                       <div className="w-full sm:w-1/5 flex flex-row sm:flex-col justify-start p-2 gap-2 bg-white">
                         {allImages.slice(1, 4).map((img, index) => (
                           <div key={index} className="relative h-14 w-1/3 sm:w-full rounded overflow-hidden border border-gray-200">
-                            <Image
-                              src={img}
-                              alt={`${store.name} thumbnail ${index + 1}`}
-                              fill
-                              className="object-cover"
-                            />
+                            <Image src={img} alt={`${store.name} thumbnail ${index + 1}`} fill className="object-cover" />
                           </div>
                         ))}
-                        
-                        {/* Show remaining images count if more than 3 additional images */}
                         {allImages.length > 4 && (
                           <div className="relative h-14 w-1/3 sm:w-full rounded overflow-hidden border border-gray-200 bg-gray-800 flex items-center justify-center">
-                            <span className="text-white text-xs font-medium">
-                              +{allImages.length - 4}
-                            </span>
+                            <span className="text-white text-xs font-medium">+{allImages.length - 4}</span>
                           </div>
                         )}
                       </div>
-                      
-                      {/* Store Info */}
                       <div className="w-full sm:w-2/5 bg-[#013033] text-white p-4 flex flex-col justify-between">
                         <div>
                           <h3 className="text-lg sm:text-xl font-semibold">{store.name}</h3>
                           <div className="flex items-start mt-3 text-[#6A6A6A]">
                             <span className="text-red-500 mr-2 mt-1">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                                />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                                />
                               </svg>
                             </span>
                             <p className="text-sm leading-tight">{store.address}</p>
                           </div>
-                          
-                          {/* Optional: Display price if available */}
                           {store.price && (
                             <div className="mt-2">
                               <span className="text-[#BBEB6D] font-semibold text-lg">
@@ -232,15 +255,12 @@ const ShopContent = () => {
                               </span>
                             </div>
                           )}
-                          
-                          {/* Optional: Show gallery image count */}
                           <div className="mt-2">
                             <span className="text-xs text-gray-400">
                               {allImages.length} image{allImages.length !== 1 ? 's' : ''} available
                             </span>
                           </div>
                         </div>
-                        
                         <button className="mt-4 w-full bg-[#BBEB6D] text-black font-medium py-2 rounded text-center transition-all duration-200 hover:scale-105 hover:shadow-md">
                           Shop from here
                         </button>
@@ -250,30 +270,39 @@ const ShopContent = () => {
                 );
               })}
             </div>
-
             {stores.length > 4 && (
               <div className="text-center mt-6 sm:mt-10">
                 <button
                   className="bg-teal-700 text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg hover:bg-teal-800 transition flex items-center mx-auto"
                   onClick={() => setShowAll(!showAll)}
                 >
-                  <span>{showAll ? "Show Less" : "View All Stores"}</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={showAll ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
+                  <span>{showAll ? 'Show Less' : 'View All Stores'}</span>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4 ml-2"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d={showAll ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'}
+                    />
                   </svg>
                 </button>
               </div>
             )}
           </div>
 
-          <NewPage/>
+          <NewPage />
         </div>
       )}
     </>
   );
 };
 
-// Use the dynamic import pattern that was already in your code
 const ShopContentExport = dynamic(() => Promise.resolve(ShopContent), {
   loading: () => <SkeletonLoader />,
   ssr: false,
