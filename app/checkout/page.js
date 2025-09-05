@@ -390,7 +390,7 @@ export default function CheckoutPage() {
               .update({
                 payment_id: response.razorpay_payment_id,
                 razorpay_order_id: order.id,
-                status: 'completed',
+                status: 'pending',
                 address: userAddress,
               })
               .eq('id', orderId)

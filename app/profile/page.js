@@ -50,6 +50,7 @@ export function ProfileSidebar({ onClose }) {
   const [error, setError] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [deleteType, setDeleteType] = useState(null);
+  const [cancelConfirmId, setCancelConfirmId] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const avatarFileRef = useRef(null);
 
@@ -231,12 +232,40 @@ export function ProfileSidebar({ onClose }) {
     }
   };
 
+  const handleCancelOrder = async (orderId) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', orderId)
+        .eq('user_id', user.id);
+      if (error) throw error;
+
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === orderId ? { ...order, status: 'cancelled' } : order
+        )
+      );
+      setCancelConfirmId(null);
+    } catch (err) {
+      setError("Unable to cancel order. Please try again.");
+    }
+  };
+
+  const canCancelOrder = (status) => {
+    return status === 'pending' || status === 'processing';
+  };
+
   const handleDeleteConfirm = async () => {
     if (deleteType === 'order') {
       await handleDeleteOrder(deleteConfirmId);
     } else if (deleteType === 'address') {
       await handleDeleteAddress(deleteConfirmId);
     }
+  };
+
+  const handleCancelConfirm = async () => {
+    await handleCancelOrder(cancelConfirmId);
   };
 
   const handleLogout = async () => {
@@ -523,7 +552,18 @@ export function ProfileSidebar({ onClose }) {
                         <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                           
                           <div className="flex items-center gap-2">
-                            
+                            {canCancelOrder(order.status) && (
+                              <button
+                                onClick={() => {
+                                  setCancelConfirmId(order.id);
+                                }}
+                                className="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 transition-all duration-200 flex items-center gap-1.5"
+                                aria-label="Cancel order"
+                              >
+                                <FaTimes className="w-3.5 h-3.5" />
+                                Cancel Order
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 setDeleteConfirmId(order.id);
@@ -561,6 +601,33 @@ export function ProfileSidebar({ onClose }) {
                                 className="flex-1 bg-gray-100 text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium text-sm transition-colors duration-200"
                               >
                                 Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {cancelConfirmId === order.id && (
+                        <div className="absolute inset-0 bg-white/95 flex items-center justify-center backdrop-blur-sm">
+                          <div className="bg-white p-6 rounded-xl shadow-xl border border-gray-200 max-w-sm mx-4">
+                            <h4 className="font-semibold text-gray-900 mb-2">Cancel Order</h4>
+                            <p className="text-sm text-gray-600 mb-6">
+                              Are you sure you want to cancel this order? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                              <button
+                                onClick={handleCancelConfirm}
+                                className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 font-medium text-sm transition-colors duration-200"
+                              >
+                                Cancel Order
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCancelConfirmId(null);
+                                }}
+                                className="flex-1 bg-gray-100 text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium text-sm transition-colors duration-200"
+                              >
+                                No, Keep Order
                               </button>
                             </div>
                           </div>

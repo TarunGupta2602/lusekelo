@@ -270,7 +270,7 @@ export default function SuccessPageContent() {
             coupons(code, discount)
           `)
           .eq('payment_id', paymentId)
-          .eq('status', 'completed');
+          .eq('status', 'pending');
 
         if (error) {
           console.error('Error fetching orders:', error);
