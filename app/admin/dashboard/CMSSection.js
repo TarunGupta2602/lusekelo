@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -22,10 +21,11 @@ export default function CMSSection() {
   const [homepage, setHomepage] = useState(null);
   const [blogs, setBlogs] = useState([]);
   const [loading, setLoading] = useState({ homepage: true, blogs: true });
-  const [errors, setErrors] = useState({ homepage: '', blogs: '' });
+  const [errors, setErrors] = useState({ homepage: '', blogs: '', upload: '' });
   const [showModal, setShowModal] = useState(null); // 'homepage', 'blog', or null
   const [selectedItem, setSelectedItem] = useState(null);
   const [blogFilter, setBlogFilter] = useState('all'); // 'all', 'draft', 'published'
+  const [imagePreview, setImagePreview] = useState(null); // For image preview
 
   useEffect(() => {
     const fetchData = async () => {
@@ -68,6 +68,7 @@ export default function CMSSection() {
         setErrors({
           homepage: 'Error loading homepage.',
           blogs: 'Error loading blogs.',
+          upload: '',
         });
         setLoading({ homepage: false, blogs: false });
       }
@@ -76,25 +77,66 @@ export default function CMSSection() {
     fetchData();
   }, [blogFilter]);
 
-  const handleSaveHomepage = async (data) => {
+  // Handle image upload to Supabase Storage
+  const handleImageUpload = async (file) => {
+    if (!file) return null;
+
     try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+      const { data, error } = await supabase.storage
+        .from('cms-images')
+        .upload(fileName, file);
+
+      if (error) {
+        throw new Error('Image upload failed: ' + error.message);
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('cms-images')
+        .getPublicUrl(fileName);
+
+      return urlData.publicUrl;
+    } catch (err) {
+      setErrors(prev => ({ ...prev, upload: err.message }));
+      return null;
+    }
+  };
+
+  const handleSaveHomepage = async (data, file) => {
+    try {
+      let imageUrl = data.image_url || selectedItem.image_url;
+      if (file) {
+        imageUrl = await handleImageUpload(file);
+        if (!imageUrl) throw new Error('Image upload failed');
+      }
+
       const { error } = await supabase
         .from('homepage')
-        .upsert({ ...data, updated_at: new Date().toISOString() });
+        .upsert({ ...data, image_url: imageUrl, updated_at: new Date().toISOString() });
       if (error) throw error;
-      setHomepage(data);
+      setHomepage({ ...data, image_url: imageUrl });
       setShowModal(null);
+      setImagePreview(null);
+      setErrors(prev => ({ ...prev, upload: '' }));
     } catch (err) {
       alert('Failed to save homepage: ' + err.message);
     }
   };
 
-  const handleSaveBlog = async (data) => {
+  const handleSaveBlog = async (data, file) => {
     try {
+      let imageUrl = data.image_url || selectedItem.image_url;
+      if (file) {
+        imageUrl = await handleImageUpload(file);
+        if (!imageUrl) throw new Error('Image upload failed');
+      }
+
       const { error } = await supabase
         .from('blogs')
         .upsert({
           ...data,
+          image_url: imageUrl,
           updated_at: new Date().toISOString(),
           published_at: data.status === 'published' ? (data.published_at || new Date().toISOString()) : null,
         });
@@ -105,6 +147,8 @@ export default function CMSSection() {
         .order('updated_at', { ascending: false });
       setBlogs(updatedBlogs || []);
       setShowModal(null);
+      setImagePreview(null);
+      setErrors(prev => ({ ...prev, upload: '' }));
     } catch (err) {
       alert('Failed to save blog: ' + err.message);
     }
@@ -118,6 +162,20 @@ export default function CMSSection() {
       setBlogs(blogs.filter(blog => blog.id !== id));
     } catch (err) {
       alert('Failed to delete blog: ' + err.message);
+    }
+  };
+
+  // Handle image file selection for preview
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setImagePreview(null);
     }
   };
 
@@ -151,6 +209,7 @@ export default function CMSSection() {
                 onClick={() => {
                   setSelectedItem(homepage);
                   setShowModal('homepage');
+                  setImagePreview(homepage.image_url || null);
                 }}
                 className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm"
               >
@@ -189,6 +248,7 @@ export default function CMSSection() {
                   status: 'draft',
                 });
                 setShowModal('blog');
+                setImagePreview(null);
               }}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm flex items-center gap-2"
             >
@@ -235,6 +295,7 @@ export default function CMSSection() {
                         onClick={() => {
                           setSelectedItem(blog);
                           setShowModal('blog');
+                          setImagePreview(blog.image_url || null);
                         }}
                         className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
                       >
@@ -263,17 +324,21 @@ export default function CMSSection() {
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Homepage</h3>
             <form
-              onSubmit={e => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 const formData = new FormData(e.target);
-                handleSaveHomepage({
-                  id: selectedItem.id,
-                  title: formData.get('title'),
-                  subtitle: formData.get('subtitle'),
-                  description: formData.get('description'),
-                  button_text: formData.get('button_text'),
-                  image_url: formData.get('image_url') || selectedItem.image_url,
-                });
+                const file = formData.get('image');
+                handleSaveHomepage(
+                  {
+                    id: selectedItem.id,
+                    title: formData.get('title'),
+                    subtitle: formData.get('subtitle'),
+                    description: formData.get('description'),
+                    button_text: formData.get('button_text'),
+                    image_url: selectedItem.image_url, // Preserve existing URL if no new file
+                  },
+                  file
+                );
               }}
             >
               <div className="space-y-4">
@@ -314,18 +379,30 @@ export default function CMSSection() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Image URL</label>
+                  <label className="block text-sm font-medium text-gray-700">Image</label>
                   <input
-                    name="image_url"
-                    defaultValue={selectedItem.image_url}
+                    type="file"
+                    name="image"
+                    accept="image/*"
+                    onChange={handleImageChange}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                   />
+                  {imagePreview && (
+                    <img src={imagePreview} alt="Preview" className="h-20 w-auto mt-2 rounded" />
+                  )}
+                  {errors.upload && (
+                    <p className="text-red-600 text-sm mt-1">{errors.upload}</p>
+                  )}
                 </div>
               </div>
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowModal(null)}
+                  onClick={() => {
+                    setShowModal(null);
+                    setImagePreview(null);
+                    setErrors(prev => ({ ...prev, upload: '' }));
+                  }}
                   className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md text-sm"
                 >
                   Cancel
@@ -350,17 +427,21 @@ export default function CMSSection() {
               {selectedItem.id ? 'Edit Blog' : 'Add Blog'}
             </h3>
             <form
-              onSubmit={e => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 const formData = new FormData(e.target);
-                handleSaveBlog({
-                  id: selectedItem.id || undefined,
-                  title: formData.get('title'),
-                  slug: formData.get('slug'),
-                  content: formData.get('content'),
-                  image_url: formData.get('image_url') || selectedItem.image_url,
-                  status: formData.get('status'),
-                });
+                const file = formData.get('image');
+                handleSaveBlog(
+                  {
+                    id: selectedItem.id || undefined,
+                    title: formData.get('title'),
+                    slug: formData.get('slug'),
+                    content: formData.get('content'),
+                    image_url: selectedItem.image_url, // Preserve existing URL if no new file
+                    status: formData.get('status'),
+                  },
+                  file
+                );
               }}
             >
               <div className="space-y-4">
@@ -393,12 +474,20 @@ export default function CMSSection() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Image URL</label>
+                  <label className="block text-sm font-medium text-gray-700">Image</label>
                   <input
-                    name="image_url"
-                    defaultValue={selectedItem.image_url}
+                    type="file"
+                    name="image"
+                    accept="image/*"
+                    onChange={handleImageChange}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                   />
+                  {imagePreview && (
+                    <img src={imagePreview} alt="Preview" className="h-20 w-auto mt-2 rounded" />
+                  )}
+                  {errors.upload && (
+                    <p className="text-red-600 text-sm mt-1">{errors.upload}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Status</label>
@@ -416,7 +505,11 @@ export default function CMSSection() {
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowModal(null)}
+                  onClick={() => {
+                    setShowModal(null);
+                    setImagePreview(null);
+                    setErrors(prev => ({ ...prev, upload: '' }));
+                  }}
                   className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md text-sm"
                 >
                   Cancel
