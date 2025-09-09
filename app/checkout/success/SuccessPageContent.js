@@ -101,7 +101,7 @@ const generateInvoicePDF = async (orders, paymentId) => {
         doc.setFont('helvetica', 'normal');
       }
 
-      const productName = order.products.name || 'Unknown Product';
+      const productName = order.product_name || 'Unknown Product';
       const quantity = order.quantity || 1;
       const unitPrice = Number(order.products.price || 0).toFixed(2);
       const originalSubtotal = Number(order.products.price || 0) * quantity;
