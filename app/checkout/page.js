@@ -146,31 +146,42 @@ export default function CheckoutPage() {
       }
 
       // Fetch product categories for tax calculation
-      const productIds = cart.map(item => item.product_id || item.itemId);
-      const { data: productsData, error: productsError } = await supabase
-        .from('products')
-        .select('id, category')
-        .in('id', productIds);
-      if (productsError) {
-        console.error('Error fetching product categories:', productsError);
-        setErrorMessage('Failed to fetch product data for tax calculation.');
-        setTimeout(() => setErrorMessage(''), 3000);
-        cart = cart.map(item => ({ ...item, category: 'general' })); // Fallback category
+      const productIds = cart.map(item => item.product_id || item.itemId).filter(id => id);
+      
+      if (productIds.length > 0) {
+        const { data: productsData, error: productsError } = await supabase
+          .from('products')
+          .select('id, category')
+          .in('id', productIds);
+        
+        if (productsError) {
+          console.warn('Error fetching product categories:', productsError);
+          // Don't show error message to user, just use fallback
+          cart = cart.map(item => ({ ...item, category: 'general' })); // Fallback category
+        } else {
+          // Merge category into cart items
+          cart = cart.map(item => {
+            const product = productsData.find(p => p.id === (item.product_id || item.itemId));
+            return { ...item, category: product?.category || 'general' };
+          });
+        }
       } else {
-        // Merge category into cart items
-        cart = cart.map(item => {
-          const product = productsData.find(p => p.id === (item.product_id || item.itemId));
-          return { ...item, category: product?.category || 'general' };
-        });
+        // No valid product IDs, use fallback category for all items
+        cart = cart.map(item => ({ ...item, category: 'general' }));
       }
 
       // Fetch promotion products with joined promotions
-      const { data: promoProducts, error: promoError } = await supabase
-        .from('promotion_products')
-        .select('product_id, promotions!promotion_products_promotion_id_fkey(discount_percentage, start_date, end_date)')
-        .in('product_id', productIds);
-      if (promoError) {
-        console.warn('Error fetching promotion products:', promoError);
+      let promoProducts = [];
+      if (productIds.length > 0) {
+        const { data: promoData, error: promoError } = await supabase
+          .from('promotion_products')
+          .select('product_id, promotions!promotion_products_promotion_id_fkey(discount_percentage, start_date, end_date)')
+          .in('product_id', productIds);
+        if (promoError) {
+          console.warn('Error fetching promotion products:', promoError);
+        } else {
+          promoProducts = promoData || [];
+        }
       }
 
       console.log('Cart items:', cart);
@@ -321,13 +332,15 @@ export default function CheckoutPage() {
         itemTotal *= (1 - (couponInfo.discount / 100));
         appliedCouponId = couponInfo.id;
       }
+      // Add tax to get the grand total
+      const grandTotal = itemTotal + (item.tax_amount || 0);
       const { data, error } = await supabase
         .from('orders')
         .insert({
           user_id: user.id,
           product_id: productId,
           quantity: item.quantity || 1,
-          total_amount: itemTotal,
+          total_amount: grandTotal, // Now includes tax
           tax_amount: item.tax_amount || 0, // Include tax amount
           status: 'pending',
           address: userAddress,
@@ -340,7 +353,7 @@ export default function CheckoutPage() {
           user_id: user.id,
           product_id: productId,
           quantity: item.quantity || 1,
-          total_amount: itemTotal,
+          total_amount: grandTotal,
           tax_amount: item.tax_amount || 0,
           status: 'pending',
           address: userAddress,

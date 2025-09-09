@@ -133,7 +133,7 @@ const generateInvoicePDF = async (orders, paymentId) => {
     const afterDiscount = orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0);
     const discountTotal = originalSubtotal - afterDiscount;
     const taxTotal = orders.reduce((acc, order) => acc + Number(order.tax_amount || 0), 0);
-    const grandTotal = afterDiscount + taxTotal;
+    const grandTotal = afterDiscount;
 
     // Items Total
     doc.text('Items Total:', margin + 100, yPosition);
@@ -147,9 +147,10 @@ const generateInvoicePDF = async (orders, paymentId) => {
       yPosition += lineHeight;
     }
 
-    // Subtotal After Discounts
+    // Subtotal After Discounts (before tax)
+    const subtotalBeforeTax = afterDiscount - taxTotal;
     doc.text('Subtotal After Discounts:', margin + 100, yPosition);
-    doc.text(`₹${afterDiscount.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
+    doc.text(`₹${subtotalBeforeTax.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
     yPosition += lineHeight;
 
     // Tax
@@ -461,7 +462,7 @@ export default function SuccessPageContent() {
   const afterDiscount = orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0);
   const discountTotal = originalSubtotal - afterDiscount;
   const taxTotal = orders.reduce((acc, order) => acc + Number(order.tax_amount || 0), 0);
-  const grandTotal = afterDiscount + taxTotal;
+  const grandTotal = afterDiscount;
 
   // Define selectedProduct safely
   const selectedProduct = selectedProductId ? orders.find((order) => order.product_id === selectedProductId) : null;
@@ -612,7 +613,7 @@ export default function SuccessPageContent() {
               )}
               <div className="flex justify-between text-sm text-gray-600 mt-2">
                 <span>Subtotal After Discounts</span>
-                <span>₹{afterDiscount.toFixed(2)}</span>
+                <span>₹{(afterDiscount - taxTotal).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm text-gray-600 mt-2">
                 <span>Tax</span>
