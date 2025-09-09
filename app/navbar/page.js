@@ -8,6 +8,7 @@ import debounce from "lodash.debounce";
 import { createClient } from "@supabase/supabase-js";
 import { ProfileSidebar } from "@/app/profile/page";
 import AuthModal from "./AuthModal";
+import NavbarTranslateWidget from "@/components/NavbarTranslateWidget";
 import { useRouter } from "next/navigation";
 
 // Initialize Supabase client
@@ -92,6 +93,51 @@ export default function Navbar() {
   const searchInputRef = useRef();
   const searchResultsRef = useRef();
   const router = useRouter();
+
+  // Initialize Google Translate
+  useEffect(() => {
+    // Load Google Translate script
+    const addScript = document.createElement("script");
+    addScript.src =
+      "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+    document.body.appendChild(addScript);
+
+    // Init function
+    window.googleTranslateElementInit = () => {
+      // Desktop translate element
+      if (document.getElementById("google_translate_element")) {
+        new window.google.translate.TranslateElement(
+          {
+            pageLanguage: "en", // default site language
+            includedLanguages: "en,sw,hi,fr,es,de,ar,zh,ja,ko,pt,ru,it,nl", // supported languages
+            layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE,
+          },
+          "google_translate_element"
+        );
+      }
+      
+      // Mobile translate element
+      if (document.getElementById("google_translate_element_mobile")) {
+        new window.google.translate.TranslateElement(
+          {
+            pageLanguage: "en",
+            includedLanguages: "en,hi,fr,es,de,ar,zh,ja,ko,pt,ru,it,nl",
+            layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE,
+          },
+          "google_translate_element_mobile"
+        );
+      }
+    };
+
+    // Cleanup function
+    return () => {
+      // Remove script if component unmounts
+      const existingScript = document.querySelector('script[src*="translate.google.com"]');
+      if (existingScript) {
+        existingScript.remove();
+      }
+    };
+  }, []);
 
   // Fetch user from Supabase auth
   useEffect(() => {
@@ -328,6 +374,8 @@ export default function Navbar() {
 
   return (
     <>
+      {/* NavbarTranslateWidget for Google branding removal */}
+      <NavbarTranslateWidget />
       {/* Profile Sidebar Overlay */}
       {profileSidebarOpen && (
         <ProfileSidebar onClose={() => setProfileSidebarOpen(false)} />
@@ -608,6 +656,22 @@ export default function Navbar() {
                 )}
               </div>
               
+              {/* Google Translate Widget - Mobile */}
+              <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                <div className="flex items-center mb-3">
+                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mr-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-gray-800">Language Translate</span>
+                    <p className="text-xs text-gray-600">Choose your preferred language</p>
+                  </div>
+                </div>
+                <div id="google_translate_element_mobile" className="translate-widget-mobile"></div>
+              </div>
+
               {/* Cart Link in Mobile Menu */}
               <Link 
                 href="/cart" 
@@ -792,6 +856,16 @@ export default function Navbar() {
               No results found
             </div>
           )}
+        </div>
+
+        {/* Google Translate Widget - Desktop */}
+        <div className="hidden lg:block">
+          <div className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition duration-150">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+            </svg>
+            <div id="google_translate_element" className="translate-widget"></div>
+          </div>
         </div>
 
         {/* Desktop User and Cart Icons */}

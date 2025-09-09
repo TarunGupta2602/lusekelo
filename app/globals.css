@@ -28,3 +28,149 @@ body {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;     /* Firefox */
 }
+
+/* Google Translate Widget Styling and Branding Removal */
+.goog-te-banner-frame,
+.goog-te-banner,
+.goog-te-gadget-icon,
+.goog-te-gadget-simple .goog-te-menu-value span:first-child,
+.goog-te-gadget-simple .goog-te-menu-value span[style*="color"],
+.goog-te-gadget-simple .goog-te-menu-value > span:first-child,
+.goog-te-gadget .goog-te-gadget-icon,
+.goog-te-combo option[value=""],
+iframe[src*="translate.google.com"],
+.goog-te-spinner,
+.goog-te-balloon,
+.goog-te-balloon-frame,
+.goog-tooltip,
+.goog-te-menu-frame,
+.goog-te-ftab,
+.goog-te-menu2,
+.goog-te-menu2-item div[style*="color: rgb(118, 118, 118)"],
+.goog-te-menu2-item:first-child,
+.goog-logo-link,
+a[href*="translate.google.com"],
+[id*="google_translate_element"] .goog-te-gadget-simple a,
+[id*="google_translate_element"] .goog-te-gadget-simple span[style*="color"],
+[id*="google_translate_element"] .goog-te-gadget-simple > span:first-child {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+}
+
+/* Style the translate widget container */
+.translate-widget,
+.translate-widget-mobile {
+  font-size: 14px;
+  position: relative;
+}
+
+.translate-widget .goog-te-gadget-simple,
+.translate-widget-mobile .goog-te-gadget-simple {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  padding: 10px 16px !important;
+  font-size: 14px !important;
+  color: #475569 !important;
+  cursor: pointer !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease-in-out !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+  min-width: 120px !important;
+  text-align: center !important;
+}
+
+.translate-widget .goog-te-gadget-simple:hover,
+.translate-widget-mobile .goog-te-gadget-simple:hover {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%) !important;
+  border-color: #94a3b8 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Desktop translate widget specific styling */
+.translate-widget {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Mobile translate widget specific styling */
+.translate-widget-mobile .goog-te-gadget-simple {
+  width: 100% !important;
+  margin-top: 4px !important;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
+  border: 1px solid #93c5fd !important;
+  color: #1e40af !important;
+  font-weight: 600 !important;
+}
+
+.translate-widget-mobile .goog-te-gadget-simple:hover {
+  background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%) !important;
+  border-color: #3b82f6 !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Enhanced dropdown styling */
+.goog-te-menu-frame {
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+  overflow: hidden !important;
+}
+
+.goog-te-menu2 {
+  border: none !important;
+  border-radius: 12px !important;
+  background: white !important;
+}
+
+.goog-te-menu2-item {
+  padding: 8px 16px !important;
+  transition: all 0.2s ease-in-out !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.goog-te-menu2-item:hover {
+  background: #f8fafc !important;
+}
+
+.goog-te-menu2-item:last-child {
+  border-bottom: none !important;
+}
+
+/* Custom language text styling */
+.goog-te-menu2-item div {
+  color: #475569 !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+}
+
+/* Hide Google Translate top banner */
+.goog-te-banner-frame.skiptranslate {
+  display: none !important;
+}
+
+/* Prevent body positioning changes */
+body {
+  position: static !important;
+  top: 0 !important;
+}
+
+/* Additional wildcard selectors for dynamic elements */
+[class*="goog-te"][class*="banner"],
+[class*="goog-te"][class*="balloon"],
+[id*="goog-te"][id*="banner"],
+[id*="google_translate_element"] [style*="color: rgb(68, 68, 68)"],
+[id*="google_translate_element"] [style*="font-size: 10pt"],
+[id*="google_translate_element"] a[href*="translate.google"] {
+  display: none !important;
+  visibility: hidden !important;
+}
