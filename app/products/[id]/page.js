@@ -1,3 +1,4 @@
+
 "use client";
 
 import { createClient } from '@supabase/supabase-js';
@@ -11,6 +12,15 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
+
+// Supported currencies and symbols
+const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR'];
+const CURRENCY_SYMBOLS = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  INR: '₹',
+};
 
 // Normalize image path to handle both single strings and arrays
 const normalizeImagePath = (path) => {
@@ -37,7 +47,30 @@ export default function ProductDetailPage({ params }) {
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [visibleReviews, setVisibleReviews] = useState(5);
-  const scrollContainerRef = useRef(null);
+  const [selectedCurrency, setSelectedCurrency] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      return SUPPORTED_CURRENCIES.includes(savedCurrency) ? savedCurrency : 'USD';
+    }
+    return 'USD';
+  });
+  const scrollContainerRef = useRef();
+
+  const symbol = CURRENCY_SYMBOLS[selectedCurrency] || '$';
+
+  // Listen for currency changes from navbar
+  useEffect(() => {
+    const handleCurrencyUpdate = () => {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      if (SUPPORTED_CURRENCIES.includes(savedCurrency)) {
+        setSelectedCurrency(savedCurrency);
+      }
+    };
+    window.addEventListener('currencyUpdated', handleCurrencyUpdate);
+    return () => {
+      window.removeEventListener('currencyUpdated', handleCurrencyUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     const resolveParams = async () => {
@@ -66,8 +99,9 @@ export default function ProductDetailPage({ params }) {
       const { id } = resolvedParams;
       if (!id) return;
 
+      setLoading(true);
       try {
-        const response = await fetch(`/api/products/${id}`);
+        const response = await fetch(`/api/products/${id}?currency=${selectedCurrency}`);
         if (!response.ok) {
           throw new Error('Failed to fetch product');
         }
@@ -101,7 +135,7 @@ export default function ProductDetailPage({ params }) {
     };
 
     fetchProductAndWishlist();
-  }, [resolvedParams, user]);
+  }, [resolvedParams, user, selectedCurrency]);
 
   useEffect(() => {
     const migrateGuestCart = async () => {
@@ -172,7 +206,7 @@ export default function ProductDetailPage({ params }) {
       product_id: productToAdd.id,
       quantity: qty,
       name: productToAdd.name,
-      price: variation ? variation.price : productToAdd.price,
+      price: variation ? variation.original_price : productToAdd.original_price,
       image: Array.isArray(productToAdd.image) ? productToAdd.image[0] : productToAdd.image,
       variation: variation || null,
       supermarket_id: productToAdd.supermarket_id,
@@ -376,13 +410,12 @@ export default function ProductDetailPage({ params }) {
   const reviews = product?.reviews || [];
   const shownReviews = reviews.slice(0, visibleReviews);
   const hasMoreReviews = visibleReviews < reviews.length;
+  const displayPrice = selectedVariation ? selectedVariation.price : product.price;
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
-      {/* Breadcrumb */}
       <div className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          
           <nav className="flex items-center text-sm text-gray-600" aria-label="Breadcrumb">
             <Link href="/" className="hover:text-blue-600 transition-colors font-medium">Home</Link>
             <ChevronRight className="w-4 h-4 mx-2 text-gray-400" />
@@ -395,7 +428,6 @@ export default function ProductDetailPage({ params }) {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-          {/* Product Image Gallery */}
           <div className="space-y-4">
             <div className="relative aspect-square bg-white rounded-2xl shadow-lg overflow-hidden">
               {imagePaths.length > 1 && (
@@ -455,7 +487,6 @@ export default function ProductDetailPage({ params }) {
             )}
           </div>
 
-          {/* Product Details */}
           <div className="space-y-4">
             <p className="text-sm text-gray-500">{product.quantity} in stock</p>
 
@@ -463,8 +494,10 @@ export default function ProductDetailPage({ params }) {
               {product.name}
             </h1>
 
-            <div className="text-3xl font-bold text-green-600">
-              ${selectedVariation ? selectedVariation.price.toFixed(2) : product.price.toFixed(2)}
+            <div className="flex items-end justify-between mb-4">
+              <div className="text-3xl font-bold text-green-600">
+                {symbol}{displayPrice.toFixed(2)}
+              </div>
             </div>
             <hr />
 
@@ -535,7 +568,7 @@ export default function ProductDetailPage({ params }) {
                       {variation.size && variation.color
                         ? `${variation.size} / ${variation.color}`
                         : variation.size || variation.color || `Variation ${idx + 1}`}
-                      <span className="ml-2">(${variation.price.toFixed(2)})</span>
+                      <span className="ml-2">({symbol}{variation.price.toFixed(2)})</span>
                     </button>
                   ))}
                 </div>
@@ -572,8 +605,6 @@ export default function ProductDetailPage({ params }) {
           </div>
         </div>
 
-        
-        {/* Related Products */}
         <div className="mt-12">
           <h2 className="text-xl font-bold text-gray-900 mb-6">Related Items</h2>
           <div className="relative">
@@ -597,93 +628,55 @@ export default function ProductDetailPage({ params }) {
             )}
             <div
               ref={scrollContainerRef}
-              className="flex overflow-x-auto gap-4 scrollbar-hide scroll-smooth snap-x snap-mandatory"
+              className="flex overflow-x-auto gap-4 pb-4 scrollbar-hide snap-x snap-mandatory"
             >
               {relatedProducts.length > 0 ? (
                 relatedProducts.map((relatedProduct) => {
-                  const relatedImagePaths = normalizeImagePath(relatedProduct.image);
-                  const firstImagePath = relatedImagePaths[0];
+                  const relatedImage = normalizeImagePath(relatedProduct.image)[0];
                   return (
-                    <div
+                    <Link
                       key={relatedProduct.id}
-                      className="snap-start flex-shrink-0 w-40 sm:w-48 bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-100"
+                      href={`/products/${relatedProduct.id}`}
+                      className="flex-none w-64 snap-start"
                     >
-                      <Link href={`/products/${relatedProduct.id}`} className="block">
-                        <div className="relative aspect-[3/4] bg-gray-50 p-2">
-                          {firstImagePath ? (
-                            <Image
-                              src={firstImagePath}
-                              alt={relatedProduct.name}
-                              fill
-                              className="object-contain transition-transform duration-300 hover:scale-105"
-                              loading="lazy"
-                              sizes="(max-width: 768px) 160px, 192px"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-                              No Image
-                            </div>
-                          )}
+                      <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                        <div className="relative w-full h-48">
+                          <Image
+                            src={relatedImage}
+                            alt={relatedProduct.name}
+                            fill
+                            className="object-cover"
+                            sizes="256px"
+                          />
                         </div>
-                        <div className="p-3 space-y-1">
-                          <h3 className="font-medium text-gray-900 text-sm line-clamp-1">
+                        <div className="p-4">
+                          <h3 className="text-lg font-semibold text-gray-900 truncate">
                             {relatedProduct.name}
                           </h3>
-                          <p className="text-xs text-gray-500 line-clamp-1">
-                            {relatedProduct.description || 'No description available.'}
+                          <p className="text-sm text-gray-500">{relatedProduct.quantity} in stock</p>
+                          <p className="text-lg font-bold text-green-600 mt-2">
+                            {symbol}{relatedProduct.price.toFixed(2)}
                           </p>
-                          <p className="text-xs text-gray-600">{relatedProduct.quantity} in stock</p>
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm font-bold text-gray-900">
-                              ${relatedProduct.price.toFixed(2)}
-                            </div>
-                            <button
-                              className="bg-gray-200 hover:bg-gray-300 rounded-md p-1.5 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                handleAddToCart(relatedProduct, 1);
-                              }}
-                              aria-label={`Add ${relatedProduct.name} to cart`}
-                            >
-                              <Plus className="w-4 h-4 text-gray-800" />
-                            </button>
+                          <div className="flex items-center mt-2">
+                            {renderStars(relatedProduct?.averageRating || 0)}
+                            <span className="ml-2 text-sm text-gray-600">
+                              ({relatedProduct?.reviewCount || 0})
+                            </span>
                           </div>
                         </div>
-                      </Link>
-                    </div>
+                      </div>
+                    </Link>
                   );
                 })
               ) : (
-                <div className="w-full text-center py-12">
-                  <p className="text-gray-700 text-base sm:text-lg">No related products available.</p>
-                </div>
+                <p className="text-gray-500">No related products found.</p>
               )}
             </div>
           </div>
         </div>
-      </div>
 
-      <style jsx>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        .animate-fade-in {
-          animation: fadeIn 0.3s ease-in;
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @media (max-width: 640px) {
-          .scrollbar-hide {
-            -webkit-overflow-scrolling: touch;
-          }
-        }
-      `}</style>
+        
+      </div>
     </div>
   );
 }

@@ -1,14 +1,23 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback } from "react";
-import Image from "next/image";
-import Link from "next/link";
+import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
-import { FaTrashAlt, FaShoppingBag, FaArrowLeft, FaShieldAlt } from "react-icons/fa";
-import { MdOutlineShoppingCart, MdSecurity } from "react-icons/md";
-import { HiOutlineShoppingBag, HiOutlineLockClosed } from "react-icons/hi";
+import { FaTrashAlt, FaShoppingBag, FaArrowLeft, FaShieldAlt } from 'react-icons/fa';
+import { MdOutlineShoppingCart, MdSecurity } from 'react-icons/md';
+import { HiOutlineShoppingBag, HiOutlineLockClosed } from 'react-icons/hi';
 import CustomAuthModal from '../../components/CustomAuthModal';
-import { useRouter } from "next/navigation";
+import { useRouter } from 'next/navigation';
+
+// Supported currencies and symbols
+const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR'];
+const CURRENCY_SYMBOLS = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  INR: '₹',
+};
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -38,18 +47,18 @@ const normalizeImageUrl = (url) => {
 
 // Normalize address to prevent duplicates due to formatting
 const normalizeAddress = (address) => {
-  if (!address) return "";
-  return address.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!address) return '';
+  return address.trim().toLowerCase().replace(/\s+/g, ' ');
 };
 
 export default function CartPage() {
   const [userAddress, setUserAddress] = useState(null);
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [editingAddress, setEditingAddress] = useState(false);
-  const [newAddress, setNewAddress] = useState("");
+  const [newAddress, setNewAddress] = useState('');
   const [addressLoading, setAddressLoading] = useState(false);
-  const [addressError, setAddressError] = useState("");
-  const [addressSuccess, setAddressSuccess] = useState("");
+  const [addressError, setAddressError] = useState('');
+  const [addressSuccess, setAddressSuccess] = useState('');
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -60,7 +69,28 @@ export default function CartPage() {
   const [storeOptions, setStoreOptions] = useState({});
   const [storeDurations, setStoreDurations] = useState({});
   const [durationsLoading, setDurationsLoading] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      return SUPPORTED_CURRENCIES.includes(savedCurrency) ? savedCurrency : 'USD';
+    }
+    return 'USD';
+  });
   const router = useRouter();
+
+  // Listen for currency changes from navbar
+  useEffect(() => {
+    const handleCurrencyUpdate = () => {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      if (SUPPORTED_CURRENCIES.includes(savedCurrency)) {
+        setSelectedCurrency(savedCurrency);
+      }
+    };
+    window.addEventListener('currencyUpdated', handleCurrencyUpdate);
+    return () => {
+      window.removeEventListener('currencyUpdated', handleCurrencyUpdate);
+    };
+  }, []);
 
   // Fetch user and addresses
   useEffect(() => {
@@ -93,7 +123,7 @@ export default function CartPage() {
           setUserAddress(null);
         } else {
           setSavedAddresses(addressData || []);
-          const lastUsedAddress = addressData.find(addr => addr.is_last_used) || addressData[0];
+          const lastUsedAddress = addressData.find((addr) => addr.is_last_used) || addressData[0];
           setUserAddress(lastUsedAddress ? { id: lastUsedAddress.id, address: lastUsedAddress.full_address } : null);
         }
       } catch (err) {
@@ -129,7 +159,7 @@ export default function CartPage() {
             setUserAddress(null);
           } else {
             setSavedAddresses(addressData || []);
-            const lastUsedAddress = addressData.find(addr => addr.is_last_used) || addressData[0];
+            const lastUsedAddress = addressData.find((addr) => addr.is_last_used) || addressData[0];
             setUserAddress(lastUsedAddress ? { id: lastUsedAddress.id, address: lastUsedAddress.full_address } : null);
           }
         };
@@ -169,26 +199,46 @@ export default function CartPage() {
           currentCart = data.store_carts;
         }
 
-        const updatedGuestCart = await Promise.all(guestCart.map(async (item) => {
-          if (!item.storeName || item.storeName === 'Unknown Store' || !item.address) {
-            const { data: supermarket, error } = await supabase
-              .from('supermarkets')
-              .select('name, address')
-              .eq('id', item.supermarket_id)
-              .single();
+        // Fetch exchange rate for selected currency
+        const response = await fetch(`/api/products/convert?currency=${selectedCurrency}`);
+        const { rate, symbol } = await response.json();
+
+        const updatedGuestCart = await Promise.all(
+          guestCart.map(async (item) => {
+            if (!item.storeName || item.storeName === 'Unknown Store' || !item.address) {
+              const { data: supermarket, error } = await supabase
+                .from('supermarkets')
+                .select('name, address')
+                .eq('id', item.supermarket_id)
+                .single();
+              return {
+                ...item,
+                storeName: error || !supermarket ? 'N/A' : supermarket.name,
+                address: error || !supermarket ? null : supermarket.address,
+                original_price: item.price,
+                price: item.price * rate,
+                currency: selectedCurrency,
+                symbol,
+              };
+            }
             return {
               ...item,
-              storeName: error || !supermarket ? 'N/A' : supermarket.name,
-              address: error || !supermarket ? null : supermarket.address
+              original_price: item.price,
+              price: item.price * rate,
+              currency: selectedCurrency,
+              symbol,
             };
-          }
-          return item;
-        }));
+          })
+        );
 
         updatedGuestCart.forEach((guestItem) => {
           const existingItem = currentCart.find((item) => item.itemId === guestItem.itemId);
           if (existingItem) {
             existingItem.quantity += guestItem.quantity;
+            existingItem.price = guestItem.price;
+            existingItem.original_price = guestItem.original_price;
+            existingItem.currency = guestItem.currency;
+            existingItem.symbol = guestItem.symbol;
           } else {
             currentCart.push(guestItem);
           }
@@ -221,143 +271,186 @@ export default function CartPage() {
     };
 
     migrateGuestCart();
-  }, [user, authChecked]);
+  }, [user, authChecked, selectedCurrency]);
 
   // Fetch cart items
-  const fetchCartItems = useCallback(async (options = {}) => {
-    const { skipLoading = false } = options;
-    if (!authChecked) return;
+  const fetchCartItems = useCallback(
+    async (options = {}) => {
+      const { skipLoading = false } = options;
+      if (!authChecked) return;
 
-    try {
-      if (!skipLoading) setLoading(true);
-      let cart = [];
+      try {
+        if (!skipLoading) setLoading(true);
+        let cart = [];
 
-      if (!user) {
-        cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
-        cart = await Promise.all(cart.map(async (item) => {
-          if (!item.storeName || item.storeName === 'Unknown Store' || !item.address) {
-            const { data: supermarket, error } = await supabase
-              .from('supermarkets')
-              .select('name, address')
-              .eq('id', item.supermarket_id)
-              .single();
-            return {
-              ...item,
-              storeName: error || !supermarket ? 'N/A' : supermarket.name,
-              address: error || !supermarket ? null : supermarket.address
-            };
+        // Fetch exchange rate for selected currency
+        const response = await fetch(`/api/products/convert?currency=${selectedCurrency}`);
+        const { rate, symbol } = await response.json();
+
+        if (!user) {
+          cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
+          cart = await Promise.all(
+            cart.map(async (item) => {
+              if (!item.storeName || item.storeName === 'Unknown Store' || !item.address) {
+                const { data: supermarket, error } = await supabase
+                  .from('supermarkets')
+                  .select('name, address')
+                  .eq('id', item.supermarket_id)
+                  .single();
+                return {
+                  ...item,
+                  storeName: error || !supermarket ? 'N/A' : supermarket.name,
+                  address: error || !supermarket ? null : supermarket.address,
+                  original_price: item.price,
+                  price: item.price * rate,
+                  currency: selectedCurrency,
+                  symbol,
+                };
+              }
+              return {
+                ...item,
+                original_price: item.price,
+                price: item.price * rate,
+                currency: selectedCurrency,
+                symbol,
+              };
+            })
+          );
+        } else {
+          const { data, error } = await supabase
+            .from('carts')
+            .select('store_carts')
+            .eq('user_id', user.id)
+            .single();
+
+          if (error && error.code !== 'PGRST116') {
+            console.error('Error fetching cart:', error);
+            setErrorMessage('Failed to fetch cart.');
+            setTimeout(() => setErrorMessage(''), 3000);
+            return;
           }
-          return item;
-        }));
-      } else {
-        const { data, error } = await supabase
-          .from('carts')
-          .select('store_carts')
-          .eq('user_id', user.id)
-          .single();
-
-        if (error && error.code !== 'PGRST116') {
-          console.error('Error fetching cart:', error);
-          setErrorMessage('Failed to fetch cart.');
-          setTimeout(() => setErrorMessage(''), 3000);
-          return;
+          cart = data?.store_carts || [];
+          cart = await Promise.all(
+            cart.map(async (item) => {
+              if (!item.storeName || item.storeName === 'Unknown Store' || !item.address) {
+                const { data: supermarket, error } = await supabase
+                  .from('supermarkets')
+                  .select('name, address')
+                  .eq('id', item.supermarket_id)
+                  .single();
+                return {
+                  ...item,
+                  storeName: error || !supermarket ? 'N/A' : supermarket.name,
+                  address: error || !supermarket ? null : supermarket.address,
+                  original_price: item.original_price || item.price,
+                  price: (item.original_price || item.price) * rate,
+                  currency: selectedCurrency,
+                  symbol,
+                };
+              }
+              return {
+                ...item,
+                original_price: item.original_price || item.price,
+                price: (item.original_price || item.price) * rate,
+                currency: selectedCurrency,
+                symbol,
+              };
+            })
+          );
         }
-        cart = data?.store_carts || [];
-        cart = await Promise.all(cart.map(async (item) => {
-          if (!item.storeName || item.storeName === 'Unknown Store' || !item.address) {
-            const { data: supermarket, error } = await supabase
-              .from('supermarkets')
-              .select('name, address')
-              .eq('id', item.supermarket_id)
-              .single();
-            return {
-              ...item,
-              storeName: error || !supermarket ? 'N/A' : supermarket.name,
-              address: error || !supermarket ? null : supermarket.address
-            };
-          }
-          return item;
-        }));
-      }
 
-      setCartItems(cart);
-      const totalPrice = cart.reduce(
-        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-        0
-      );
-      setTotal(totalPrice);
-    } catch (error) {
-      console.error('Error fetching cart items:', error);
-      setErrorMessage('An error occurred while fetching cart.');
-      setTimeout(() => setErrorMessage(''), 3000);
-    } finally {
-      if (!skipLoading) setLoading(false);
-    }
-  }, [user, authChecked]);
+        setCartItems(cart);
+        const totalPrice = cart.reduce(
+          (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+          0
+        );
+        setTotal(totalPrice);
+      } catch (error) {
+        console.error('Error fetching cart items:', error);
+        setErrorMessage('An error occurred while fetching cart.');
+        setTimeout(() => setErrorMessage(''), 3000);
+      } finally {
+        if (!skipLoading) setLoading(false);
+      }
+    },
+    [user, authChecked, selectedCurrency]
+  );
 
   // Fetch store options for each product
-  const fetchStoreOptions = useCallback(async () => {
-    if (!cartItems.length) return;
+  const fetchStoreOptions = useCallback(
+    async () => {
+      if (!cartItems.length) return;
 
-    const productNames = [...new Set(cartItems
-      .filter(item => item.storeName !== 'N/A')
-      .map(item => item.name?.trim()))].filter(name => name);
-    const options = {};
+      const productNames = [...new Set(cartItems
+        .filter((item) => item.storeName !== 'N/A')
+        .map((item) => item.name?.trim()))].filter((name) => name);
+      const options = {};
 
-    try {
-      for (const productName of productNames) {
-        const cartItemsForName = cartItems.filter(item => item.name?.trim() === productName && item.storeName !== 'N/A');
-        const excludedSupermarketIds = cartItemsForName.map(item => item.supermarket_id);
+      // Fetch exchange rate for selected currency
+      const response = await fetch(`/api/products/convert?currency=${selectedCurrency}`);
+      const { rate, symbol } = await response.json();
 
-        let { data, error } = await supabase
-          .from('products')
-          .select(`
-            id,
-            name,
-            price,
-            image,
-            supermarket_id,
-            variations,
-            supermarkets!supermarket_id (name, address)
-          `)
-          .ilike('name', `%${productName}%`);
+      try {
+        for (const productName of productNames) {
+          const cartItemsForName = cartItems.filter(
+            (item) => item.name?.trim() === productName && item.storeName !== 'N/A'
+          );
+          const excludedSupermarketIds = cartItemsForName.map((item) => item.supermarket_id);
 
-        if (error) {
-          console.error(`Error fetching store options for name "${productName}":`, error);
-          setErrorMessage(`Failed to fetch store options for "${productName}".`);
-          setTimeout(() => setErrorMessage(''), 3000);
-          continue;
-        }
+          let { data, error } = await supabase
+            .from('products')
+            .select(`
+              id,
+              name,
+              price,
+              image,
+              supermarket_id,
+              variations,
+              supermarkets!supermarket_id (name, address)
+            `)
+            .ilike('name', `%${productName}%`);
 
-        if (data && data.length) {
-          options[productName] = data
-            .filter(p => !excludedSupermarketIds.includes(p.supermarket_id) && p.supermarkets?.address)
-            .sort((a, b) => a.price - b.price)
-            .map(p => ({
-              itemId: p.id,
-              product_id: p.id,
-              price: p.price,
-              storeName: p.supermarkets?.name || 'N/A',
-              image: p.image,
-              variations: p.variations,
-              supermarket_id: p.supermarket_id,
-              address: p.supermarkets?.address || null
-            }))
-            .filter(p => p.storeName !== 'N/A' && p.address);
-          if (options[productName].length === 0) {
-            console.warn(`No valid store options with addresses for "${productName}"`);
+          if (error) {
+            console.error(`Error fetching store options for name "${productName}":`, error);
+            setErrorMessage(`Failed to fetch store options for "${productName}".`);
+            setTimeout(() => setErrorMessage(''), 3000);
+            continue;
           }
-        } else {
-          console.warn(`No store options found for name "${productName}"`);
+
+          if (data && data.length) {
+            options[productName] = data
+              .filter((p) => !excludedSupermarketIds.includes(p.supermarket_id) && p.supermarkets?.address)
+              .sort((a, b) => a.price - b.price)
+              .map((p) => ({
+                itemId: p.id,
+                product_id: p.id,
+                original_price: p.price,
+                price: p.price * rate,
+                storeName: p.supermarkets?.name || 'N/A',
+                image: p.image,
+                variations: p.variations,
+                supermarket_id: p.supermarket_id,
+                address: p.supermarkets?.address || null,
+                currency: selectedCurrency,
+                symbol,
+              }))
+              .filter((p) => p.storeName !== 'N/A' && p.address);
+            if (options[productName].length === 0) {
+              console.warn(`No valid store options with addresses for "${productName}"`);
+            }
+          } else {
+            console.warn(`No store options found for name "${productName}"`);
+          }
         }
+        setStoreOptions(options);
+      } catch (err) {
+        console.error('Error fetching store options:', err);
+        setErrorMessage('An error occurred while fetching store options.');
+        setTimeout(() => setErrorMessage(''), 3000);
       }
-      setStoreOptions(options);
-    } catch (err) {
-      console.error('Error fetching store options:', err);
-      setErrorMessage('An error occurred while fetching store options.');
-      setTimeout(() => setErrorMessage(''), 3000);
-    }
-  }, [cartItems]);
+    },
+    [cartItems, selectedCurrency]
+  );
 
   useEffect(() => {
     if (authChecked) {
@@ -384,13 +477,13 @@ export default function CartPage() {
 
       const allOptions = Object.values(storeOptions).flat();
       const uniqueStores = new Map();
-      allOptions.forEach(opt => {
+      allOptions.forEach((opt) => {
         if (opt.address && !uniqueStores.has(opt.supermarket_id)) {
           uniqueStores.set(opt.supermarket_id, opt.address);
         }
       });
 
-      cartItems.forEach(item => {
+      cartItems.forEach((item) => {
         if (item.address && !uniqueStores.has(item.supermarket_id)) {
           uniqueStores.set(item.supermarket_id, item.address);
         }
@@ -407,12 +500,12 @@ export default function CartPage() {
         const res = await fetch('/api/distance-matrix', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             origin: userAddress.address,
-            destinations
-          })
+            destinations,
+          }),
         });
 
         if (!res.ok) {
@@ -428,7 +521,7 @@ export default function CartPage() {
               const address = destinations[idx];
               newDurations[address] = {
                 text: element.duration.text,
-                value: element.duration.value
+                value: element.duration.value,
               };
             } else {
               const address = destinations[idx];
@@ -438,13 +531,13 @@ export default function CartPage() {
           setStoreDurations(newDurations);
         } else {
           setStoreDurations(
-            Object.fromEntries(destinations.map(dest => [dest, { text: 'N/A', value: Infinity }]))
+            Object.fromEntries(destinations.map((dest) => [dest, { text: 'N/A', value: Infinity }]))
           );
         }
       } catch (err) {
         console.error('Error fetching durations:', err.message);
         setStoreDurations(
-          Object.fromEntries(destinations.map(dest => [dest, { text: 'N/A', value: Infinity }]))
+          Object.fromEntries(destinations.map((dest) => [dest, { text: 'N/A', value: Infinity }]))
         );
       } finally {
         setDurationsLoading(false);
@@ -487,13 +580,29 @@ export default function CartPage() {
         }
       }
 
+      // Fetch exchange rate for selected currency
+      const response = await fetch(`/api/products/convert?currency=${selectedCurrency}`);
+      const { rate, symbol } = await response.json();
+
       let updatedCart = [...cartItems];
       const existingItem = updatedCart.find((item) => item.itemId === product.itemId);
 
       if (existingItem) {
         existingItem.quantity += 1;
+        existingItem.price = existingItem.original_price * rate;
+        existingItem.currency = selectedCurrency;
+        existingItem.symbol = symbol;
       } else {
-        updatedCart.push({ ...product, quantity: 1, storeName, address });
+        updatedCart.push({
+          ...product,
+          quantity: 1,
+          storeName,
+          address,
+          original_price: product.price,
+          price: product.price * rate,
+          currency: selectedCurrency,
+          symbol,
+        });
       }
 
       setCartItems(updatedCart);
@@ -706,11 +815,14 @@ export default function CartPage() {
             itemId: newProduct.itemId,
             product_id: newProduct.product_id,
             price: newProduct.price,
+            original_price: newProduct.original_price,
             supermarket_id: newProduct.supermarket_id,
             image: newProduct.image,
             storeName: newProduct.storeName,
             variations: newProduct.variations,
-            address: newProduct.address
+            address: newProduct.address,
+            currency: newProduct.currency,
+            symbol: newProduct.symbol,
           };
         }
         return item;
@@ -763,8 +875,8 @@ export default function CartPage() {
   const handleSelectAddress = async (addressId) => {
     if (!user || addressLoading) return;
     setAddressLoading(true);
-    setAddressError("");
-    setAddressSuccess("");
+    setAddressError('');
+    setAddressSuccess('');
     try {
       // Reset all addresses' is_last_used flag
       await supabase
@@ -796,11 +908,11 @@ export default function CartPage() {
             : { ...addr, is_last_used: false }
         )
       );
-      setAddressSuccess("Address selected successfully!");
+      setAddressSuccess('Address selected successfully!');
       setTimeout(() => setAddressSuccess(''), 3000);
     } catch (err) {
       console.error('Error selecting address:', err);
-      setAddressError("Failed to select address. Please try again.");
+      setAddressError('Failed to select address. Please try again.');
       setTimeout(() => setAddressError(''), 3000);
     } finally {
       setAddressLoading(false);
@@ -821,7 +933,10 @@ export default function CartPage() {
               <div className="lg:col-span-2">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex flex-col sm:flex-row items-center gap-4 p-4 sm:p-6 border-b border-gray-100 last:border-b-0">
+                    <div
+                      key={i}
+                      className="flex flex-col sm:flex-row items-center gap-4 p-4 sm:p-6 border-b border-gray-100 last:border-b-0"
+                    >
                       <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-200 rounded-xl animate-pulse"></div>
                       <div className="flex-1">
                         <div className="h-4 bg-gray-200 rounded w-3/4 mb-2 animate-pulse"></div>
@@ -888,14 +1003,26 @@ export default function CartPage() {
                     Shopping Cart
                   </h1>
                 </div>
-                <p className="text-gray-600 ml-8 sm:ml-10 text-sm sm:text-base">{cartItems.length} item{cartItems.length !== 1 ? 's' : ''} in your cart</p>
+                <p className="text-gray-600 ml-8 sm:ml-10 text-sm sm:text-base">
+                  {cartItems.length} item{cartItems.length !== 1 ? 's' : ''} in your cart
+                </p>
               </div>
               {/* Address Section with Address Selection */}
               <div className="mb-6 sm:mb-8">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
                   <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                    <svg className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <svg
+                      className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                      />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                     <div className="flex-1">
@@ -907,9 +1034,9 @@ export default function CartPage() {
                               className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
                               onClick={() => {
                                 setEditingAddress(true);
-                                setNewAddress(userAddress?.address || "");
-                                setAddressError("");
-                                setAddressSuccess("");
+                                setNewAddress(userAddress?.address || '');
+                                setAddressError('');
+                                setAddressSuccess('');
                               }}
                             >
                               {userAddress ? 'Edit' : 'Add Address'}
@@ -918,9 +1045,9 @@ export default function CartPage() {
                               className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
                               onClick={() => {
                                 setEditingAddress(true);
-                                setNewAddress("");
-                                setAddressError("");
-                                setAddressSuccess("");
+                                setNewAddress('');
+                                setAddressError('');
+                                setAddressSuccess('');
                               }}
                             >
                               Add New
@@ -935,19 +1062,21 @@ export default function CartPage() {
                               <div className="space-y-3">
                                 <select
                                   className="w-full py-2 sm:py-3 px-3 sm:px-4 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm sm:text-base"
-                                  value={userAddress?.id || ""}
+                                  value={userAddress?.id || ''}
                                   onChange={(e) => {
-                                    const selectedAddress = savedAddresses.find(addr => addr.id === e.target.value);
+                                    const selectedAddress = savedAddresses.find((addr) => addr.id === e.target.value);
                                     if (selectedAddress) {
                                       handleSelectAddress(selectedAddress.id);
                                     }
                                   }}
                                   disabled={addressLoading}
                                 >
-                                  <option value="" disabled>Select an address</option>
+                                  <option value="" disabled>
+                                    Select an address
+                                  </option>
                                   {savedAddresses.map((addr) => (
                                     <option key={addr.id} value={addr.id}>
-                                      {addr.full_address} {addr.is_last_used ? "(Last Used)" : ""}
+                                      {addr.full_address} {addr.is_last_used ? '(Last Used)' : ''}
                                     </option>
                                   ))}
                                 </select>
@@ -978,13 +1107,13 @@ export default function CartPage() {
                           onSubmit={async (e) => {
                             e.preventDefault();
                             if (!newAddress || !user) {
-                              setAddressError("Please enter a valid address.");
+                              setAddressError('Please enter a valid address.');
                               setTimeout(() => setAddressError(''), 3000);
                               return;
                             }
                             setAddressLoading(true);
-                            setAddressError("");
-                            setAddressSuccess("");
+                            setAddressError('');
+                            setAddressSuccess('');
                             try {
                               const formattedAddress = newAddress.trim();
                               const normalizedAddress = normalizeAddress(formattedAddress);
@@ -1038,7 +1167,7 @@ export default function CartPage() {
                                     )
                                   );
                                   setEditingAddress(false);
-                                  setAddressSuccess("Address updated successfully!");
+                                  setAddressSuccess('Address updated successfully!');
                                   setTimeout(() => setAddressSuccess(''), 3000);
                                 }
                               } else {
@@ -1078,13 +1207,13 @@ export default function CartPage() {
                                     },
                                   ]);
                                   setEditingAddress(false);
-                                  setAddressSuccess("Address added successfully!");
+                                  setAddressSuccess('Address added successfully!');
                                   setTimeout(() => setAddressSuccess(''), 3000);
                                 }
                               }
                             } catch (err) {
                               console.error('Error updating address:', err);
-                              setAddressError("Failed to save address. Please try again.");
+                              setAddressError('Failed to save address. Please try again.');
                               setTimeout(() => setAddressError(''), 3000);
                             } finally {
                               setAddressLoading(false);
@@ -1106,15 +1235,15 @@ export default function CartPage() {
                               className="bg-blue-600 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm sm:text-base"
                               disabled={addressLoading || !newAddress}
                             >
-                              {addressLoading ? "Saving..." : "Save Address"}
+                              {addressLoading ? 'Saving...' : 'Save Address'}
                             </button>
                             <button
                               type="button"
                               className="bg-gray-200 text-gray-700 px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50 text-sm sm:text-base"
                               onClick={() => {
                                 setEditingAddress(false);
-                                setAddressError("");
-                                setAddressSuccess("");
+                                setAddressError('');
+                                setAddressSuccess('');
                               }}
                               disabled={addressLoading}
                             >
@@ -1208,7 +1337,12 @@ export default function CartPage() {
                                           className="p-1 sm:p-2 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-l-lg transition-colors"
                                           aria-label="Decrease quantity"
                                         >
-                                          <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <svg
+                                            className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                          >
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
                                           </svg>
                                         </button>
@@ -1220,7 +1354,12 @@ export default function CartPage() {
                                           className="p-1 sm:p-2 hover:bg-gray-100 rounded-r-lg transition-colors"
                                           aria-label="Increase quantity"
                                         >
-                                          <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <svg
+                                            className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                          >
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                                           </svg>
                                         </button>
@@ -1236,10 +1375,14 @@ export default function CartPage() {
                                   </div>
                                   <div className="text-right flex-shrink-0">
                                     <div className="text-xs text-gray-500 mb-1">Unit Price</div>
-                                    <div className="text-sm font-medium text-gray-700 mb-1 sm:mb-2">${Number(item.price || 0).toFixed(2)}</div>
+                                    <div className="text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                                      {item.symbol}
+                                      {Number(item.price || 0).toFixed(2)}
+                                    </div>
                                     <div className="text-xs text-gray-500 mb-1">Subtotal</div>
                                     <div className="text-lg sm:text-xl font-bold text-gray-900">
-                                      ${(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}
+                                      {item.symbol}
+                                      {(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}
                                     </div>
                                   </div>
                                 </div>
@@ -1251,14 +1394,14 @@ export default function CartPage() {
                     </div>
                   </div>
                   {/* Review by Stores Section */}
-                  {cartItems.some(item => item.storeName !== 'N/A' && storeOptions[item.name?.trim()]?.length > 0) && (
+                  {cartItems.some((item) => item.storeName !== 'N/A' && storeOptions[item.name?.trim()]?.length > 0) && (
                     <div className="mt-6 sm:mt-8 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
                       <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6 flex items-center gap-2">
                         <div className="w-1.5 h-5 sm:h-6 bg-blue-600 rounded-full"></div>
                         Review by Stores
                       </h2>
                       {cartItems
-                        .filter(item => item.storeName !== 'N/A')
+                        .filter((item) => item.storeName !== 'N/A')
                         .map((item) => {
                           const options = storeOptions[item.name?.trim()] || [];
                           if (!options.length) return null;
@@ -1273,7 +1416,10 @@ export default function CartPage() {
                           const imageUrl = normalizeImageUrl(normalizedImages[0] || '/placeholder-product.jpg');
 
                           return (
-                            <div key={item.itemId} className="mb-6 sm:mb-8 border-b border-gray-200 pb-4 sm:pb-6 last:border-b-0 last:pb-0">
+                            <div
+                              key={item.itemId}
+                              className="mb-6 sm:mb-8 border-b border-gray-200 pb-4 sm:pb-6 last:border-b-0 last:pb-0"
+                            >
                               <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
                                 <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white rounded-xl border border-gray-200 overflow-hidden">
                                   <Image
@@ -1306,7 +1452,9 @@ export default function CartPage() {
                                         />
                                       </div>
                                       <div className="flex-1">
-                                        <div className="font-medium text-gray-800 text-sm sm:text-base">{opt.storeName === 'N/A' ? 'No supermarket assigned' : opt.storeName}</div>
+                                        <div className="font-medium text-gray-800 text-sm sm:text-base">
+                                          {opt.storeName === 'N/A' ? 'No supermarket assigned' : opt.storeName}
+                                        </div>
                                         {opt.variations && (
                                           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full mt-1 inline-block">
                                             {opt.variations.size && opt.variations.color
@@ -1316,7 +1464,10 @@ export default function CartPage() {
                                         )}
                                       </div>
                                       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
-                                        <span className="text-gray-900 text-sm sm:text-base">${opt.price.toFixed(2)}</span>
+                                        <span className="text-gray-900 text-sm sm:text-base">
+                                          {opt.symbol}
+                                          {opt.price.toFixed(2)}
+                                        </span>
                                         {durationsLoading ? (
                                           <span className="text-gray-600 text-xs sm:text-sm bg-gray-100 px-2 sm:px-3 py-1 rounded-full">
                                             Calculating...
@@ -1346,7 +1497,9 @@ export default function CartPage() {
                           );
                         })}
                       {Object.keys(storeOptions).every((name) => storeOptions[name].length === 0) && (
-                        <p className="text-gray-600 text-center text-sm sm:text-base">No alternative stores available for your items. Please ensure stores have valid addresses.</p>
+                        <p className="text-gray-600 text-center text-sm sm:text-base">
+                          No alternative stores available for your items. Please ensure stores have valid addresses.
+                        </p>
                       )}
                     </div>
                   )}
@@ -1360,7 +1513,10 @@ export default function CartPage() {
                     <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Subtotal ({cartItems.length} items)</span>
-                        <span className="font-medium">${total.toFixed(2)}</span>
+                        <span className="font-medium">
+                          {cartItems[0]?.symbol || '$'}
+                          {total.toFixed(2)}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Shipping</span>
@@ -1373,7 +1529,10 @@ export default function CartPage() {
                       <div className="border-t border-gray-200 pt-3 sm:pt-4">
                         <div className="flex justify-between items-center">
                           <span className="text-base sm:text-lg font-bold text-gray-900">Total</span>
-                          <span className="text-lg sm:text-2xl font-bold text-blue-600">${total.toFixed(2)}</span>
+                          <span className="text-lg sm:text-2xl font-bold text-blue-600">
+                            {cartItems[0]?.symbol || '$'}
+                            {total.toFixed(2)}
+                          </span>
                         </div>
                       </div>
                     </div>

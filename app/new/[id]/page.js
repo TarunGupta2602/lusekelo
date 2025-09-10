@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useEffect, useState, useCallback } from 'react';
@@ -5,6 +6,15 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@supabase/supabase-js';
 import React from 'react';
+
+// Supported currencies and symbols
+const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR'];
+const CURRENCY_SYMBOLS = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  INR: '₹',
+};
 
 // Normalize the image path to ensure the image URL is correct
 const normalizeImagePath = (path) => {
@@ -72,7 +82,7 @@ const ProductCard = React.memo(({ product, cart, handleAddToCart }) => {
           <div className="flex items-center justify-between mt-auto">
             <div className="flex-1 min-w-0">
               <div className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 truncate">
-                ${product.price.toFixed(2)}
+                {product.symbol}{product.price.toFixed(2)}
               </div>
               {product.quantity && (
                 <p className="text-gray-400 text-xs mt-0.5 truncate">Qty: {product.quantity}</p>
@@ -180,6 +190,27 @@ export default function CategoryProducts({ params, searchParams }) {
   const [cart, setCart] = useState([]);
   const [cartMessage, setCartMessage] = useState('');
   const [user, setUser] = useState(null);
+  const [selectedCurrency, setSelectedCurrency] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      return SUPPORTED_CURRENCIES.includes(savedCurrency) ? savedCurrency : 'USD';
+    }
+    return 'USD';
+  });
+
+  // Listen for currency changes from navbar
+  useEffect(() => {
+    const handleCurrencyUpdate = () => {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      if (SUPPORTED_CURRENCIES.includes(savedCurrency)) {
+        setSelectedCurrency(savedCurrency);
+      }
+    };
+    window.addEventListener('currencyUpdated', handleCurrencyUpdate);
+    return () => {
+      window.removeEventListener('currencyUpdated', handleCurrencyUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -216,7 +247,20 @@ export default function CategoryProducts({ params, searchParams }) {
           }, {})
         );
 
-        setProducts(deduplicatedProducts);
+        // Fetch exchange rate
+        const response = await fetch(`/api/products/convert?currency=${selectedCurrency}`);
+        const { rate, symbol } = await response.json();
+
+        // Convert prices
+        const convertedProducts = deduplicatedProducts.map(product => ({
+          ...product,
+          original_price: product.price,
+          price: product.price * rate,
+          currency: selectedCurrency,
+          symbol,
+        }));
+
+        setProducts(convertedProducts);
 
         // Fetch category name
         const { data: category, error: categoryError } = await supabase
@@ -257,7 +301,7 @@ export default function CategoryProducts({ params, searchParams }) {
 
     fetchData();
     fetchUserAndCart();
-  }, [categoryId, storeId]);
+  }, [categoryId, storeId, selectedCurrency]);
 
   const updateCartInSupabase = useCallback(async (newCart, userId) => {
     if (!userId) return;
@@ -305,9 +349,10 @@ export default function CategoryProducts({ params, searchParams }) {
             product_id: productToAdd.id,
             quantity: quantityDelta,
             name: productToAdd.name,
-            price: productToAdd.price,
+            price: productToAdd.original_price,
             image: productToAdd.image,
             supermarket_id: productToAdd.supermarket_id,
+            currency: productToAdd.currency,
           });
           setCartMessage('Product added to cart!');
         }

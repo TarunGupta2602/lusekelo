@@ -33,6 +33,15 @@ const categoryMapping = {
   800: [801, 802, 803, 804], // Books & Media
 }
 
+// Supported currencies and symbols
+const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR']
+const CURRENCY_SYMBOLS = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  INR: '₹',
+}
+
 // Helper to normalize image path and return the first valid image
 function normalizeImagePath(path) {
   const defaultImage = '/placeholder-product.jpg'
@@ -78,6 +87,28 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState([])
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [supermarkets, setSupermarkets] = useState({})
+  const [selectedCurrency, setSelectedCurrency] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedCurrency = localStorage.getItem('selectedCurrency')
+      return SUPPORTED_CURRENCIES.includes(savedCurrency) ? savedCurrency : 'USD'
+    }
+    return 'USD'
+  })
+  const [currencySymbol, setCurrencySymbol] = useState(CURRENCY_SYMBOLS['USD'])
+
+  // Listen for currency changes from navbar
+  useEffect(() => {
+    const handleCurrencyUpdate = () => {
+      const savedCurrency = localStorage.getItem('selectedCurrency')
+      if (SUPPORTED_CURRENCIES.includes(savedCurrency)) {
+        setSelectedCurrency(savedCurrency)
+      }
+    }
+    window.addEventListener('currencyUpdated', handleCurrencyUpdate)
+    return () => {
+      window.removeEventListener('currencyUpdated', handleCurrencyUpdate)
+    }
+  }, [])
 
   // Set categories to mainCategories
   useEffect(() => {
@@ -107,12 +138,17 @@ export default function ProductsPage() {
     fetchSupermarkets()
   }, [])
 
-  // Fetch products
+  // Fetch products and convert prices
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true)
         setError('')
+
+        // Fetch exchange rate for selected currency
+        const response = await fetch(`/api/products/convert?currency=${selectedCurrency}`)
+        const { rate, symbol } = await response.json()
+        setCurrencySymbol(symbol)
 
         const { data: productsData, error: productsError } = await supabase
           .from('products')
@@ -133,7 +169,11 @@ export default function ProductsPage() {
 
         const normalizedProducts = productsData.map(product => ({
           ...product,
-          image: normalizeImagePath(product.image)
+          image: normalizeImagePath(product.image),
+          original_price: product.price, // Store original price (assumed USD)
+          price: product.price * rate, // Convert to selected currency
+          currency: selectedCurrency,
+          symbol,
         }))
 
         setProducts(normalizedProducts)
@@ -145,7 +185,7 @@ export default function ProductsPage() {
     }
 
     fetchData()
-  }, [sortOrder])
+  }, [sortOrder, selectedCurrency])
 
   // Filter products by selected main category
   const filteredProducts = selectedCategory
@@ -154,7 +194,7 @@ export default function ProductsPage() {
 
   // Find selected category name
   const selectedCategoryName = selectedCategory
-    ? (mainCategories.find(c => c.id === c.id === selectedCategory)?.name || 'Category')
+    ? (mainCategories.find(c => c.id === selectedCategory)?.name || 'Category')
     : 'All Products'
 
   return (
@@ -224,7 +264,7 @@ export default function ProductsPage() {
                   )}
                 </div>
                 <div className="mt-auto">
-                  <span className="text-blue-600 font-bold text-base sm:text-lg">${product.price.toFixed(2)}</span>
+                  <span className="text-blue-600 font-bold text-base sm:text-lg">{product.symbol}{product.price.toFixed(2)}</span>
                 </div>
               </div>
             </Link>

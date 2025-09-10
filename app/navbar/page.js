@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -16,14 +17,21 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Supported currencies and symbols
+const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR'];
+const CURRENCY_SYMBOLS = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  INR: '₹',
+};
+
 // Normalize image URL or path to handle both absolute URLs and relative paths
 const normalizeImageUrl = (input) => {
   const fallbackImage = '/placeholder-product.jpg';
 
-  // Handle null, undefined, or empty input
   if (!input) return fallbackImage;
 
-  // Handle array input (e.g., product.image might be an array)
   if (Array.isArray(input)) {
     const normalized = input
       .map((p) => {
@@ -31,7 +39,6 @@ const normalizeImageUrl = (input) => {
         const trimmed = String(p).trim();
         if (!trimmed) return null;
 
-        // Handle absolute URLs
         if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
           try {
             new URL(trimmed);
@@ -41,7 +48,6 @@ const normalizeImageUrl = (input) => {
           }
         }
 
-        // Handle relative paths (e.g., ../../assets/HairSpray.webp)
         const normalizedPath = trimmed.replace(/^(\.\.\/)+assets\//, '/');
         return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
       })
@@ -50,11 +56,9 @@ const normalizeImageUrl = (input) => {
     return normalized.length > 0 ? normalized[0] : fallbackImage;
   }
 
-  // Handle single string input
   const urlString = String(input).trim();
   if (!urlString) return fallbackImage;
 
-  // Handle absolute URLs
   if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
     try {
       new URL(urlString);
@@ -64,7 +68,6 @@ const normalizeImageUrl = (input) => {
     }
   }
 
-  // Handle relative paths
   const normalizedPath = urlString.replace(/^(\.\.\/)+assets\//, '/');
   return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
 };
@@ -90,33 +93,41 @@ export default function Navbar() {
   const [profileSidebarOpen, setProfileSidebarOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [products, setProducts] = useState([]);
+  const [selectedCurrency, setSelectedCurrency] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      return SUPPORTED_CURRENCIES.includes(savedCurrency) ? savedCurrency : 'USD';
+    }
+    return 'USD';
+  });
   const searchInputRef = useRef();
   const searchResultsRef = useRef();
   const router = useRouter();
 
+  // Save selected currency to localStorage and dispatch event
+  useEffect(() => {
+    localStorage.setItem('selectedCurrency', selectedCurrency);
+    window.dispatchEvent(new Event('currencyUpdated'));
+  }, [selectedCurrency]);
+
   // Initialize Google Translate
   useEffect(() => {
-    // Load Google Translate script
     const addScript = document.createElement("script");
-    addScript.src =
-      "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+    addScript.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
     document.body.appendChild(addScript);
 
-    // Init function
     window.googleTranslateElementInit = () => {
-      // Desktop translate element
       if (document.getElementById("google_translate_element")) {
         new window.google.translate.TranslateElement(
           {
-            pageLanguage: "en", // default site language
-            includedLanguages: "en,sw,hi,fr,es,de,ar,zh,ja,ko,pt,ru,it,nl", // supported languages
+            pageLanguage: "en",
+            includedLanguages: "en,sw,hi,fr,es,de,ar,zh,ja,ko,pt,ru,it,nl",
             layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE,
           },
           "google_translate_element"
         );
       }
       
-      // Mobile translate element
       if (document.getElementById("google_translate_element_mobile")) {
         new window.google.translate.TranslateElement(
           {
@@ -129,9 +140,7 @@ export default function Navbar() {
       }
     };
 
-    // Cleanup function
     return () => {
-      // Remove script if component unmounts
       const existingScript = document.querySelector('script[src*="translate.google.com"]');
       if (existingScript) {
         existingScript.remove();
@@ -148,7 +157,6 @@ export default function Navbar() {
 
     fetchUser();
 
-    // Set up auth state change subscription
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (session) {
@@ -202,7 +210,6 @@ export default function Navbar() {
           console.error('Error fetching products:', productsError.message);
           setProducts([]);
         } else {
-          // Normalize image field
           const normalizedProducts = productsData.map(product => ({
             ...product,
             image: normalizeImageUrl(product.image)
@@ -228,17 +235,15 @@ export default function Navbar() {
     try {
       let cart = [];
       if (!user) {
-        // Guest cart from localStorage
         cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
       } else {
-        // Authenticated user cart from DB
         const { data, error } = await supabase
           .from('carts')
           .select('store_carts')
           .eq('user_id', user.id)
           .single();
 
-        if (error && error.code !== 'PGRST116') { // PGRST116: No rows found
+        if (error && error.code !== 'PGRST116') {
           console.error('Error fetching cart:', error);
           return;
         }
@@ -255,7 +260,6 @@ export default function Navbar() {
 
   useEffect(() => {
     loadCartCount();
-    // Listen for cart updates via storage events
     const handleCartUpdate = () => {
       loadCartCount();
     };
@@ -266,17 +270,16 @@ export default function Navbar() {
   }, [loadCartCount]);
 
   const handleSearchBlur = (event) => {
-    // Check if the related target (where focus is moving) is within search results
     if (searchResultsRef.current && event.relatedTarget && searchResultsRef.current.contains(event.relatedTarget)) {
-      return; // Do not clear results if clicking within the search results
+      return;
     }
     setTimeout(() => setSearchResults([]), 200);
   };
 
-  // Debounced search function
+  // Debounced search function with currency conversion
   const debouncedSearch = useMemo(
     () =>
-      debounce((query) => {
+      debounce(async (query) => {
         const trimmedQuery = query.trim().toLowerCase();
         if (!trimmedQuery) {
           setSearchResults([]);
@@ -285,10 +288,20 @@ export default function Navbar() {
         }
         setLoading(true);
         try {
+          // Fetch exchange rate for selected currency
+          const response = await fetch(`/api/products/convert?currency=${selectedCurrency}`);
+          const { rate, symbol } = await response.json();
+
           const filteredProducts = products.filter((product) =>
             product.name?.toLowerCase().includes(trimmedQuery)
           );
-          setSearchResults(filteredProducts.map((p) => ({ ...p, _type: "product" })));
+          const convertedProducts = filteredProducts.map((p) => ({
+            ...p,
+            _type: "product",
+            price: (parseFloat(p.price) * rate).toFixed(2),
+            currencySymbol: symbol
+          }));
+          setSearchResults(convertedProducts);
         } catch (error) {
           console.error('Search error:', error);
           setSearchResults([]);
@@ -296,24 +309,21 @@ export default function Navbar() {
           setLoading(false);
         }
       }, 400),
-    [products]
+    [products, selectedCurrency]
   );
 
-  // Handle search input change
   const handleSearchChange = useCallback((e) => {
     const query = e.target.value;
     setSearchQuery(query);
     debouncedSearch(query);
   }, [debouncedSearch]);
 
-  // Cleanup debounced search on component unmount
   useEffect(() => {
     return () => {
       debouncedSearch.cancel();
     };
   }, [debouncedSearch]);
 
-  // Handle form submission (Enter key press)
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     const trimmedQuery = searchQuery.trim();
@@ -324,7 +334,6 @@ export default function Navbar() {
     }
   };
 
-  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownVisible && !event.target.closest('.store-dropdown')) {
@@ -341,13 +350,11 @@ export default function Navbar() {
     };
   }, [dropdownVisible, userDropdownVisible]);
 
-  // Helper function to get username display text
   const getUserDisplayName = () => {
     if (!user) return "Sign In";
     return user.user_metadata?.full_name || user.email?.split('@')[0] || "Profile";
   };
 
-  // Helper function to get user avatar URL
   const getUserAvatar = () => {
     if (!user) return null;
     if (user.app_metadata?.provider === 'google') {
@@ -359,7 +366,6 @@ export default function Navbar() {
     return null;
   };
 
-  // Get user initials for avatar fallback
   const getUserInitials = () => {
     if (!user) return "?";
     if (user.user_metadata?.full_name) {
@@ -374,16 +380,12 @@ export default function Navbar() {
 
   return (
     <>
-      {/* NavbarTranslateWidget for Google branding removal */}
       <NavbarTranslateWidget />
-      {/* Profile Sidebar Overlay */}
       {profileSidebarOpen && (
         <ProfileSidebar onClose={() => setProfileSidebarOpen(false)} />
       )}
-      {/* Auth Modal */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <header className="fixed top-0 left-0 w-full z-50 flex flex-wrap justify-between items-center py-3 px-4 sm:px-6 bg-white text-gray-700 shadow">
-        {/* Mobile Menu Button */}
         <button 
           className="lg:hidden flex items-center" 
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -404,12 +406,10 @@ export default function Navbar() {
           </svg>
         </button>
         
-        {/* Logo */}
         <Link href="/" className="flex items-center mx-auto lg:mx-0">
           <Image src="/mylogo.jpg" alt="Logo" width={40} height={40} className="rounded-lg" />
         </Link>
 
-        {/* Mobile Search Button */}
         <button 
           className="lg:hidden flex items-center" 
           onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
@@ -430,7 +430,6 @@ export default function Navbar() {
           </svg>
         </button>
 
-        {/* Mobile Cart Icon */}
         <Link href="/cart" className="lg:hidden flex items-center relative ml-4 group">
           <div className="relative transform transition-transform duration-200 group-hover:scale-105">
             <svg
@@ -455,7 +454,6 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {/* Mobile Search Bar (Conditional Render) */}
         {mobileSearchOpen && (
           <div className="w-full mt-3 order-last">
             <form className="relative" onSubmit={handleSearchSubmit}>
@@ -516,7 +514,7 @@ export default function Navbar() {
                       <div>
                         <p className="text-sm font-medium">{item.name || 'Unnamed Product'}</p>
                         {item.price && (
-                          <p className="text-xs text-green-600">${item.price}</p>
+                          <p className="text-xs text-green-600">{item.currencySymbol}{item.price}</p>
                         )}
                       </div>
                     </Link>
@@ -543,11 +541,9 @@ export default function Navbar() {
           </div>
         )}
 
-        {/* Mobile Menu (Conditional Render) */}
         {mobileMenuOpen && (
           <div className="w-full order-last mt-3">
             <div className="bg-white border rounded-lg shadow-lg p-4 space-y-4">
-              {/* User Profile or Sign In in Mobile Menu */}
               {user ? (
                 <button
                   type="button"
@@ -589,7 +585,6 @@ export default function Navbar() {
                 </button>
               )}
 
-              {/* Store Dropdown in Mobile Menu */}
               <div className="store-dropdown">
                 <button
                   onClick={() => setDropdownVisible(!dropdownVisible)}
@@ -656,6 +651,30 @@ export default function Navbar() {
                 )}
               </div>
               
+              {/* Currency Selector - Mobile */}
+              <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                <div className="flex items-center mb-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 14.121A3 3 0 1019 9m-7 7a7 7 0 117-7 7 7 0 01-7 7zm0 0H12m2.5-4.5v-.5a1.5 1.5 0 00-3 0M9 12.75l.75 1.5M15 12.75l-.75 1.5" />
+                  </svg>
+                  <div>
+                    <span className="font-semibold text-gray-800">Currency</span>
+                    <p className="text-xs text-gray-600">Choose your preferred currency</p>
+                  </div>
+                </div>
+                <select
+                  value={selectedCurrency}
+                  onChange={(e) => setSelectedCurrency(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                >
+                  {SUPPORTED_CURRENCIES.map((currency) => (
+                    <option key={currency} value={currency}>
+                      {currency} ({CURRENCY_SYMBOLS[currency]})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Google Translate Widget - Mobile */}
               <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
                 <div className="flex items-center mb-3">
@@ -672,7 +691,6 @@ export default function Navbar() {
                 <div id="google_translate_element_mobile" className="translate-widget-mobile"></div>
               </div>
 
-              {/* Cart Link in Mobile Menu */}
               <Link 
                 href="/cart" 
                 className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition duration-150"
@@ -710,7 +728,6 @@ export default function Navbar() {
           </div>
         )}
 
-        {/* Desktop Store Dropdown */}
         <div className="hidden lg:block relative store-dropdown">
           <button
             onClick={() => setDropdownVisible(!dropdownVisible)}
@@ -772,7 +789,6 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Desktop Search Bar */}
         <div className="hidden lg:block w-[500px] relative">
           <form className="relative" onSubmit={handleSearchSubmit}>
             <input
@@ -832,7 +848,7 @@ export default function Navbar() {
                     <div>
                       <p className="text-sm font-medium">{item.name || 'Unnamed Product'}</p>
                       {item.price && (
-                        <p className="text-xs text-green-600 font-medium">${item.price}</p>
+                        <p className="text-xs text-green-600">{item.currencySymbol}{item.price}</p>
                       )}
                     </div>
                   </Link>
@@ -858,7 +874,26 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Google Translate Widget - Desktop */}
+        {/* Currency Selector - Desktop */}
+        <div className="hidden lg:block">
+          <div className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition duration-150">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 14.121A3 3 0 1019 9m-7 7a7 7 0 117-7 7 7 0 01-7 7zm0 0H12m2.5-4.5v-.5a1.5 1.5 0 00-3 0M9 12.75l.75 1.5M15 12.75l-.75 1.5" />
+            </svg>
+            <select
+              value={selectedCurrency}
+              onChange={(e) => setSelectedCurrency(e.target.value)}
+              className="bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            >
+              {SUPPORTED_CURRENCIES.map((currency) => (
+                <option key={currency} value={currency}>
+                  {currency} ({CURRENCY_SYMBOLS[currency]})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         <div className="hidden lg:block">
           <div className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition duration-150">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -868,9 +903,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Desktop User and Cart Icons */}
         <div className="hidden lg:flex items-center space-x-4">
-          {/* User Profile Button */}
           <button
             type="button"
             onClick={() => user ? setProfileSidebarOpen(true) : setIsAuthModalOpen(true)}
@@ -891,7 +924,6 @@ export default function Navbar() {
             </div>
             <span className="text-sm font-medium">{getUserDisplayName()}</span>
           </button>
-          {/* Cart Link */}
           <Link 
             href="/cart" 
             className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-all duration-200 group"

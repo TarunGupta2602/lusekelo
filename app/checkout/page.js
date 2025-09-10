@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -8,6 +9,15 @@ import Image from 'next/image';
 import { FaArrowLeft, FaShieldAlt, FaCheckCircle } from 'react-icons/fa';
 import { MdOutlineShoppingCart } from 'react-icons/md';
 import { HiOutlineLockClosed } from 'react-icons/hi';
+
+// Supported currencies and symbols
+const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR'];
+const CURRENCY_SYMBOLS = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  INR: '₹',
+};
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -36,73 +46,44 @@ const normalizeImageUrl = (url) => {
 };
 
 export default function CheckoutPage() {
-  // State for user address from addresses table
   const [userAddress, setUserAddress] = useState(null);
-  // Initialize cartItems with localStorage data for guests to avoid flicker
   const initialCart = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('cart_guest') || '[]') : [];
   const [cartItems, setCartItems] = useState(initialCart);
   const [total, setTotal] = useState(0);
-  const [taxTotal, setTaxTotal] = useState(0); // New state for total tax
-  // Coupon states
+  const [taxTotal, setTaxTotal] = useState(0);
   const [couponCode, setCouponCode] = useState('');
   const [couponInfo, setCouponInfo] = useState(null);
   const [couponError, setCouponError] = useState('');
-  // Promotion states
   const [promotionTotalDiscount, setPromotionTotalDiscount] = useState(0);
   const [couponTotalDiscount, setCouponTotalDiscount] = useState(0);
   const [discountedTotal, setDiscountedTotal] = useState(null);
-  // Coupon validation and application
-  const handleApplyCoupon = async () => {
-    setCouponError('');
-    setCouponInfo(null);
-    setCouponTotalDiscount(0);
-    if (!couponCode) {
-      setCouponError('Please enter a coupon code.');
-      return;
+  const [selectedCurrency, setSelectedCurrency] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      return SUPPORTED_CURRENCIES.includes(savedCurrency) ? savedCurrency : 'USD';
     }
-    try {
-      // Find all product IDs in cart
-      const productIds = cartItems.map(item => item.product_id || item.itemId);
-      // Query coupon for any product in cart
-      const { data, error } = await supabase
-        .from('coupons')
-        .select('*')
-        .eq('code', couponCode.trim())
-        .in('product_id', productIds)
-        .single();
-      if (error || !data) {
-        setCouponError('Invalid or expired coupon code for your cart.');
-        return;
-      }
-      // Check expiry
-      const today = new Date();
-      const expiry = new Date(data.expiry_date);
-      if (expiry < today) {
-        setCouponError('This coupon has expired.');
-        return;
-      }
-      // Check usage limit
-      if (data.usage_limit && data.used_count >= data.usage_limit) {
-        setCouponError('This coupon has reached its usage limit.');
-        return;
-      }
-      // Find matching product in cart
-      const matchedItem = cartItems.find(item => (item.product_id || item.itemId) === data.product_id);
-      if (!matchedItem) {
-        setCouponError('Coupon does not apply to any product in your cart.');
-        return;
-      }
-      setCouponInfo(data);
-    } catch (err) {
-      setCouponError('Error applying coupon.');
-    }
-  };
+    return 'USD';
+  });
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCartConfirmedEmpty, setIsCartConfirmedEmpty] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const router = useRouter();
+
+  // Listen for currency changes from navbar
+  useEffect(() => {
+    const handleCurrencyUpdate = () => {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      if (SUPPORTED_CURRENCIES.includes(savedCurrency)) {
+        setSelectedCurrency(savedCurrency);
+      }
+    };
+    window.addEventListener('currencyUpdated', handleCurrencyUpdate);
+    return () => {
+      window.removeEventListener('currencyUpdated', handleCurrencyUpdate);
+    };
+  }, []);
 
   // Fetch user, address, cart, tax, and promotions data
   const fetchUserAddressAndCart = useCallback(async () => {
@@ -113,19 +94,22 @@ export default function CheckoutPage() {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       let cart = [];
 
-      if (!userError && userData?.user) {
+      if (userError || !userData?.user) {
+        console.warn('No authenticated user found:', userError?.message);
+        setUser(null);
+        cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
+      } else {
         setUser(userData.user);
-
-        // Fetch address from addresses table
+        // Fetch address
         const { data: addresses, error: addressError } = await supabase
           .from('addresses')
           .select('full_address, is_last_used')
           .eq('user_id', userData.user.id);
-        if (addressError) throw addressError;
+        if (addressError) throw new Error(`Address fetch error: ${addressError.message}`);
         const lastUsedAddress = addresses.find((addr) => addr.is_last_used) || addresses[0];
         setUserAddress(lastUsedAddress ? lastUsedAddress.full_address : null);
 
-        // Fetch cart for authenticated user
+        // Fetch cart
         const { data: cartData, error: cartError } = await supabase
           .from('carts')
           .select('store_carts')
@@ -134,43 +118,62 @@ export default function CheckoutPage() {
 
         if (cartError && cartError.code !== 'PGRST116') {
           console.error('Error fetching cart:', cartError);
-          setErrorMessage('Failed to fetch cart.');
-          setTimeout(() => setErrorMessage(''), 3000);
-          return;
+          throw new Error(`Cart fetch error: ${cartError.message}`);
         }
         cart = cartData?.store_carts || [];
-      } else {
-        setUser(null);
-        // Use guest cart from localStorage
-        cart = JSON.parse(localStorage.getItem('cart_guest') || '[]');
       }
 
-      // Fetch product categories for tax calculation
+      // Fetch exchange rate
+      const response = await fetch(`/api/products/convert?currency=${selectedCurrency}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch exchange rate for ${selectedCurrency}: ${response.statusText}`);
+      }
+      const { rate, symbol } = await response.json();
+      if (!Number.isFinite(rate) || !symbol) {
+        throw new Error(`Invalid exchange rate data for ${selectedCurrency}: rate=${rate}, symbol=${symbol}`);
+      }
+
+      // Validate and filter cart items
+      cart = cart.filter((item, index) => {
+        const isValid = (item.product_id || item.itemId) && Number.isFinite(Number(item.price)) && Number.isFinite(Number(item.quantity));
+        if (!isValid) {
+          console.warn(`Invalid cart item at index ${index}:`, item);
+        }
+        return isValid;
+      });
+
+      // Update cart items with currency conversion (store original USD price)
+      cart = cart.map((item) => ({
+        ...item,
+        original_price: Number(item.original_price) || Number(item.price) || 0, // USD price
+        price: (Number(item.original_price) || Number(item.price) || 0) * rate, // Converted price
+        currency: selectedCurrency,
+        symbol,
+        quantity: Number(item.quantity) || 1,
+      }));
+
+      // Fetch product categories
       const productIds = cart.map(item => item.product_id || item.itemId).filter(id => id);
-      
+      let productsData = [];
       if (productIds.length > 0) {
-        const { data: productsData, error: productsError } = await supabase
+        const { data, error: productsError } = await supabase
           .from('products')
           .select('id, category')
           .in('id', productIds);
-        
         if (productsError) {
           console.warn('Error fetching product categories:', productsError);
-          // Don't show error message to user, just use fallback
-          cart = cart.map(item => ({ ...item, category: 'general' })); // Fallback category
         } else {
-          // Merge category into cart items
-          cart = cart.map(item => {
-            const product = productsData.find(p => p.id === (item.product_id || item.itemId));
-            return { ...item, category: product?.category || 'general' };
-          });
+          productsData = data || [];
         }
-      } else {
-        // No valid product IDs, use fallback category for all items
-        cart = cart.map(item => ({ ...item, category: 'general' }));
       }
 
-      // Fetch promotion products with joined promotions
+      // Merge category into cart items
+      cart = cart.map(item => {
+        const product = productsData.find(p => p.id === (item.product_id || item.itemId));
+        return { ...item, category: product?.category || 'general' };
+      });
+
+      // Fetch promotion products
       let promoProducts = [];
       if (productIds.length > 0) {
         const { data: promoData, error: promoError } = await supabase
@@ -184,39 +187,38 @@ export default function CheckoutPage() {
         }
       }
 
-      console.log('Cart items:', cart);
       setCartItems(cart);
       setIsCartConfirmedEmpty(cart.length === 0);
 
-      // Calculate total price, taxes, and promotion discounts
+      // Calculate totals (in USD)
       let totalPrice = 0;
       let totalTax = 0;
       let totalPromotionDiscount = 0;
       const today = new Date();
       for (const item of cart) {
-        const subtotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+        const subtotal = (Number(item.original_price) || 0) * (Number(item.quantity) || 1); // Use USD price
         totalPrice += subtotal;
 
-        // Fetch tax rate for the product's category
+        // Fetch tax rate
         const { data: taxData, error: taxError } = await supabase
           .from('tax_rules')
           .select('tax_rate')
-          .eq('region', 'default') // Replace with dynamic region logic later
+          .eq('region', 'default')
           .eq('product_category', item.category || 'general')
           .single();
 
-        let taxRate = 0.1; // Default 10% tax
+        let taxRate = 0.1;
         if (taxError) {
           console.warn('No tax rule found for category:', item.category, taxError);
         } else {
           taxRate = taxData?.tax_rate || 0.1;
         }
         const itemTax = subtotal * taxRate;
-        item.tax_amount = itemTax; // Store tax amount for order insertion
-        totalTax += itemTax;
+        item.tax_amount = Number.isFinite(itemTax) ? itemTax * rate : 0; // Store tax in selected currency for display
+        totalTax += itemTax; // Accumulate in USD
 
-        // Calculate promotion discount for item (highest applicable active promotion)
-        const itemPromos = (promoProducts || []).filter(pp => pp.product_id === (item.product_id || item.itemId));
+        // Calculate promotion discount
+        const itemPromos = promoProducts.filter(pp => pp.product_id === (item.product_id || item.itemId));
         let maxDiscount = 0;
         for (const pp of itemPromos) {
           const promo = pp.promotions;
@@ -229,48 +231,63 @@ export default function CheckoutPage() {
         }
         const itemPromotionDiscount = subtotal * maxDiscount;
         totalPromotionDiscount += itemPromotionDiscount;
-        item.promotion_discount = maxDiscount; // Store for later use in payment
+        item.promotion_discount = maxDiscount;
       }
 
-      setTotal(totalPrice);
-      setTaxTotal(totalTax);
-      setPromotionTotalDiscount(totalPromotionDiscount);
+      setTotal(Number.isFinite(totalPrice) ? totalPrice * rate : 0); // Display in selected currency
+      setTaxTotal(Number.isFinite(totalTax) ? totalTax * rate : 0); // Display in selected currency
+      setPromotionTotalDiscount(Number.isFinite(totalPromotionDiscount) ? totalPromotionDiscount * rate : 0); // Display in selected currency
     } catch (error) {
-      console.error('Error fetching user, address, cart, taxes, or promotions:', error);
+      console.error('Error in fetchUserAddressAndCart:', error);
       setErrorMessage('An error occurred while loading the checkout.');
       setTimeout(() => setErrorMessage(''), 3000);
       setIsCartConfirmedEmpty(true);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedCurrency]);
 
   useEffect(() => {
     fetchUserAddressAndCart();
-    // Listen for cart updates
     const handleCartUpdate = () => fetchUserAddressAndCart();
     window.addEventListener('cartUpdated', handleCartUpdate);
     return () => window.removeEventListener('cartUpdated', handleCartUpdate);
   }, [fetchUserAddressAndCart]);
 
-  // Update discounted total when tax, coupon, or promotion changes
+  // Update discounted total
   useEffect(() => {
-    let couponDiscountAmount = 0;
-    if (couponInfo) {
-      const matchedItem = cartItems.find(item => (item.product_id || item.itemId) === couponInfo.product_id);
-      if (matchedItem) {
-        // Apply coupon after promotion
-        const subtotal = (Number(matchedItem.price) * Number(matchedItem.quantity || 1));
-        const afterPromo = subtotal * (1 - (matchedItem.promotion_discount || 0));
-        couponDiscountAmount = afterPromo * (couponInfo.discount / 100);
+    const updateDiscountedTotal = async () => {
+      try {
+        let couponDiscountAmount = 0;
+        if (couponInfo) {
+          const matchedItem = cartItems.find(item => (item.product_id || item.itemId) === couponInfo.product_id);
+          if (matchedItem) {
+            const subtotal = (Number(matchedItem.original_price) || 0) * (Number(matchedItem.quantity) || 1); // Use USD price
+            const afterPromo = subtotal * (1 - (matchedItem.promotion_discount || 0));
+            couponDiscountAmount = afterPromo * (couponInfo.discount / 100);
+          }
+        }
+        const response = await fetch(`/api/products/convert?currency=${selectedCurrency}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch exchange rate: ${response.statusText}`);
+        }
+        const { rate } = await response.json();
+        if (!Number.isFinite(rate)) {
+          throw new Error(`Invalid exchange rate: ${rate}`);
+        }
+        setCouponTotalDiscount(Number.isFinite(couponDiscountAmount) ? couponDiscountAmount * rate : 0); // Display in selected currency
+        const totalDiscount = promotionTotalDiscount + (couponDiscountAmount * rate);
+        setDiscountedTotal(Number.isFinite(total - totalDiscount + taxTotal) ? total - totalDiscount + taxTotal : 0);
+      } catch (error) {
+        console.error('Error updating discounted total:', error);
+        setCouponTotalDiscount(0);
+        setDiscountedTotal(total + taxTotal);
       }
-    }
-    setCouponTotalDiscount(couponDiscountAmount);
-    const totalDiscount = promotionTotalDiscount + couponDiscountAmount;
-    setDiscountedTotal(total - totalDiscount + taxTotal);
-  }, [couponInfo, total, taxTotal, promotionTotalDiscount, cartItems]);
+    };
+    updateDiscountedTotal();
+  }, [couponInfo, total, taxTotal, promotionTotalDiscount, cartItems, selectedCurrency]);
 
-  // Protect checkout page: show modal if not authenticated and cart is not empty
+  // Protect checkout page
   useEffect(() => {
     if (!isLoading && !user && cartItems.length > 0) {
       setShowAuthModal(true);
@@ -278,6 +295,49 @@ export default function CheckoutPage() {
       setShowAuthModal(false);
     }
   }, [user, isLoading, cartItems]);
+
+  // Coupon validation and application
+  const handleApplyCoupon = async () => {
+    setCouponError('');
+    setCouponInfo(null);
+    setCouponTotalDiscount(0);
+    if (!couponCode) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+    try {
+      const productIds = cartItems.map(item => item.product_id || item.itemId).filter(id => id);
+      const { data, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('code', couponCode.trim())
+        .in('product_id', productIds)
+        .single();
+      if (error || !data) {
+        setCouponError('Invalid or expired coupon code for your cart.');
+        return;
+      }
+      const today = new Date();
+      const expiry = new Date(data.expiry_date);
+      if (expiry < today) {
+        setCouponError('This coupon has expired.');
+        return;
+      }
+      if (data.usage_limit && data.used_count >= data.usage_limit) {
+        setCouponError('This coupon has reached its usage limit.');
+        return;
+      }
+      const matchedItem = cartItems.find(item => (item.product_id || item.itemId) === data.product_id);
+      if (!matchedItem) {
+        setCouponError('Coupon does not apply to any product in your cart.');
+        return;
+      }
+      setCouponInfo(data);
+    } catch (err) {
+      console.error('Error applying coupon:', err);
+      setCouponError('Error applying coupon.');
+    }
+  };
 
   const loadRazorpayScript = () =>
     new Promise((resolve) => {
@@ -291,10 +351,11 @@ export default function CheckoutPage() {
   const handlePayment = async () => {
     if (!user) {
       setShowAuthModal(true);
+      setErrorMessage('Please sign in to proceed with payment.');
+      setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
 
-    // Check if address is available
     if (!userAddress) {
       setErrorMessage('Please set a delivery address before proceeding.');
       setTimeout(() => setErrorMessage(''), 3000);
@@ -308,7 +369,10 @@ export default function CheckoutPage() {
       return;
     }
 
-    // Validate cart items for product_id
+    // Log cart items for debugging
+    console.log('Cart items before order insertion:', JSON.stringify(cartItems, null, 2));
+
+    // Validate cart items
     const invalidItems = cartItems.filter(item => !item.product_id && !item.itemId);
     if (invalidItems.length > 0) {
       console.error('Invalid cart items (missing product_id or itemId):', invalidItems);
@@ -317,71 +381,81 @@ export default function CheckoutPage() {
       return;
     }
 
-    // Create order records in Supabase for each cart item, including address and tax
-    const orderPromises = cartItems.map(async (item) => {
+    // Fetch exchange rate for converting amounts to USD
+    const { rate } = await (await fetch(`/api/products/convert?currency=${selectedCurrency}`)).json();
+
+    // Create order records (in USD)
+    const orderPromises = cartItems.map(async (item, index) => {
       const productId = item.product_id || item.itemId;
       if (!productId) {
-        throw new Error('Missing product_id for cart item.');
+        console.error(`Missing product_id for cart item at index ${index}:`, item);
+        throw new Error(`Missing product_id for cart item at index ${index}`);
       }
-      let itemTotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+      let itemTotal = (Number(item.original_price) || 0) * (Number(item.quantity) || 1); // Use USD price
       let appliedCouponId = null;
-      // Apply promotion discount first
       itemTotal *= (1 - (item.promotion_discount || 0));
-      // Then apply coupon if applicable
       if (couponInfo && couponInfo.product_id === productId) {
         itemTotal *= (1 - (couponInfo.discount / 100));
         appliedCouponId = couponInfo.id;
       }
-      // Add tax to get the grand total
-      const grandTotal = itemTotal + (item.tax_amount || 0);
-      const { data, error } = await supabase
-        .from('orders')
-        .insert({
-          user_id: user.id,
-          product_id: productId,
-          quantity: item.quantity || 1,
-          total_amount: grandTotal, // Now includes tax
-          tax_amount: item.tax_amount || 0, // Include tax amount
-          status: 'pending',
-          address: userAddress,
-          coupon_id: appliedCouponId,
-        })
-        .select('id')
-        .single();
-      if (error) {
-        console.error('Order insert error:', error, {
-          user_id: user.id,
-          product_id: productId,
-          quantity: item.quantity || 1,
-          total_amount: grandTotal,
-          tax_amount: item.tax_amount || 0,
-          status: 'pending',
-          address: userAddress,
-          coupon_id: appliedCouponId,
-        });
-        throw new Error(`Failed to create order for product ${productId}: ${error.message}`);
+      const grandTotal = Number.isFinite(itemTotal + (item.tax_amount / rate)) 
+        ? itemTotal + (item.tax_amount / rate) 
+        : 0;
+      const orderData = {
+        user_id: user.id,
+        product_id: productId,
+        quantity: Number(item.quantity) || 1,
+        total_amount: grandTotal,
+        tax_amount: Number.isFinite(item.tax_amount / rate) ? item.tax_amount / rate : 0,
+        status: 'pending',
+        address: userAddress,
+        coupon_id: appliedCouponId,
+      };
+
+      console.log(`Inserting order for product ${productId}:`, orderData);
+
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .insert(orderData)
+          .select('id')
+          .single();
+        if (error) {
+          console.error(`Order insert error for product ${productId}:`, error, { orderData });
+          throw new Error(`Failed to create order for product ${productId}: ${error.message}`);
+        }
+        return data.id;
+      } catch (error) {
+        console.error(`Error inserting order for product ${productId}:`, error, { orderData });
+        throw error;
       }
-      return data.id;
     });
 
     let orderIds;
     try {
       orderIds = await Promise.all(orderPromises);
     } catch (error) {
-      setErrorMessage('Failed to create orders. Please try again.');
+      console.error('Failed to create orders:', error);
+      setErrorMessage('Failed to create orders. Please try again or contact support.');
       setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
 
     // Create Razorpay order
+    const finalAmount = Number.isFinite(discountedTotal) ? discountedTotal : total + taxTotal;
+    console.log(`Creating Razorpay order: amount=${finalAmount}, currency=${selectedCurrency}`);
     const orderRes = await fetch('/api/razorpay-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: discountedTotal || (total + taxTotal) }), // Include tax in Razorpay amount
+      body: JSON.stringify({ 
+        amount: finalAmount,
+        currency: selectedCurrency,
+      }),
     });
 
     const order = await orderRes.json();
     if (!order.id) {
+      console.error('Razorpay order creation failed:', order);
       setErrorMessage('Failed to create Razorpay order.');
       setTimeout(() => setErrorMessage(''), 3000);
       return;
@@ -396,7 +470,6 @@ export default function CheckoutPage() {
       order_id: order.id,
       handler: async function (response) {
         try {
-          // Update order status to 'completed' and set payment details
           const updatePromises = orderIds.map((orderId) =>
             supabase
               .from('orders')
@@ -409,14 +482,12 @@ export default function CheckoutPage() {
               .eq('id', orderId)
           );
           await Promise.all(updatePromises);
-          // If coupon was used, increment used_count
           if (couponInfo) {
             await supabase
               .from('coupons')
               .update({ used_count: (couponInfo.used_count || 0) + 1 })
               .eq('id', couponInfo.id);
           }
-          // Clear cart in Supabase or localStorage
           if (!user) {
             localStorage.removeItem('cart_guest');
             setCartItems([]);
@@ -433,6 +504,7 @@ export default function CheckoutPage() {
                 { onConflict: 'user_id' }
               );
             if (error) {
+              console.error('Failed to clear cart:', error);
               setErrorMessage('Failed to clear cart after payment.');
               setTimeout(() => setErrorMessage(''), 3000);
             } else {
@@ -445,6 +517,7 @@ export default function CheckoutPage() {
             router.push('/checkout/success?payment_id=' + response.razorpay_payment_id + '&order_id=' + orderIds.join(','));
           }, 300);
         } catch (error) {
+          console.error('Error updating orders after payment:', error);
           setErrorMessage('Payment successful but there was an error updating your order. Please contact support.');
           setTimeout(() => setErrorMessage(''), 3000);
         }
@@ -469,12 +542,10 @@ export default function CheckoutPage() {
       <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-20">
           <div className="max-w-7xl mx-auto">
-            {/* Loading Header */}
             <div className="mb-8">
               <div className="h-10 bg-gray-200 rounded-lg w-64 mb-3 animate-pulse"></div>
               <div className="h-5 bg-gray-200 rounded w-48 animate-pulse"></div>
             </div>
-            {/* Loading Content */}
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
               <div className="lg:col-span-3">
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
@@ -511,7 +582,7 @@ export default function CheckoutPage() {
     );
   }
 
-  // Show empty cart UI only when cart is confirmed empty
+  // Show empty cart UI
   if (isCartConfirmedEmpty) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200">
@@ -542,7 +613,6 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-20">
         <div className="max-w-7xl mx-auto">
-          {/* Progress Indicator */}
           <div className="mb-8 flex items-center justify-center gap-4 text-sm font-medium text-gray-600">
             <div className="flex items-center gap-2">
               <FaCheckCircle className="text-blue-600" />
@@ -558,8 +628,6 @@ export default function CheckoutPage() {
               <span>Confirmation</span>
             </div>
           </div>
-
-          {/* Header */}
           <div className="mb-8 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Link href="/cart" className="text-gray-500 hover:text-gray-700 transition-colors">
@@ -572,8 +640,6 @@ export default function CheckoutPage() {
             </div>
             <p className="text-gray-600 text-sm">{cartItems.length} item{cartItems.length !== 1 ? 's' : ''}</p>
           </div>
-
-          {/* Error Message */}
           {errorMessage && (
             <div className="mb-6 mx-auto max-w-4xl">
               <div className="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2 shadow-sm">
@@ -584,8 +650,6 @@ export default function CheckoutPage() {
               </div>
             </div>
           )}
-
-          {/* Delivery Address Section */}
           <div className="mb-8">
             <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-4">
               <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -602,21 +666,16 @@ export default function CheckoutPage() {
               </div>
             </div>
           </div>
-
-          {/* Main Content */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            {/* Order Items */}
             <div className="lg:col-span-3">
               <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
                 <div className="divide-y divide-gray-100">
                   {cartItems.map((item, index) => {
                     const normalizedImages = normalizeImagePath(item.image);
                     const imageUrl = normalizeImageUrl(normalizedImages[0] || '/placeholder-product.jpg');
-
                     return (
                       <div key={item.itemId || index} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors duration-200">
                         <div className="flex flex-col sm:flex-row gap-4">
-                          {/* Product Image */}
                           <div className="flex-shrink-0">
                             <Link href={`/products/${item.product_id || item.itemId}`} className="block group">
                               <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden group-hover:shadow-md transition-shadow duration-300">
@@ -630,8 +689,6 @@ export default function CheckoutPage() {
                               </div>
                             </Link>
                           </div>
-
-                          {/* Product Info */}
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-col sm:flex-row sm:justify-between gap-3">
                               <div className="flex-1">
@@ -640,7 +697,6 @@ export default function CheckoutPage() {
                                     {item.name || 'Unnamed Product'}
                                   </h3>
                                 </Link>
-                                
                                 {item.variation && (
                                   <div className="mt-1 flex items-center gap-2">
                                     <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
@@ -650,24 +706,21 @@ export default function CheckoutPage() {
                                     </span>
                                   </div>
                                 )}
-
                                 <div className="mt-2 text-sm text-gray-600">
                                   Quantity: {item.quantity || 1}
                                 </div>
                                 {item.tax_amount > 0 && (
                                   <div className="mt-1 text-sm text-gray-600">
-                                    Tax: ₹{item.tax_amount.toFixed(2)}
+                                    Tax: {item.symbol}{item.tax_amount.toFixed(2)}
                                   </div>
                                 )}
                               </div>
-
-                              {/* Price Info */}
                               <div className="text-right flex-shrink-0">
                                 <div className="text-xs text-gray-500 mb-1">Unit Price</div>
-                                <div className="text-sm font-medium text-gray-700 mb-2">₹{Number(item.price || 0).toFixed(2)}</div>
+                                <div className="text-sm font-medium text-gray-700 mb-2">{item.symbol}{Number(item.price || 0).toFixed(2)}</div>
                                 <div className="text-xs text-gray-500 mb-1">Subtotal</div>
                                 <div className="text-lg sm:text-xl font-bold text-gray-900">
-                                  ₹{(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}
+                                  {item.symbol}{(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}
                                 </div>
                               </div>
                             </div>
@@ -679,30 +732,27 @@ export default function CheckoutPage() {
                 </div>
               </div>
             </div>
-
-            {/* Order Summary */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 sticky top-20">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
                   <div className="w-2 h-6 bg-blue-600 rounded-full"></div>
                   Order Summary
                 </h2>
-
                 <div className="space-y-4 mb-6">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Subtotal ({cartItems.length} items)</span>
-                    <span className="font-medium">₹{total.toFixed(2)}</span>
+                    <span className="font-medium">{cartItems[0]?.symbol || '$'}{total.toFixed(2)}</span>
                   </div>
                   {promotionTotalDiscount > 0 && (
                     <div className="flex justify-between text-sm text-green-600">
                       <span>Promotion Discount</span>
-                      <span className="font-medium">-₹{promotionTotalDiscount.toFixed(2)}</span>
+                      <span className="font-medium">-{cartItems[0]?.symbol || '$'}{promotionTotalDiscount.toFixed(2)}</span>
                     </div>
                   )}
                   {couponInfo && couponTotalDiscount > 0 && (
                     <div className="flex justify-between text-sm text-green-600">
                       <span>Coupon Discount ({couponInfo.code})</span>
-                      <span className="font-medium">-₹{couponTotalDiscount.toFixed(2)}</span>
+                      <span className="font-medium">-{cartItems[0]?.symbol || '$'}{couponTotalDiscount.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm">
@@ -711,9 +761,8 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Tax</span>
-                    <span className="font-medium">₹{taxTotal.toFixed(2)}</span>
+                    <span className="font-medium">{cartItems[0]?.symbol || '$'}{taxTotal.toFixed(2)}</span>
                   </div>
-                  {/* Coupon Input */}
                   <div className="flex flex-col gap-2 pt-2">
                     <label className="text-sm font-medium text-gray-700">Coupon Code</label>
                     <div className="flex gap-2">
@@ -742,11 +791,10 @@ export default function CheckoutPage() {
                   <div className="border-t border-gray-200 pt-4">
                     <div className="flex justify-between items-center">
                       <span className="text-base sm:text-lg font-bold text-gray-900">Total</span>
-                      <span className="text-xl sm:text-2xl font-bold text-blue-600">₹{(discountedTotal !== null ? discountedTotal : total + taxTotal).toFixed(2)}</span>
+                      <span className="text-xl sm:text-2xl font-bold text-blue-600">{cartItems[0]?.symbol || '$'}{(discountedTotal !== null ? discountedTotal : total + taxTotal).toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
-
                 <button
                   onClick={handlePayment}
                   className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3 sm:py-4 px-6 rounded-lg font-semibold shadow-md transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2"
@@ -754,7 +802,6 @@ export default function CheckoutPage() {
                   <HiOutlineLockClosed className="text-lg" />
                   Pay Now
                 </button>
-
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <div className="flex items-center gap-2 text-xs text-gray-600">
                     <FaShieldAlt className="text-green-500 flex-shrink-0" />

@@ -1,13 +1,23 @@
-'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import Link from 'next/link'
-import Image from 'next/image'
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
 import { createClient } from '@supabase/supabase-js';
 import React from 'react';
 
 // Move this constant outside the component
-const defaultCategoryNames = ["Food & Drinks", "Household Essentials", "Beauty & Personal Care"]
+const defaultCategoryNames = ["Food & Drinks", "Household Essentials", "Beauty & Personal Care"];
+
+// Supported currencies and symbols
+const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR'];
+const CURRENCY_SYMBOLS = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  INR: '₹',
+};
 
 // Normalize image paths
 const normalizeImagePath = (path) => {
@@ -55,8 +65,10 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const ProductCard = React.memo(({ product, cart, handleAddToCart }) => {
+const ProductCard = React.memo(({ product, cart, handleAddToCart, selectedCurrency }) => {
   const quantityInCart = cart.find((item) => item.itemId === `${product.id}`)?.quantity || 0;
+  const symbol = CURRENCY_SYMBOLS[selectedCurrency] || '$';
+  const displayPrice = Number(product.price); // Convert to number to ensure toFixed works
 
   const handleIncrement = (e) => {
     e.preventDefault();
@@ -98,7 +110,9 @@ const ProductCard = React.memo(({ product, cart, handleAddToCart }) => {
           </p>
           <div className="flex items-center justify-between mt-auto">
             <div className="flex-1">
-              <div className="text-xl font-bold text-gray-900">${product.price}</div>
+              <div className="text-xl font-bold text-gray-900">
+                {symbol}{isNaN(displayPrice) ? '0.00' : displayPrice.toFixed(2)}
+              </div>
               {product.quantity && (
                 <p className="text-gray-400 text-xs mt-0.5">Qty: {product.quantity}</p>
               )}
@@ -188,7 +202,7 @@ const ProductCard = React.memo(({ product, cart, handleAddToCart }) => {
     </Link>
   );
 });
-ProductCard.displayName = 'ProductCard'; // Added displayName
+ProductCard.displayName = 'ProductCard';
 
 const CategoryCard = React.memo(({ childCategory }) => (
   <Link
@@ -224,13 +238,13 @@ const CategoryCard = React.memo(({ childCategory }) => (
     </div>
   </Link>
 ));
-CategoryCard.displayName = 'CategoryCard'; // Added displayName
+CategoryCard.displayName = 'CategoryCard';
 
 export default function NewPage() {
-  const [electronics, setElectronics] = useState([])
-  const [breakfast, setBreakfast] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [electronics, setElectronics] = useState([]);
+  const [breakfast, setBreakfast] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [productsLoading, setProductsLoading] = useState(true);
   const [categories, setCategories] = useState([]);
   const [showAllCategories, setShowAllCategories] = useState(false);
@@ -238,52 +252,73 @@ export default function NewPage() {
   const [user, setUser] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [cart, setCart] = useState([]);
+  const [selectedCurrency, setSelectedCurrency] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      return SUPPORTED_CURRENCIES.includes(savedCurrency) ? savedCurrency : 'USD';
+    }
+    return 'USD';
+  });
+
+  // Listen for currency changes from navbar
+  useEffect(() => {
+    const handleCurrencyUpdate = () => {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      if (SUPPORTED_CURRENCIES.includes(savedCurrency)) {
+        setSelectedCurrency(savedCurrency);
+      }
+    };
+    window.addEventListener('currencyUpdated', handleCurrencyUpdate);
+    return () => {
+      window.removeEventListener('currencyUpdated', handleCurrencyUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setCategoriesLoading(true)
-        setProductsLoading(true)
+        setCategoriesLoading(true);
+        setProductsLoading(true);
 
         const [categoriesRes, productsRes] = await Promise.all([
           fetch('/api/categories'),
-          fetch('/api/products')
-        ])
+          fetch(`/api/products?currency=${selectedCurrency}`)
+        ]);
 
-        const categoriesData = await categoriesRes.json()
-        const productsData = await productsRes.json()
+        const categoriesData = await categoriesRes.json();
+        const productsData = await productsRes.json();
 
         if (categoriesData.error) {
-          throw new Error(categoriesData.error)
+          throw new Error(categoriesData.error);
         }
         
         if (productsData.error) {
-          throw new Error(productsData.error)
+          throw new Error(productsData.error);
         }
         
         // Sort to prioritize our default categories
         const sortedCategories = [...categoriesData].sort((a, b) => {
-          const aIndex = defaultCategoryNames.indexOf(a.name)
-          const bIndex = defaultCategoryNames.indexOf(b.name)
-          if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex
-          if (aIndex !== -1) return -1
-          if (bIndex !== -1) return 1
-          return 0
-        })
+          const aIndex = defaultCategoryNames.indexOf(a.name);
+          const bIndex = defaultCategoryNames.indexOf(b.name);
+          if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+          if (aIndex !== -1) return -1;
+          if (bIndex !== -1) return 1;
+          return 0;
+        });
         
-        setCategories(sortedCategories)
-        setElectronics(productsData.filter(product => product.categoryid === 1))
-        setBreakfast(productsData.filter(product => product.categoryid === 2))
+        setCategories(sortedCategories);
+        setElectronics(productsData.filter(product => product.categoryid === 1));
+        setBreakfast(productsData.filter(product => product.categoryid === 2));
       } catch (err) {
-        console.error('Failed to fetch data:', err)
+        console.error('Failed to fetch data:', err);
       } finally {
-        setCategoriesLoading(false)
-        setProductsLoading(false)
-        setLoading(false)
+        setCategoriesLoading(false);
+        setProductsLoading(false);
+        setLoading(false);
       }
-    }
-    fetchData()
-  }, [])
+    };
+    fetchData();
+  }, [selectedCurrency]);
 
   useEffect(() => {
     const fetchUserAndCart = async () => {
@@ -355,8 +390,9 @@ export default function NewPage() {
           product_id: productToAdd.id,
           quantity: quantityDelta,
           name: productToAdd.name,
-          price: productToAdd.price,
+          price: Number(productToAdd.price), // Ensure price is a number
           image: productToAdd.image,
+          currency: productToAdd.currency, // Store currency for consistency
         });
         setCartMessage("Product added to cart!");
       }
@@ -388,7 +424,7 @@ export default function NewPage() {
     setSelectedCategory(null);
   };
 
-  // Define CSS styles
+  // Define CSS styles (unchanged)
   const style = `
     .no-scrollbar::-webkit-scrollbar {
       display: none;
@@ -561,7 +597,7 @@ export default function NewPage() {
     .product-card .absolute.opacity-100 {
       visibility: visible;
     }
-  `
+  `;
 
   // Skeleton loader for product section
   const ProductSectionSkeleton = () => (
@@ -783,6 +819,7 @@ export default function NewPage() {
                         product={product}
                         cart={cart}
                         handleAddToCart={handleAddToCart}
+                        selectedCurrency={selectedCurrency}
                       />
                     ))
                   ) : (
@@ -820,6 +857,7 @@ export default function NewPage() {
                         product={product}
                         cart={cart}
                         handleAddToCart={handleAddToCart}
+                        selectedCurrency={selectedCurrency}
                       />
                     ))
                   ) : (
@@ -839,5 +877,5 @@ export default function NewPage() {
         </div>
       )}
     </div>
-  )
+  );
 }

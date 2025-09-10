@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -8,6 +9,15 @@ import Image from 'next/image';
 import { Star } from 'lucide-react';
 import { FaArrowLeft, FaCheckCircle } from 'react-icons/fa';
 import jsPDF from 'jspdf';
+
+// Supported currencies and symbols
+const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR'];
+const CURRENCY_SYMBOLS = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  INR: '₹',
+};
 
 // Initialize Supabase client
 const supabase = createClientComponentClient();
@@ -32,10 +42,29 @@ const normalizeImageUrl = (url) => {
   return url;
 };
 
+// Fetch exchange rate
+const fetchExchangeRate = async (currency) => {
+  try {
+    const response = await fetch(`/api/products/convert?currency=${currency}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch exchange rate: ${response.statusText}`);
+    }
+    const { rate, symbol } = await response.json();
+    if (!Number.isFinite(rate) || !symbol) {
+      throw new Error(`Invalid exchange rate data: rate=${rate}, symbol=${symbol}`);
+    }
+    return { rate, symbol };
+  } catch (error) {
+    console.error('Error fetching exchange rate:', error);
+    return { rate: 1, symbol: '$' }; // Fallback to USD
+  }
+};
+
 // Generate PDF invoice and store in Supabase
-const generateInvoicePDF = async (orders, paymentId) => {
+const generateInvoicePDF = async (orders, paymentId, selectedCurrency) => {
   try {
     console.log('Generating PDF with orders:', orders); // Debug log
+    const { rate, symbol } = await fetchExchangeRate(selectedCurrency);
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -66,6 +95,8 @@ const generateInvoicePDF = async (orders, paymentId) => {
     doc.text(`Payment ID: ${paymentId || 'N/A'}`, margin, yPosition);
     yPosition += 5;
     doc.text(`Date: ${new Date().toLocaleDateString()}`, margin, yPosition);
+    yPosition += 5;
+    doc.text(`Currency: ${selectedCurrency}`, margin, yPosition);
     yPosition += 15;
 
     // Table Header
@@ -103,10 +134,10 @@ const generateInvoicePDF = async (orders, paymentId) => {
 
       const productName = order.product_name || 'Unknown Product';
       const quantity = order.quantity || 1;
-      const unitPrice = Number(order.products.price || 0).toFixed(2);
-      const originalSubtotal = Number(order.products.price || 0) * quantity;
-      const discountAmount = (originalSubtotal - Number(order.total_amount || 0)).toFixed(2);
-      const total = Number(order.total_amount || 0).toFixed(2);
+      const unitPrice = (Number(order.products.price || 0) * rate).toFixed(2); // Convert to selected currency
+      const originalSubtotal = (Number(order.products.price || 0) * quantity * rate).toFixed(2);
+      const discountAmount = ((Number(order.products.price || 0) * quantity - Number(order.total_amount || 0)) * rate).toFixed(2);
+      const total = (Number(order.total_amount || 0) * rate).toFixed(2);
 
       if (!productName || !quantity || !unitPrice || !total) {
         console.warn('Invalid order data:', order);
@@ -117,9 +148,9 @@ const generateInvoicePDF = async (orders, paymentId) => {
         doc.text(line, margin, yPosition + index * lineHeight);
       });
       doc.text(quantity.toString(), margin + 80, yPosition);
-      doc.text(`₹${unitPrice}`, margin + 100, yPosition);
-      doc.text(discountAmount > 0 ? `-₹${discountAmount}` : '₹0.00', margin + 140, yPosition);
-      doc.text(`₹${total}`, margin + 180, yPosition, { align: 'right' });
+      doc.text(`${symbol}${unitPrice}`, margin + 100, yPosition);
+      doc.text(discountAmount > 0 ? `-${symbol}${discountAmount}` : `${symbol}0.00`, margin + 140, yPosition);
+      doc.text(`${symbol}${total}`, margin + 180, yPosition, { align: 'right' });
       yPosition += Math.max(splitText.length * lineHeight, lineHeight);
     });
 
@@ -129,33 +160,33 @@ const generateInvoicePDF = async (orders, paymentId) => {
     yPosition += 10;
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    const originalSubtotal = orders.reduce((acc, order) => acc + (Number(order.products.price || 0) * order.quantity), 0);
-    const afterDiscount = orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0);
-    const discountTotal = originalSubtotal - afterDiscount;
-    const taxTotal = orders.reduce((acc, order) => acc + Number(order.tax_amount || 0), 0);
-    const grandTotal = afterDiscount;
+    const originalSubtotal = orders.reduce((acc, order) => acc + (Number(order.products.price || 0) * order.quantity), 0); // USD
+    const afterDiscount = orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0); // USD
+    const discountTotal = originalSubtotal - afterDiscount; // USD
+    const taxTotal = orders.reduce((acc, order) => acc + Number(order.tax_amount || 0), 0); // USD
+    const grandTotal = afterDiscount; // USD
 
     // Items Total
     doc.text('Items Total:', margin + 100, yPosition);
-    doc.text(`₹${originalSubtotal.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
+    doc.text(`${symbol}${(originalSubtotal * rate).toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
     yPosition += lineHeight;
 
     // Discounts (Promotions and Coupons)
     if (discountTotal > 0) {
       doc.text('Discounts:', margin + 100, yPosition);
-      doc.text(`-₹${discountTotal.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
+      doc.text(`-${symbol}${(discountTotal * rate).toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
       yPosition += lineHeight;
     }
 
     // Subtotal After Discounts (before tax)
-    const subtotalBeforeTax = afterDiscount - taxTotal;
+    const subtotalBeforeTax = afterDiscount - taxTotal; // USD
     doc.text('Subtotal After Discounts:', margin + 100, yPosition);
-    doc.text(`₹${subtotalBeforeTax.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
+    doc.text(`${symbol}${(subtotalBeforeTax * rate).toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
     yPosition += lineHeight;
 
     // Tax
     doc.text('Tax:', margin + 100, yPosition);
-    doc.text(`₹${taxTotal.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
+    doc.text(`${symbol}${(taxTotal * rate).toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
     yPosition += lineHeight;
 
     // Grand Total
@@ -163,7 +194,7 @@ const generateInvoicePDF = async (orders, paymentId) => {
     doc.line(margin + 100, yPosition, pageWidth - margin, yPosition);
     yPosition += 10;
     doc.text('Grand Total:', margin + 100, yPosition);
-    doc.text(`₹${grandTotal.toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
+    doc.text(`${symbol}${(grandTotal * rate).toFixed(2)}`, margin + 180, yPosition, { align: 'right' });
 
     // Footer
     yPosition += 20;
@@ -174,7 +205,7 @@ const generateInvoicePDF = async (orders, paymentId) => {
     // Save PDF
     doc.save(`invoice_${paymentId || 'order'}.pdf`);
 
-    // Calculate commission for DB only (not shown in PDF, as it's a vendor cost)
+    // Calculate commission for DB only (in USD)
     const commissionRate = 0.05; // 5% commission
     const commissionAmount = afterDiscount * commissionRate;
     const userId = orders[0]?.user_id;
@@ -194,10 +225,10 @@ const generateInvoicePDF = async (orders, paymentId) => {
       .insert({
         payment_id: paymentId || 'N/A',
         user_id: userId,
-        total_amount: grandTotal,
-        tax_amount: taxTotal,
-        commission_amount: commissionAmount,
-        promotion_amount: discountTotal,
+        total_amount: grandTotal, // USD
+        tax_amount: taxTotal, // USD
+        commission_amount: commissionAmount, // USD
+        promotion_amount: discountTotal, // USD
         invoice_date: new Date().toISOString(),
         status: 'generated',
       })
@@ -245,7 +276,35 @@ export default function SuccessPageContent() {
   const [hoveredRating, setHoveredRating] = useState(0);
   const [selectedProductId, setSelectedProductId] = useState(null);
   const [reviewedProductIds, setReviewedProductIds] = useState([]);
+  const [selectedCurrency, setSelectedCurrency] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      return SUPPORTED_CURRENCIES.includes(savedCurrency) ? savedCurrency : 'USD';
+    }
+    return 'USD';
+  });
+  const [currencySymbol, setCurrencySymbol] = useState('$');
+  const [exchangeRate, setExchangeRate] = useState(1);
 
+  // Fetch exchange rate and listen for currency changes
+  useEffect(() => {
+    const updateCurrency = async () => {
+      const savedCurrency = localStorage.getItem('selectedCurrency') || 'USD';
+      if (SUPPORTED_CURRENCIES.includes(savedCurrency)) {
+        setSelectedCurrency(savedCurrency);
+        const { rate, symbol } = await fetchExchangeRate(savedCurrency);
+        setExchangeRate(rate);
+        setCurrencySymbol(symbol);
+      }
+    };
+
+    updateCurrency();
+    const handleCurrencyUpdate = () => updateCurrency();
+    window.addEventListener('currencyUpdated', handleCurrencyUpdate);
+    return () => window.removeEventListener('currencyUpdated', handleCurrencyUpdate);
+  }, []);
+
+  // Fetch orders
   useEffect(() => {
     if (!paymentId) {
       setErrorMessage('No payment ID provided.');
@@ -287,8 +346,8 @@ export default function SuccessPageContent() {
               product_id: order.product_id,
               user_id: order.user_id,
               quantity: order.quantity,
-              total_amount: order.total_amount,
-              tax_amount: order.tax_amount,
+              total_amount: order.total_amount, // USD
+              tax_amount: order.tax_amount, // USD
               coupon_id: order.coupon_id,
               coupon_code: order.coupons?.code || null,
               coupon_discount: order.coupons?.discount || null,
@@ -296,7 +355,7 @@ export default function SuccessPageContent() {
               product_name: order.products?.name || 'Unknown Product',
               product_image: order.products?.image || '/placeholder-product.jpg',
               products: {
-                price: order.products?.price || 0,
+                price: order.products?.price || 0, // USD
               },
             }))
           );
@@ -390,7 +449,7 @@ export default function SuccessPageContent() {
     }
     console.log('Orders before generating PDF:', orders); // Debug log
     try {
-      await generateInvoicePDF(orders, paymentId);
+      await generateInvoicePDF(orders, paymentId, selectedCurrency);
       setFeedbackSuccess(true);
       setTimeout(() => setFeedbackSuccess(false), 3000);
     } catch (error) {
@@ -457,11 +516,11 @@ export default function SuccessPageContent() {
     );
   }
 
-  // Calculate totals for display (consistent with PDF)
-  const originalSubtotal = orders.reduce((acc, order) => acc + (Number(order.products.price || 0) * order.quantity), 0);
-  const afterDiscount = orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0);
+  // Calculate totals for display (in selected currency)
+  const originalSubtotal = orders.reduce((acc, order) => acc + (Number(order.products.price || 0) * order.quantity), 0) * exchangeRate;
+  const afterDiscount = orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0) * exchangeRate;
   const discountTotal = originalSubtotal - afterDiscount;
-  const taxTotal = orders.reduce((acc, order) => acc + Number(order.tax_amount || 0), 0);
+  const taxTotal = orders.reduce((acc, order) => acc + Number(order.tax_amount || 0), 0) * exchangeRate;
   const grandTotal = afterDiscount;
 
   // Define selectedProduct safely
@@ -536,8 +595,8 @@ export default function SuccessPageContent() {
               {orders.map((order, index) => {
                 const normalizedImages = normalizeImagePath(order.product_image);
                 const imageUrl = normalizeImageUrl(normalizedImages[0] || '/placeholder-product.jpg');
-                const originalSubtotal = Number(order.products.price || 0) * order.quantity;
-                const discountAmount = originalSubtotal - Number(order.total_amount || 0);
+                const originalSubtotal = Number(order.products.price || 0) * order.quantity * exchangeRate;
+                const discountAmount = (Number(order.products.price || 0) * order.quantity - Number(order.total_amount || 0)) * exchangeRate;
 
                 return (
                   <div key={order.id || index} className="py-4 sm:py-6">
@@ -578,19 +637,19 @@ export default function SuccessPageContent() {
                             )}
                             {discountAmount > 0 && (
                               <p className="text-sm text-green-600">
-                                Discount: ₹{discountAmount.toFixed(2)}
+                                Discount: {currencySymbol}{discountAmount.toFixed(2)}
                               </p>
                             )}
                             {order.tax_amount > 0 && (
                               <p className="text-sm text-gray-600">
-                                Tax: ₹{order.tax_amount.toFixed(2)}
+                                Tax: {currencySymbol}{(order.tax_amount * exchangeRate).toFixed(2)}
                               </p>
                             )}
                           </div>
                           <div className="text-right flex-shrink-0">
                             <div className="text-xs text-gray-500 mb-1">Total</div>
                             <div className="text-lg font-bold text-gray-900">
-                              ₹{Number(order.total_amount || 0).toFixed(2)}
+                              {currencySymbol}{(Number(order.total_amount || 0) * exchangeRate).toFixed(2)}
                             </div>
                           </div>
                         </div>
@@ -603,25 +662,25 @@ export default function SuccessPageContent() {
             <div className="border-t border-gray-200 pt-4 mt-4">
               <div className="flex justify-between text-sm text-gray-600">
                 <span>Items Total</span>
-                <span>₹{originalSubtotal.toFixed(2)}</span>
+                <span>{currencySymbol}{originalSubtotal.toFixed(2)}</span>
               </div>
               {discountTotal > 0 && (
                 <div className="flex justify-between text-sm text-green-600 mt-2">
                   <span>Discounts (Promotions/Coupons)</span>
-                  <span>-₹{discountTotal.toFixed(2)}</span>
+                  <span>-{currencySymbol}{discountTotal.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm text-gray-600 mt-2">
                 <span>Subtotal After Discounts</span>
-                <span>₹{(afterDiscount - taxTotal).toFixed(2)}</span>
+                <span>{currencySymbol}{(afterDiscount - taxTotal).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm text-gray-600 mt-2">
                 <span>Tax</span>
-                <span>₹{taxTotal.toFixed(2)}</span>
+                <span>{currencySymbol}{taxTotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center mt-2">
                 <span className="text-base sm:text-lg font-bold text-gray-900">Grand Total</span>
-                <span className="text-xl sm:text-2xl font-bold text-blue-600">₹{grandTotal.toFixed(2)}</span>
+                <span className="text-xl sm:text-2xl font-bold text-blue-600">{currencySymbol}{grandTotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm text-gray-600 mt-2">
                 <span>Payment ID</span>

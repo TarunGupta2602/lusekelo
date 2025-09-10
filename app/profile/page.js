@@ -1,3 +1,4 @@
+
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -21,6 +22,15 @@ import {
   FaShieldAlt
 } from "react-icons/fa";
 
+// Supported currencies and symbols
+const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR'];
+const CURRENCY_SYMBOLS = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  INR: '₹',
+};
+
 const normalizeImagePath = (path) => {
   if (!path) return ['/placeholder-product.jpg'];
   if (Array.isArray(path)) {
@@ -30,6 +40,24 @@ const normalizeImagePath = (path) => {
     return normalized.length > 0 ? normalized : ['/placeholder-product.jpg'];
   }
   return [path.replace(/^(\.\.\/)+assets\//, '/')];
+};
+
+// Fetch exchange rate
+const fetchExchangeRate = async (currency) => {
+  try {
+    const response = await fetch(`/api/products/convert?currency=${currency}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch exchange rate: ${response.statusText}`);
+    }
+    const { rate, symbol } = await response.json();
+    if (!Number.isFinite(rate) || !symbol) {
+      throw new Error(`Invalid exchange rate data: rate=${rate}, symbol=${symbol}`);
+    }
+    return { rate, symbol };
+  } catch (error) {
+    console.error('Error fetching exchange rate:', error);
+    return { rate: 1, symbol: '$' }; // Fallback to USD
+  }
 };
 
 export function ProfileSidebar({ onClose }) {
@@ -52,7 +80,34 @@ export function ProfileSidebar({ onClose }) {
   const [deleteType, setDeleteType] = useState(null);
   const [cancelConfirmId, setCancelConfirmId] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedCurrency = localStorage.getItem('selectedCurrency');
+      return SUPPORTED_CURRENCIES.includes(savedCurrency) ? savedCurrency : 'USD';
+    }
+    return 'USD';
+  });
+  const [currencySymbol, setCurrencySymbol] = useState('$');
+  const [exchangeRate, setExchangeRate] = useState(1);
   const avatarFileRef = useRef(null);
+
+  // Fetch exchange rate and listen for currency changes
+  useEffect(() => {
+    const updateCurrency = async () => {
+      const savedCurrency = localStorage.getItem('selectedCurrency') || 'USD';
+      if (SUPPORTED_CURRENCIES.includes(savedCurrency)) {
+        setSelectedCurrency(savedCurrency);
+        const { rate, symbol } = await fetchExchangeRate(savedCurrency);
+        setExchangeRate(rate);
+        setCurrencySymbol(symbol);
+      }
+    };
+
+    updateCurrency();
+    const handleCurrencyUpdate = () => updateCurrency();
+    window.addEventListener('currencyUpdated', handleCurrencyUpdate);
+    return () => window.removeEventListener('currencyUpdated', handleCurrencyUpdate);
+  }, []);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -532,7 +587,7 @@ export function ProfileSidebar({ onClose }) {
                                 Qty: <span className="font-medium text-gray-900">{order.quantity}</span>
                               </span>
                               <span className="text-gray-600">
-                                Total: <span className="font-semibold text-gray-900">₹{order.total_amount?.toFixed(2)}</span>
+                                Total: <span className="font-semibold text-gray-900">{currencySymbol}{(order.total_amount * exchangeRate).toFixed(2)}</span>
                               </span>
                             </div>
                           </div>
@@ -824,7 +879,7 @@ export function ProfileSidebar({ onClose }) {
                     <Link
                       href={`/products/${item.id}`}
                       key={item.id}
-                      className="block bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 overflow-hidden group"
+                      className="block bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 group"
                     >
                       <div className="p-6">
                         <div className="flex items-start gap-4">
@@ -848,7 +903,7 @@ export function ProfileSidebar({ onClose }) {
                             </p>
                             {item.price && (
                               <div className="mt-3 flex items-center">
-                                <span className="text-lg font-bold text-gray-900">₹{item.price.toFixed(2)}</span>
+                                <span className="text-lg font-bold text-gray-900">{currencySymbol}{(item.price * exchangeRate).toFixed(2)}</span>
                               </div>
                             )}
                           </div>
