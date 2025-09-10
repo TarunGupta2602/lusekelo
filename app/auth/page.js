@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import Image from "next/image";
 
+
+//I have used the mailjit for the SMTP server for sending the verification emails. We Do NOt have a domain and a profesinonal email yet so i have added my personal email and no domain so the verifications emails might go to spam. Please check your spam folder if you do not see the email in your inbox.
+
 export default function AuthModal({ isOpen, onClose }) {
   const [mode, setMode] = useState("signup"); // 'signup' or 'login'
   const [email, setEmail] = useState("");
@@ -152,7 +155,7 @@ export default function AuthModal({ isOpen, onClose }) {
             <h2 className="text-xl font-bold text-green-700">Verify your email</h2>
             <p className="text-gray-600">
               We’ve sent a verification link to <span className="font-semibold">{email}</span>.<br />
-              Please check your inbox and verify your email to continue.
+              Please check your inbox, spam folder and verify your email to continue.
             </p>
             {showResend && (
               <div className="space-y-2">
