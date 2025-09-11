@@ -1,4 +1,3 @@
-
 "use client";
 
 import { createClient } from '@supabase/supabase-js';
@@ -225,48 +224,36 @@ export default function ProductDetailPage({ params }) {
         }
 
         localStorage.setItem(cartKey, JSON.stringify(cart));
+        window.dispatchEvent(new Event('cartUpdated'));
+        setCartMessage('Product added to cart!');
+        setTimeout(() => setCartMessage(''), 3000);
       } else {
-        const { data, error } = await supabase
-          .from('carts')
-          .select('store_carts')
-          .eq('user_id', user.id)
-          .single();
-
-        let cart = [];
-        if (data && data.store_carts) {
-          cart = data.store_carts;
-        }
-
-        const existingItem = cart.find((item) => item.itemId === itemId);
-
-        if (existingItem) {
-          existingItem.quantity += qty;
-        } else {
-          cart.push(newItem);
-        }
-
-        const { error: upsertError } = await supabase
-          .from('carts')
-          .upsert(
-            {
-              user_id: user.id,
-              store_carts: cart,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id' }
-          );
-
-        if (upsertError) {
-          console.error('Error updating cart:', upsertError);
-          setCartMessage('Failed to add product to cart.');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setCartMessage('Session expired. Please log in again.');
           setTimeout(() => setCartMessage(''), 3000);
           return;
         }
-      }
 
-      window.dispatchEvent(new Event('cartUpdated'));
-      setCartMessage('Product added to cart!');
-      setTimeout(() => setCartMessage(''), 3000);
+        const response = await fetch('/api/cart/add', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify(newItem),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to add to cart');
+        }
+
+        window.dispatchEvent(new Event('cartUpdated'));
+        setCartMessage(data.message || 'Product added to cart!');
+        setTimeout(() => setCartMessage(''), 3000);
+      }
     } catch (err) {
       console.error('Error in handleAddToCart:', err);
       setCartMessage('An error occurred while adding to cart.');
