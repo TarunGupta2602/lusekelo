@@ -107,9 +107,6 @@ export default function ProductDetailPage({ params }) {
         const data = await response.json();
         setProduct(data.product);
         setRelatedProducts(data.relatedProducts || []);
-        if (data.product.variations && data.product.variations.length > 0) {
-          setSelectedVariation(data.product.variations[0]);
-        }
 
         if (user) {
           const { data: wishlistData, error: wishlistError } = await supabase
