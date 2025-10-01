@@ -155,7 +155,7 @@ export default function AuthModal({ isOpen, onClose }) {
             <h2 className="text-xl font-bold text-green-700">Verify your email</h2>
             <p className="text-gray-600">
               We’ve sent a verification link to <span className="font-semibold">{email}</span>.<br />
-              Please check your inbox, spam folder and verify your email to continue.
+              Please check your inbox, spamm folder and verify your email to continue.
             </p>
             {showResend && (
               <div className="space-y-2">
